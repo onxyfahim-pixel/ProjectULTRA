@@ -69,15 +69,20 @@ echo.
 set "REMOTE_URL="
 for /f "tokens=*" %%r in ('git remote get-url origin 2^>nul') do set "REMOTE_URL=%%r"
 
+:: Trim any whitespace
+if not "%REMOTE_URL%"=="" (
+    set "REMOTE_URL=%REMOTE_URL: =%"
+)
+
 if "%~1" NEQ "" (
     set "REMOTE_URL=%~1"
     git remote remove origin >nul 2>&1
     git remote add origin "!REMOTE_URL!"
-    echo [OK] Remote origin updated from argument: !REMOTE_URL!
+    echo [OK] Remote origin set to: !REMOTE_URL!
     goto :proceed_commit
 )
 
-if not "!REMOTE_URL!"=="" goto :remote_found
+if not "%REMOTE_URL%"=="" goto :remote_found
 
 :prompt_remote
 echo [STEP 2/5] GitHub Remote Repository setup:
@@ -89,17 +94,21 @@ echo 2. Create a new repository - for example: garments-qms-erp
 echo 3. Copy the HTTPS URL - example: https://github.com/USER/garments-qms-erp.git
 echo ----------------------------------------------------------------------
 echo.
-set /p "REMOTE_URL=Paste your GitHub Repository URL: "
+set "INPUT_URL="
+set /p "INPUT_URL=Paste your GitHub Repository URL: "
 
-if "!REMOTE_URL!"=="" (
+if "!INPUT_URL!"=="" (
     color 0C
     echo.
-    echo [ABORTED] No repository URL provided.
+    echo [ABORTED] No repository URL was provided.
+    echo Please double-click this script again when you are ready to paste the URL.
     echo.
     pause
     exit /b 1
 )
 
+set "REMOTE_URL=!INPUT_URL!"
+git remote remove origin >nul 2>&1
 git remote add origin "!REMOTE_URL!"
 echo [OK] Remote origin linked to: !REMOTE_URL!
 goto :proceed_commit
@@ -114,6 +123,7 @@ echo.
 echo [STEP 3/5] Commit details:
 set "DEFAULT_MSG=Backup %DATE% %TIME%"
 echo Press ENTER to use default: [!DEFAULT_MSG!]
+set "USER_MSG="
 set /p "USER_MSG=Or type custom message: "
 if "!USER_MSG!"=="" set "USER_MSG=!DEFAULT_MSG!"
 echo.
@@ -154,6 +164,7 @@ echo ----------------------------------------------------------------------
 echo If your GitHub repo was created with an empty README and you want to
 echo overwrite it with this local project, you can force push.
 echo ----------------------------------------------------------------------
+set "FORCE_CHOICE="
 set /p "FORCE_CHOICE=Do you want to force push to overwrite remote? (Y/N): "
 if /i "!FORCE_CHOICE!"=="Y" (
     git push -u origin main --force
