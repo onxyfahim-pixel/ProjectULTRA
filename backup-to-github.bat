@@ -3,145 +3,147 @@ setlocal enabledelayedexpansion
 title Garments QMS ERP - GitHub Backup Tool
 color 0B
 
+:: Ensure Git is in PATH
+if exist "%LOCALAPPDATA%\Programs\Git\cmd" (
+    set "PATH=%LOCALAPPDATA%\Programs\Git\cmd;%PATH%"
+)
+if exist "%ProgramFiles%\Git\cmd" (
+    set "PATH=%ProgramFiles%\Git\cmd;%PATH%"
+)
+if exist "%ProgramFiles(x86)%\Git\cmd" (
+    set "PATH=%ProgramFiles(x86)%\Git\cmd;%PATH%"
+)
+
+cls
 echo ======================================================================
 echo           GARMENTS QMS ERP - ONE-CLICK GITHUB BACKUP
 echo ======================================================================
 echo.
 
-:: 1. Locate Git executable
-set "GIT_CMD=git"
+:: 1. Verify Git availability
 where git >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    if exist "%LOCALAPPDATA%\Programs\Git\cmd\git.exe" (
-        set "GIT_CMD=%LOCALAPPDATA%\Programs\Git\cmd\git.exe"
-        set "PATH=%LOCALAPPDATA%\Programs\Git\cmd;%PATH%"
-    ) else if exist "%ProgramFiles%\Git\cmd\git.exe" (
-        set "GIT_CMD=%ProgramFiles%\Git\cmd\git.exe"
-        set "PATH=%ProgramFiles%\Git\cmd;%PATH%"
-    ) else if exist "%ProgramFiles(x86)%\Git\cmd\git.exe" (
-        set "GIT_CMD=%ProgramFiles(x86)%\Git\cmd\git.exe"
-        set "PATH=%ProgramFiles(x86)%\Git\cmd;%PATH%"
-    ) else (
-        color 0C
-        echo [ERROR] Git is not detected on your system.
-        echo Please ensure Git is installed.
-        echo.
-        pause
-        exit /b 1
-    )
+    color 0C
+    echo [ERROR] Git could not be located on your machine.
+    echo Please ensure Git is installed at:
+    echo %LOCALAPPDATA%\Programs\Git\cmd\git.exe
+    echo.
+    pause
+    exit /b 1
 )
 
-echo [OK] Git found: !GIT_CMD!
-for /f "tokens=*" %%v in ('"!GIT_CMD!" --version') do echo [INFO] %%v
+for /f "tokens=*" %%v in ('git --version') do echo [STATUS] %%v
 echo.
 
-:: 2. Check Git User Configuration
-for /f "tokens=*" %%u in ('"!GIT_CMD!" config user.name 2^>nul') do set "GIT_USER=%%u"
-for /f "tokens=*" %%e in ('"!GIT_CMD!" config user.email 2^>nul') do set "GIT_EMAIL=%%e"
+:: 2. Ensure Git identity is set
+for /f "tokens=*" %%u in ('git config user.name 2^>nul') do set "GIT_USER=%%u"
+for /f "tokens=*" %%e in ('git config user.email 2^>nul') do set "GIT_EMAIL=%%e"
 
 if "!GIT_USER!"=="" (
-    echo [SETUP] Git user name is not configured.
-    set /p "GIT_USER=Enter your Name or GitHub Username: "
-    if "!GIT_USER!"=="" set "GIT_USER=User"
-    "!GIT_CMD!" config --global user.name "!GIT_USER!"
+    set /p "GIT_USER=Enter your Name or GitHub Username [Alia]: "
+    if "!GIT_USER!"=="" set "GIT_USER=Alia"
+    git config --global user.name "!GIT_USER!"
 )
 if "!GIT_EMAIL!"=="" (
-    echo [SETUP] Git user email is not configured.
-    set /p "GIT_EMAIL=Enter your Email: "
-    if "!GIT_EMAIL!"=="" set "GIT_EMAIL=user@example.com"
-    "!GIT_CMD!" config --global user.email "!GIT_EMAIL!"
+    set /p "GIT_EMAIL=Enter your Email [alia@project.local]: "
+    if "!GIT_EMAIL!"=="" set "GIT_EMAIL=alia@project.local"
+    git config --global user.email "!GIT_EMAIL!"
 )
 
-:: 3. Initialize Git repository if not present
+:: 3. Initialize repository if not already initialized
 if not exist ".git" (
     echo [STEP 1/5] Initializing local Git repository...
-    "!GIT_CMD!" init -b main
-    if %ERRORLEVEL% NEQ 0 (
-        "!GIT_CMD!" init
-        "!GIT_CMD!" branch -M main
-    )
-    echo [OK] Local repository initialized.
+    git init -b main
+    echo [OK] Initialized repository.
 ) else (
-    echo [STEP 1/5] Local Git repository is already initialized.
-    "!GIT_CMD!" branch -M main >nul 2>&1
+    echo [STEP 1/5] Repository ready on branch main.
+    git branch -M main >nul 2>&1
 )
 echo.
 
 :: 4. Verify or Set Remote Origin URL
 set "REMOTE_URL="
-for /f "tokens=*" %%r in ('"!GIT_CMD!" remote get-url origin 2^>nul') do set "REMOTE_URL=%%r"
+for /f "tokens=*" %%r in ('git remote get-url origin 2^>nul') do set "REMOTE_URL=%%r"
+
+if "%~1" NEQ "" (
+    set "REMOTE_URL=%~1"
+    git remote remove origin >nul 2>&1
+    git remote add origin "!REMOTE_URL!"
+    echo [OK] Remote 'origin' updated from argument: !REMOTE_URL!
+)
 
 if "!REMOTE_URL!"=="" (
     echo [STEP 2/5] GitHub Remote Repository setup:
-    echo No GitHub remote is currently linked to this project.
+    echo ----------------------------------------------------------------------
+    echo No GitHub repository is linked to this project yet.
     echo.
-    echo Please paste your GitHub repository URL:
-    echo (Example: https://github.com/your-username/garments-erp.git)
-    set /p "REMOTE_URL=GitHub Repository URL: "
+    echo 1. Go to https://github.com/new in your browser.
+    echo 2. Create a new repository (e.g. named: garments-qms-erp).
+    echo 3. Copy the HTTPS URL (e.g. https://github.com/USERNAME/garments-qms-erp.git)
+    echo ----------------------------------------------------------------------
+    echo.
+    set /p "REMOTE_URL=Paste your GitHub Repository URL: "
     
     if "!REMOTE_URL!"=="" (
         color 0C
         echo.
-        echo [ERROR] No repository URL was provided. Backup aborted.
+        echo [ABORTED] No repository URL provided.
         echo.
         pause
         exit /b 1
     )
-    "!GIT_CMD!" remote add origin "!REMOTE_URL!"
+    git remote add origin "!REMOTE_URL!"
     echo [OK] Remote 'origin' linked to: !REMOTE_URL!
 ) else (
-    echo [STEP 2/5] Remote 'origin' is linked to: !REMOTE_URL!
+    echo [STEP 2/5] Linked Remote: !REMOTE_URL!
 )
 echo.
 
-:: 5. Prompt for Commit Message
-echo [STEP 3/5] Preparing commit...
+:: 5. Commit message
+echo [STEP 3/5] Commit details:
 set "DEFAULT_MSG=Backup %DATE% %TIME%"
-echo Enter commit description (or press ENTER to use default):
-set /p "USER_MSG=Commit message [!DEFAULT_MSG!]: "
+echo Press ENTER to use default: [!DEFAULT_MSG!]
+set /p "USER_MSG=Or type custom message: "
 if "!USER_MSG!"=="" set "USER_MSG=!DEFAULT_MSG!"
 echo.
 
 :: 6. Stage files
-echo [STEP 4/5] Staging files (excluding node_modules, .next, and sensitive keys)...
-"!GIT_CMD!" add .
+echo [STEP 4/5] Staging files...
+git add .
 echo [OK] Files staged.
 echo.
 
 :: 7. Commit changes
-"!GIT_CMD!" commit -m "!USER_MSG!"
-if %ERRORLEVEL% NEQ 0 (
-    echo [INFO] No new changes to commit, or commit already up to date.
+git commit -m "!USER_MSG!" >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] New changes committed: "!USER_MSG!"
 ) else (
-    echo [OK] Changes committed successfully.
+    echo [INFO] Working directory clean. Proceeding to push existing commits.
 )
 echo.
 
 :: 8. Push to GitHub
-echo [STEP 5/5] Uploading to GitHub (main branch)...
+echo [STEP 5/5] Pushing to GitHub (origin main)...
 echo ----------------------------------------------------------------------
-"!GIT_CMD!" push -u origin main
+git push -u origin main
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo [NOTICE] Standard push was rejected.
-    echo This usually happens if the remote repository on GitHub was created with
-    echo a README or existing files that are not in your local folder yet.
-    echo.
-    echo Attempting to synchronize remote changes (pull with rebase)...
-    "!GIT_CMD!" pull origin main --rebase
+    echo [SYNC] Push rejected (remote may contain initial files or commits).
+    echo Attempting to fetch and rebase with remote...
+    git pull origin main --rebase
     if %ERRORLEVEL% EQU 0 (
         echo [RETRY] Pushing again after rebase...
-        "!GIT_CMD!" push -u origin main
+        git push -u origin main
     )
     if %ERRORLEVEL% NEQ 0 (
         echo.
         echo ----------------------------------------------------------------------
-        echo [OPTIONS] If the repository on GitHub is brand new and you want to
-        echo overwrite it with your local project, you can force push.
-        echo.
-        set /p "DO_FORCE=Would you like to force push to GitHub? (Y/N): "
-        if /i "!DO_FORCE!"=="Y" (
-            "!GIT_CMD!" push -u origin main --force
+        echo If your GitHub repo was created with an empty README and you want to
+        echo overwrite it with this local project, you can force push.
+        echo ----------------------------------------------------------------------
+        set /p "FORCE_CHOICE=Do you want to force push to overwrite remote? (Y/N): "
+        if /i "!FORCE_CHOICE!"=="Y" (
+            git push -u origin main --force
         )
     )
 )
@@ -150,15 +152,17 @@ echo.
 if %ERRORLEVEL% EQU 0 (
     color 0A
     echo ======================================================================
-    echo           [SUCCESS] PROJECT BACKUP UPLOADED TO GITHUB!
+    echo           [SUCCESS] PROJECT BACKUP COMPLETED TO GITHUB!
     echo ======================================================================
     echo Repository: !REMOTE_URL!
+    echo Time: %DATE% %TIME%
 ) else (
     color 0C
     echo ======================================================================
-    echo           [FAILED] Push could not be completed.
+    echo           [ATTENTION] Upload could not be completed.
     echo ======================================================================
-    echo Please verify your GitHub permissions, credentials, or repository URL.
+    echo If GitHub requested credentials, please authenticate in the popup.
+    echo Verify your repo URL and repository write permissions.
 )
 echo.
 pause
