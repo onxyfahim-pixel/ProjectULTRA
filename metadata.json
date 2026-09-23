@@ -1,0 +1,6 @@
+{
+  "name": "Garments QMS ERP",
+  "description": "Garments Quality Management System & ERP dashboard with unified modular navigation, standard data tables, JWT & RBAC Express backend, PostgreSQL Prisma integration, and real-time WebSocket inventory sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

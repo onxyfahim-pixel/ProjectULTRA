@@ -1,0 +1,145 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  QA_MANAGER
+  WAREHOUSE_INSPECTOR
+  PRODUCTION_HEAD
+  OPERATOR
+}
+
+enum QualityGrade {
+  GRADE_A
+  GRADE_B
+  REJECTED
+  ON_HOLD
+}
+
+enum StockStatus {
+  IN_STOCK
+  INSPECTING
+  ALLOCATED
+  DISPATCHED
+}
+
+enum InspectionStage {
+  FABRIC_INWARD
+  CUTTING_INSPECTION
+  SEWING_IN_LINE
+  END_LINE_QC
+  FINISHING_PACKING
+}
+
+enum InspectionStatus {
+  PASSED
+  REJECTED
+  CONDITIONAL_PASS
+}
+
+model User {
+  id           String             @id @default(cuid())
+  email        String             @unique
+  name         String
+  passwordHash String
+  role         Role               @default(WAREHOUSE_INSPECTOR)
+  department   String
+  avatarUrl    String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  inspections  InspectionRecord[]
+  auditLogs    AuditLog[]
+}
+
+model InventoryItem {
+  id                String       @id @default(cuid())
+  sku               String       @unique
+  styleNumber       String
+  fabricType        String
+  color             String
+  batchLot          String
+  rollCount         Int          @default(1)
+  quantityMeters    Float
+  qualityGrade      QualityGrade @default(GRADE_A)
+  warehouseLocation String
+  status            StockStatus  @default(IN_STOCK)
+  unitCost          Float
+  updatedBy         String
+  lastUpdatedAt     DateTime     @default(now())
+  createdAt         DateTime     @default(now())
+}
+
+model InspectionRecord {
+  id              String           @id @default(cuid())
+  inspectionCode  String           @unique
+  styleNumber     String
+  lotNumber       String
+  stage           InspectionStage
+  sampleSize      Int
+  passCount       Int
+  defectCount     Int
+  majorDefects    Int              @default(0)
+  minorDefects    Int              @default(0)
+  criticalDefects Int              @default(0)
+  status          InspectionStatus @default(PASSED)
+  inspectorId     String
+  inspectorName   String
+  buyer           String
+  inspector       User             @relation(fields: [inspectorId], references: [id])
+  defects         DefectLog[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model DefectLog {
+  id                 String           @id @default(cuid())
+  defectType         String
+  severity           String           @default("MINOR")
+  location           String
+  resolved           Boolean          @default(false)
+  inspectionRecordId String
+  inspectionRecord   InspectionRecord @relation(fields: [inspectionRecordId], references: [id], onDelete: Cascade)
+  loggedAt           DateTime         @default(now())
+}
+
+model ProductionOrder {
+  id                String   @id @default(cuid())
+  orderNumber       String   @unique
+  buyer             String
+  styleName         String
+  targetQuantity    Int
+  completedQuantity Int      @default(0)
+  sewingLine        String
+  status            String   @default("RUNNING")
+  defectRate        Float    @default(1.2)
+  startDate         DateTime @default(now())
+  dueDate           DateTime
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entity      String
+  entityId    String
+  performedBy String
+  userRole    String
+  timestamp   DateTime @default(now())
+  details     String?  @db.Text
+  user        User?    @relation(fields: [performedBy], references: [id])
+}
+
+model ModuleStore {
+  moduleKey String   @id @db.VarChar(100)
+  data      Json
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("module_store")
+}
+
