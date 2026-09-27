@@ -221,9 +221,11 @@ export interface HourlyReportEntry {
   targetQty: number; // Target production for this hour
   checkedQty: number; // Total inspected pieces count for this hour
   passedQty: number; // Good pieces passed
-  defectQty: number; // Defective pieces found (sum of defectBreakdown counts)
+  defectQty: number; // Defective pieces found (sum of defectBreakdown counts - repairable)
+  rejectQty?: number; // Unrecoverable scrap pieces (cannot be repaired, excluded from production)
+  repairedQty?: number; // Defective pieces repaired and added to good production
   defectRate: number; // Defect rate / DHU %: (defectQty / checkedQty) * 100
-  rftRate?: number; // Right First Time %: ((checkedQty - defectQty) / checkedQty) * 100
+  rftRate?: number; // Right First Time %: ((checkedQty - defectQty - (rejectQty || 0)) / checkedQty) * 100
   defectBreakdown?: DefectCountEntry[]; // Granular list of which defects occurred and their counts
   topDefect?: string; // Common apparel defect name (e.g., "Skip Stitch", "Puckering")
   operatorId?: string; // Operator / workstation ID

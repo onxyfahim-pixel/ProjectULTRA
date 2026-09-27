@@ -160,55 +160,70 @@ export function ProductionRecordDetailsPage({
         </div>
       </div>
 
-      {/* Hero Card */}
+      {/* Hero Card (Clean Executive Light Design) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-900 px-6 py-5 text-white">
+        <div className="bg-gradient-to-r from-slate-50 via-blue-50/40 to-indigo-50/30 px-6 py-5 border-b border-slate-200 text-slate-900">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs font-bold bg-white/15 px-2.5 py-0.5 rounded-lg border border-white/20">
+                <span className="font-mono text-xs font-bold bg-white px-2.5 py-0.5 rounded-lg border border-slate-300 text-slate-800 shadow-2xs">
                   {order.orderNumber}
                 </span>
-                <span className="inline-flex items-center gap-1 text-xs bg-emerald-500/20 text-emerald-200 font-semibold px-2.5 py-0.5 rounded-md border border-emerald-400/30">
-                  <Calendar className="w-3 h-3" />
+                <span className="inline-flex items-center gap-1 text-xs bg-emerald-50 text-emerald-800 font-semibold px-2.5 py-0.5 rounded-md border border-emerald-200">
+                  <Calendar className="w-3 h-3 text-emerald-600" />
                   <span>Record Date: {order.recordDate || order.createdAt?.split('T')[0] || 'Active'}</span>
                 </span>
                 {order.shift && (
-                  <span className="inline-flex items-center gap-1 text-xs bg-indigo-500/20 text-indigo-200 font-semibold px-2.5 py-0.5 rounded-md border border-indigo-400/30">
-                    <Clock className="w-3 h-3" />
+                  <span className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-800 font-semibold px-2.5 py-0.5 rounded-md border border-indigo-200">
+                    <Clock className="w-3 h-3 text-indigo-600" />
                     <span>{order.shift}</span>
                   </span>
                 )}
-                <span className="text-xs bg-blue-500/20 text-blue-200 font-semibold px-2 py-0.5 rounded-md border border-blue-400/30">
+                <span className="text-xs bg-blue-50 text-blue-800 font-semibold px-2 py-0.5 rounded-md border border-blue-200">
                   {order.unit || 'Unit 01'}
                 </span>
-                <span className="text-xs bg-slate-500/30 text-slate-200 font-semibold px-2 py-0.5 rounded-md border border-slate-400/30">
+                <span className="text-xs bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-md border border-slate-200">
                   {order.section || order.sewingLine}
                 </span>
               </div>
-              <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                 {order.styleName}
               </h1>
-              <p className="text-xs text-blue-200 font-medium">
-                Buyer: <strong className="text-white">{order.buyer}</strong> | Style Code: <span className="font-mono text-white">{order.styleNumber || 'STY-001'}</span>
+              <p className="text-xs text-slate-500 font-medium">
+                Buyer: <strong className="text-slate-800">{order.buyer}</strong> | Style Code:{' '}
+                <span className="font-mono text-slate-700 font-semibold">{order.styleNumber || 'STY-001'}</span>
               </p>
             </div>
 
-            <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md px-4 py-3 rounded-xl border border-white/15">
+            <div className="flex items-center gap-4 bg-white px-4 py-3 rounded-xl border border-slate-200 shadow-2xs">
               <div>
-                <div className="text-[10px] text-blue-200 font-medium uppercase tracking-wider">Ship Date / Deadline</div>
-                <div className="text-sm font-bold font-mono text-white">
-                  {new Date(order.dueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                  Ship Date / Deadline
+                </div>
+                <div className="text-sm font-bold font-mono text-slate-900">
+                  {new Date(order.dueDate).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
                 </div>
               </div>
-              <div className={`text-xs font-bold px-2 py-1 rounded-md ${daysLeft < 0 ? 'bg-rose-500/30 text-rose-200' : daysLeft <= 7 ? 'bg-amber-500/30 text-amber-200' : 'bg-emerald-500/30 text-emerald-200'}`}>
+              <div
+                className={`text-xs font-bold px-2.5 py-1 rounded-md border ${
+                  daysLeft < 0
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : daysLeft <= 7
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                }`}
+              >
                 {daysLeft < 0 ? `${Math.abs(daysLeft)}d Overdue` : `${daysLeft}d left`}
               </div>
             </div>
           </div>
         </div>
 
-        {/* 11-METRIC KPI STRIP ACROSS RECORD */}
+        {/* 6-METRIC KPI STRIP (CLARIFIED DEFECTS VS SCRAP REJECTS) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 bg-slate-50/60 p-4 gap-y-3">
           <div className="px-3 py-1">
             <div className="text-[11px] font-semibold text-slate-500">Target</div>
@@ -220,23 +235,39 @@ export function ProductionRecordDetailsPage({
 
           <div className="px-3 py-1">
             <div className="text-[11px] font-semibold text-slate-500">Total Production</div>
-            <div className="text-lg font-bold font-mono text-blue-700 mt-0.5">
+            <div className="text-lg font-bold font-mono text-emerald-700 mt-0.5">
               {completed.toLocaleString()}
             </div>
-            <div className="text-[10px] text-emerald-600 font-semibold">{pct}% of target</div>
+            <div className="text-[10px] text-emerald-600 font-semibold">
+              {pct}% reached • Repaired incl.
+            </div>
           </div>
 
           <div className="px-3 py-1">
-            <div className="text-[11px] font-semibold text-slate-500">Total Defects</div>
+            <div className="text-[11px] font-semibold text-slate-500">Repairable Defects</div>
             <div className="text-lg font-bold font-mono text-amber-700 mt-0.5">
               {defects.toLocaleString()}
             </div>
-            <div className="text-[10px] text-slate-400">Defect events</div>
+            <div className="text-[10px] text-amber-700 font-medium">Rectified on line</div>
+          </div>
+
+          <div className="px-3 py-1">
+            <div className="text-[11px] font-semibold text-slate-500">Scrap Rejects</div>
+            <div className="text-lg font-bold font-mono text-rose-700 mt-0.5">
+              {reject.toLocaleString()}
+            </div>
+            <div className="text-[10px] text-rose-600 font-medium">
+              {rejectRate}% unrecoverable
+            </div>
           </div>
 
           <div className="px-3 py-1">
             <div className="text-[11px] font-semibold text-slate-500">DHU Rate</div>
-            <div className={`text-lg font-bold font-mono mt-0.5 ${dhu <= 2.0 ? 'text-emerald-700' : dhu <= 3.0 ? 'text-amber-700' : 'text-rose-700'}`}>
+            <div
+              className={`text-lg font-bold font-mono mt-0.5 ${
+                dhu <= 2.0 ? 'text-emerald-700' : dhu <= 3.0 ? 'text-amber-700' : 'text-rose-700'
+              }`}
+            >
               {dhu}%
             </div>
             <div className="text-[10px] text-slate-400">Limit: ≤ 2.0%</div>
@@ -244,23 +275,14 @@ export function ProductionRecordDetailsPage({
 
           <div className="px-3 py-1">
             <div className="text-[11px] font-semibold text-slate-500">RFT (Right First Time)</div>
-            <div className={`text-lg font-bold font-mono mt-0.5 ${rft >= 95 ? 'text-emerald-700' : 'text-amber-700'}`}>
+            <div
+              className={`text-lg font-bold font-mono mt-0.5 ${
+                rft >= 95 ? 'text-emerald-700' : 'text-amber-700'
+              }`}
+            >
               {rft}%
             </div>
-            <div className="text-[10px] text-slate-400">Target: ≥ 95.0%</div>
-          </div>
-
-          <div className="px-3 py-1">
-            <div className="text-[11px] font-semibold text-slate-500">Efficiency & Rejects</div>
-            <div className="flex items-baseline gap-1 mt-0.5">
-              <span className={`text-lg font-bold font-mono ${eff >= 80 ? 'text-emerald-700' : 'text-amber-700'}`}>
-                {eff}%
-              </span>
-              <span className="text-xs text-rose-600 font-mono font-semibold">
-                / {reject} rej
-              </span>
-            </div>
-            <div className="text-[10px] text-slate-400">Scrap: {rejectRate}%</div>
+            <div className="text-[10px] text-slate-400">First-pass clean pass</div>
           </div>
         </div>
       </div>
@@ -362,6 +384,9 @@ export function ProductionRecordDetailsPage({
                 </div>
                 <div className="text-[11px] text-slate-500">
                   {dhu <= 2.0 ? '✓ Within tolerance threshold' : '⚠ Exceeds 2.0% target'}
+                  <span className="block text-[10px] text-slate-400 mt-0.5">
+                    Repairable defects reworked & cleared
+                  </span>
                 </div>
               </div>
 
@@ -372,16 +397,22 @@ export function ProductionRecordDetailsPage({
                 </div>
                 <div className="text-[11px] text-slate-500">
                   {rft >= 95 ? '✓ Passing first-pass QA' : 'Needs rework reduction'}
+                  <span className="block text-[10px] text-slate-400 mt-0.5">
+                    Clean pieces on 1st inspection
+                  </span>
                 </div>
               </div>
 
               <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-1">
-                <div className="text-xs text-slate-500 font-medium">Garment Rejection / Scrap</div>
+                <div className="text-xs text-slate-500 font-medium">Garment Scrap Rejects</div>
                 <div className="text-2xl font-black font-mono text-rose-700">
                   {reject} <span className="text-xs font-normal text-slate-500">pcs ({rejectRate}%)</span>
                 </div>
                 <div className="text-[11px] text-slate-500">
                   Unrecoverable scrap count
+                  <span className="block text-[10px] text-rose-600 mt-0.5">
+                    Permanently excluded from output
+                  </span>
                 </div>
               </div>
             </div>
@@ -475,18 +506,25 @@ export function ProductionRecordDetailsPage({
           </button>
         </div>
 
-        {/* TOP 3 IDENTIFIED DEFECTS BANNER */}
+        {/* TOP 3 IDENTIFIED DEFECTS BANNER (CLEAN EXECUTIVE LIGHT DESIGN) */}
         {top3Defects.length > 0 && (
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 rounded-xl text-white shadow-xs">
-            <div className="flex items-center justify-between pb-2.5 border-b border-white/10">
+          <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs text-slate-900">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <Award className="w-4 h-4 text-amber-400" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-white">
-                  Top 3 Identified Defects
-                </h4>
+                <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Top 3 Identified Defects
+                  </h4>
+                  <span className="text-[11px] text-slate-500">
+                    Pareto defect frequency ranking for this production order
+                  </span>
+                </div>
               </div>
-              <span className="text-[10px] text-slate-300 font-mono">
-                Pareto QC defect ranking for this production record
+              <span className="text-[10px] text-slate-500 font-mono">
+                ISO 9001 Quality Control
               </span>
             </div>
 
@@ -494,30 +532,32 @@ export function ProductionRecordDetailsPage({
               {top3Defects.map((td, rank) => {
                 const rankLabels = ['Rank #1 (Major Issue)', 'Rank #2', 'Rank #3'];
                 const rankBadges = [
-                  'bg-amber-400/20 text-amber-300 border-amber-400/40',
-                  'bg-slate-300/20 text-slate-200 border-slate-300/40',
-                  'bg-amber-700/30 text-amber-200 border-amber-600/40',
+                  'bg-amber-50 text-amber-800 border-amber-200',
+                  'bg-slate-100 text-slate-700 border-slate-200',
+                  'bg-orange-50 text-orange-800 border-orange-200',
                 ];
 
                 return (
                   <div
                     key={td.defectType}
-                    className="p-3 rounded-xl bg-white/10 border border-white/10 space-y-1.5"
+                    className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200 space-y-2 hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${rankBadges[rank]}`}>
                         {rankLabels[rank]}
                       </span>
-                      <span className="font-mono font-bold text-sm text-white">
-                        {td.count} <span className="text-[10px] font-normal text-slate-300">pcs ({td.percentage}%)</span>
+                      <span className="font-mono font-bold text-xs text-slate-800">
+                        {td.count} <span className="text-[10px] font-normal text-slate-500">pcs ({td.percentage}%)</span>
                       </span>
                     </div>
-                    <div className="text-xs font-bold text-white truncate">
+                    <div className="text-xs font-bold text-slate-900 truncate" title={td.defectType}>
                       {td.defectType}
                     </div>
-                    <div className="w-full bg-white/15 h-1.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                       <div
-                        className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          rank === 0 ? 'bg-amber-500' : rank === 1 ? 'bg-blue-500' : 'bg-orange-500'
+                        }`}
                         style={{ width: `${Math.min(td.percentage, 100)}%` }}
                       />
                     </div>
@@ -528,20 +568,38 @@ export function ProductionRecordDetailsPage({
           </div>
         )}
 
+        {/* Quality Standard Guidance Callout */}
+        <div className="flex items-start sm:items-center gap-2.5 p-3 bg-blue-50/70 rounded-xl border border-blue-200/80 text-xs text-blue-900">
+          <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 sm:mt-0" />
+          <div className="text-[11px] leading-relaxed">
+            <strong className="font-bold text-blue-950">Factory QC Inspection Protocol:</strong>{' '}
+            <strong className="text-amber-900 font-bold">Defects (Rework)</strong> are repairable alterations (repaired by line tailors & passed into production).{' '}
+            <strong className="text-rose-900 font-bold">Rejects (Scrap)</strong> are unrecoverable fabric damages permanently excluded from production (<code className="bg-blue-100 px-1 py-0.5 rounded font-mono font-bold">Passed = Checked - Rejects</code>).{' '}
+            <strong className="text-indigo-900 font-bold">RFT%</strong> measures garments passing cleanly on the first inspection without rework.
+          </div>
+        </div>
+
         {order.hourlyReports && order.hourlyReports.length > 0 ? (
           <div className="space-y-4">
             <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left text-xs border-collapse min-w-[850px]">
+              <table className="w-full text-left text-xs border-collapse min-w-[950px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                     <th className="py-2.5 px-3 w-12 text-center">#</th>
                     <th className="py-2.5 px-3 w-32">Hour Slot</th>
-                    <th className="py-2.5 px-3 w-24 text-right">Target</th>
-                    <th className="py-2.5 px-3 w-28 text-right bg-blue-50/50">Total Checked</th>
-                    <th className="py-2.5 px-3 w-24 text-right bg-emerald-50/50">Passed</th>
-                    <th className="py-2.5 px-3 w-24 text-right bg-rose-50/50">Defects</th>
-                    <th className="py-2.5 px-3 w-24 text-right">DHU %</th>
-                    <th className="py-2.5 px-3 w-24 text-right">RFT %</th>
+                    <th className="py-2.5 px-3 w-20 text-right">Target</th>
+                    <th className="py-2.5 px-3 w-24 text-right bg-blue-50/50">Checked</th>
+                    <th className="py-2.5 px-3 w-24 text-right bg-amber-50/50" title="Repairable alterations reworked on the line">
+                      Defects (Rework)
+                    </th>
+                    <th className="py-2.5 px-3 w-24 text-right bg-rose-50/50" title="Unrecoverable scrap pieces (deducted from production)">
+                      Rejects (Scrap)
+                    </th>
+                    <th className="py-2.5 px-3 w-24 text-right bg-emerald-50/50" title="Good output delivered (Checked - Scrap Rejects). Repaired defects are counted.">
+                      Passed (Output)
+                    </th>
+                    <th className="py-2.5 px-3 w-20 text-right">DHU %</th>
+                    <th className="py-2.5 px-3 w-20 text-right">RFT %</th>
                     <th className="py-2.5 px-3 min-w-[200px]">Specific Defects Logged</th>
                     <th className="py-2.5 px-3">Workstation / Remarks</th>
                   </tr>
@@ -549,7 +607,17 @@ export function ProductionRecordDetailsPage({
                 <tbody className="divide-y divide-slate-100">
                   {order.hourlyReports.map((hr, idx) => {
                     const dhu = hr.defectRate || 0;
-                    const rftVal = hr.rftRate ?? (hr.checkedQty > 0 ? Number((Math.max(0, hr.checkedQty - hr.defectQty) / hr.checkedQty * 100).toFixed(1)) : 100);
+                    const rftVal =
+                      hr.rftRate ??
+                      (hr.checkedQty > 0
+                        ? Number(
+                            (
+                              (Math.max(0, hr.checkedQty - hr.defectQty - (hr.rejectQty || 0)) /
+                                hr.checkedQty) *
+                              100
+                            ).toFixed(1)
+                          )
+                        : 100);
 
                     const dhuBadge =
                       dhu === 0
@@ -583,11 +651,29 @@ export function ProductionRecordDetailsPage({
                         <td className="py-2.5 px-3 text-right font-mono font-bold text-blue-700 bg-blue-50/20">
                           {hr.checkedQty}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 bg-emerald-50/20">
-                          {hr.passedQty}
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-800 bg-amber-50/20">
+                          <span
+                            className="bg-amber-100/70 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200"
+                            title="Repairable defects reworked on line"
+                          >
+                            {hr.defectQty}
+                          </span>
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-600 bg-rose-50/20">
-                          {hr.defectQty}
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700 bg-rose-50/20">
+                          <span
+                            className="bg-rose-100/70 text-rose-800 px-1.5 py-0.5 rounded border border-rose-200"
+                            title="Unrecoverable scrap pieces deducted from output"
+                          >
+                            {hr.rejectQty || 0}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 bg-emerald-50/20">
+                          <span
+                            className="bg-emerald-100/60 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-200"
+                            title="Good production pieces (Checked - Scrap Rejects). Repaired defects are included."
+                          >
+                            {hr.passedQty}
+                          </span>
                         </td>
                         <td className="py-2.5 px-3 text-right">
                           <span
@@ -609,10 +695,10 @@ export function ProductionRecordDetailsPage({
                               breakdown.map((db) => (
                                 <span
                                   key={db.defectType}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-800 border border-rose-200"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-900 border border-amber-200"
                                 >
                                   <span>{db.defectType}:</span>
-                                  <strong className="font-mono">{db.count}</strong>
+                                  <strong className="font-mono text-amber-950">{db.count}</strong>
                                 </span>
                               ))
                             ) : (
@@ -636,28 +722,49 @@ export function ProductionRecordDetailsPage({
             {(() => {
               const totTarget = order.hourlyReports.reduce((s, h) => s + (h.targetQty || 0), 0);
               const totChecked = order.hourlyReports.reduce((s, h) => s + (h.checkedQty || 0), 0);
-              const totPassed = order.hourlyReports.reduce((s, h) => s + (h.passedQty || 0), 0);
               const totDefects = order.hourlyReports.reduce((s, h) => s + (h.defectQty || 0), 0);
+              const totRejects = order.hourlyReports.reduce((s, h) => s + (h.rejectQty || 0), 0);
+              const totPassed = order.hourlyReports.reduce((s, h) => s + (h.passedQty || 0), 0);
               const avgDhu = totChecked > 0 ? ((totDefects / totChecked) * 100).toFixed(2) : '0.00';
-              const avgRft = totChecked > 0 ? (Math.max(0, (totChecked - totDefects) / totChecked) * 100).toFixed(1) : '100.0';
+              const avgRft =
+                totChecked > 0
+                  ? (Math.max(0, (totChecked - totDefects - totRejects) / totChecked) * 100).toFixed(1)
+                  : '100.0';
 
               return (
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
                   <div>
                     <div className="text-[10px] text-slate-400 font-semibold uppercase">Scheduled Target</div>
-                    <div className="text-sm font-bold font-mono text-slate-900 mt-0.5">{totTarget.toLocaleString()} pcs</div>
+                    <div className="text-sm font-bold font-mono text-slate-900 mt-0.5">
+                      {totTarget.toLocaleString()} pcs
+                    </div>
                   </div>
                   <div>
                     <div className="text-[10px] text-blue-600 font-semibold uppercase">Total Checked By QC</div>
-                    <div className="text-sm font-bold font-mono text-blue-700 mt-0.5">{totChecked.toLocaleString()} pcs</div>
+                    <div className="text-sm font-bold font-mono text-blue-700 mt-0.5">
+                      {totChecked.toLocaleString()} pcs
+                    </div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-emerald-600 font-semibold uppercase">Total Quality Passed</div>
-                    <div className="text-sm font-bold font-mono text-emerald-700 mt-0.5">{totPassed.toLocaleString()} pcs</div>
+                    <div className="text-[10px] text-amber-700 font-semibold uppercase">Repairable Defects</div>
+                    <div className="text-sm font-bold font-mono text-amber-800 mt-0.5">
+                      {totDefects.toLocaleString()} def
+                    </div>
+                    <div className="text-[10px] text-amber-700 font-medium">Reworked & cleared</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-rose-600 font-semibold uppercase">Total Defects Found</div>
-                    <div className="text-sm font-bold font-mono text-rose-700 mt-0.5">{totDefects.toLocaleString()} def</div>
+                    <div className="text-[10px] text-rose-600 font-semibold uppercase">Scrap Rejects</div>
+                    <div className="text-sm font-bold font-mono text-rose-700 mt-0.5">
+                      {totRejects.toLocaleString()} pcs
+                    </div>
+                    <div className="text-[10px] text-rose-600 font-medium">Excluded from output</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-emerald-600 font-semibold uppercase">Total Passed Output</div>
+                    <div className="text-sm font-bold font-mono text-emerald-700 mt-0.5">
+                      {totPassed.toLocaleString()} pcs
+                    </div>
+                    <div className="text-[10px] text-emerald-700 font-medium">Checked - Rejects</div>
                   </div>
                   <div>
                     <div className="text-[10px] text-slate-500 font-semibold uppercase">Overall Line DHU%</div>
@@ -666,6 +773,7 @@ export function ProductionRecordDetailsPage({
                   <div>
                     <div className="text-[10px] text-indigo-600 font-semibold uppercase">Overall Line RFT%</div>
                     <div className="text-sm font-bold font-mono text-indigo-700 mt-0.5">{avgRft}%</div>
+                    <div className="text-[10px] text-indigo-600 font-medium">First-pass clean</div>
                   </div>
                 </div>
               );

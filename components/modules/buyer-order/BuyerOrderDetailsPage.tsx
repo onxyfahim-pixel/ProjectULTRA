@@ -239,7 +239,7 @@ export function BuyerOrderDetailsPage({
           </div>
 
           {/* Secondary specs bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-100 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 pt-3 border-t border-slate-100 text-xs">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-slate-400" />
               <div>
@@ -273,6 +273,24 @@ export function BuyerOrderDetailsPage({
               <div>
                 <span className="text-[10px] text-slate-500 block">Buyer Brand</span>
                 <span className="font-semibold text-slate-800">{order.buyerName}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 p-1.5 rounded-lg bg-indigo-50/60 border border-indigo-100">
+              <div>
+                <span className="text-[10px] text-indigo-700 font-bold block">Target SMV</span>
+                <span className="font-bold text-indigo-950 font-mono">
+                  {order.smv || 18.5} min
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 p-1.5 rounded-lg bg-emerald-50/60 border border-emerald-100">
+              <div>
+                <span className="text-[10px] text-emerald-700 font-bold block">Production Target</span>
+                <span className="font-bold text-emerald-950 font-mono">
+                  {(order.productionTarget || order.dailyTarget || 1200).toLocaleString()} pcs/d
+                </span>
               </div>
             </div>
           </div>

@@ -335,24 +335,35 @@ export function AddProductionRecordPage({
     const desc = fabricBOM ? fabricBOM.description : bo.styleDescription;
     setItemInfo(desc);
 
-    // Calculate realistic SMV target based on garment type
+    // Check if SMV is specified in Buyer Order; fallback to garment type heuristic
     let calculatedSmv = 18.5;
-    const lowerStyle = bo.styleDescription.toLowerCase();
-    if (lowerStyle.includes('tee') || lowerStyle.includes('t-shirt')) {
-      calculatedSmv = 11.2;
-    } else if (lowerStyle.includes('polo')) {
-      calculatedSmv = 15.0;
-    } else if (lowerStyle.includes('jeans') || lowerStyle.includes('denim')) {
-      calculatedSmv = 22.4;
-    } else if (lowerStyle.includes('jacket') || lowerStyle.includes('outerwear')) {
-      calculatedSmv = 28.0;
-    } else if (lowerStyle.includes('hoodie') || lowerStyle.includes('fleece')) {
-      calculatedSmv = 19.5;
+    if (bo.smv && bo.smv > 0) {
+      calculatedSmv = bo.smv;
+    } else {
+      const lowerStyle = (bo.styleDescription || '').toLowerCase();
+      if (lowerStyle.includes('tee') || lowerStyle.includes('t-shirt')) {
+        calculatedSmv = 11.2;
+      } else if (lowerStyle.includes('polo')) {
+        calculatedSmv = 15.0;
+      } else if (lowerStyle.includes('jeans') || lowerStyle.includes('denim')) {
+        calculatedSmv = 22.4;
+      } else if (lowerStyle.includes('jacket') || lowerStyle.includes('outerwear')) {
+        calculatedSmv = 28.0;
+      } else if (lowerStyle.includes('hoodie') || lowerStyle.includes('fleece')) {
+        calculatedSmv = 19.5;
+      }
     }
     setSmvTarget(calculatedSmv);
 
-    // Calculate hourly line target: (operators * 60 / SMV) * efficiency
-    const hourlyLinePace = Math.round(((operatorCount || 48) * 60 / calculatedSmv) * ((efficiencyPercent || 84.5) / 100));
+    // Check if Planned Daily Target is entered in Buyer Order; otherwise calculate from SMV
+    const plannedTarget = bo.productionTarget || bo.dailyTarget;
+    let hourlyLinePace = 0;
+    if (plannedTarget && plannedTarget > 0) {
+      hourlyLinePace = Math.round(plannedTarget / 8);
+    } else {
+      // Calculate hourly line target: (operators * 60 / SMV) * efficiency
+      hourlyLinePace = Math.round(((operatorCount || 48) * 60 / calculatedSmv) * ((efficiencyPercent || 84.5) / 100));
+    }
 
     // Update hourly slots target to match SMV pacing
     setHourlyReports((prev) =>
@@ -363,7 +374,10 @@ export function AddProductionRecordPage({
     );
 
     setPoSearchFocus(false);
-    showToast(`✓ Auto-filled details from Buyer Order PO: ${bo.orderNumber}`);
+    const targetInfo = plannedTarget
+      ? ` | Target: ${plannedTarget} pcs/day (${hourlyLinePace}/hr)`
+      : ` | Hourly Pace: ${hourlyLinePace}/hr`;
+    showToast(`✓ Linked SMV (${calculatedSmv} min)${targetInfo} from Buyer Order PO: ${bo.orderNumber}`);
   };
 
   // Hourly Reports State with Granular Defect Breakdowns
@@ -379,6 +393,7 @@ export function AddProductionRecordPage({
       checkedQty: 0,
       passedQty: 0,
       defectQty: 0,
+      rejectQty: 0,
       defectRate: 0,
       rftRate: 100,
       defectBreakdown: [],
@@ -423,13 +438,22 @@ export function AddProductionRecordPage({
   }, [hourlyReports]);
 
   // Hourly Totals & Summary Calculation
+  // In garments manufacturing:
+  // - Defects are repairable rework: line tailors fix them and they pass into good completed production.
+  // - Rejects are unrecoverable scrap: they are permanently deducted from production (Passed = Checked - Rejects).
+  // - RFT % measures first-time-right yield without any alteration rework or scrap.
   const hourlySummary = useMemo(() => {
     const totalTarget = hourlyReports.reduce((sum, h) => sum + (Number(h.targetQty) || 0), 0);
     const totalChecked = hourlyReports.reduce((sum, h) => sum + (Number(h.checkedQty) || 0), 0);
-    const totalPassed = hourlyReports.reduce((sum, h) => sum + (Number(h.passedQty) || 0), 0);
     const totalDef = hourlyReports.reduce((sum, h) => sum + (Number(h.defectQty) || 0), 0);
+    const totalRejects = hourlyReports.reduce((sum, h) => sum + (Number(h.rejectQty) || 0), 0);
+    const totalPassed = hourlyReports.reduce((sum, h) => sum + (Number(h.passedQty) || 0), 0);
     const avgDhu = totalChecked > 0 ? Number(((totalDef / totalChecked) * 100).toFixed(2)) : 0;
-    const avgRft = totalChecked > 0 ? Number((Math.max(0, (totalChecked - totalDef) / totalChecked) * 100).toFixed(1)) : 98.5;
+    const avgRft =
+      totalChecked > 0
+        ? Number((Math.max(0, (totalChecked - totalDef - totalRejects) / totalChecked) * 100).toFixed(1))
+        : 98.5;
+    const rejectRate = totalChecked > 0 ? Number(((totalRejects / totalChecked) * 100).toFixed(2)) : 0;
     const achievementRate = totalTarget > 0 ? Number(((totalPassed / totalTarget) * 100).toFixed(1)) : 0;
 
     return {
@@ -437,8 +461,10 @@ export function AddProductionRecordPage({
       totalChecked,
       totalPassed,
       totalDefects: totalDef,
+      totalRejects,
       avgDhu,
       avgRft,
+      rejectRate,
       achievementRate,
     };
   }, [hourlyReports]);
@@ -453,14 +479,19 @@ export function AddProductionRecordPage({
       const updated = [...prev];
       const row = { ...updated[index], [field]: value };
 
-      // Auto-recalculate if checkedQty or defectQty changes directly
-      if (field === 'checkedQty') {
-        const checked = Number(value) || 0;
-        const defects = Number(row.defectQty) || 0;
-        row.passedQty = Math.max(0, checked - defects);
-        row.defectRate = checked > 0 ? Number(((defects / checked) * 100).toFixed(2)) : 0;
-        row.rftRate = checked > 0 ? Number((Math.max(0, (checked - defects) / checked) * 100).toFixed(1)) : 100;
-      }
+      // In garments QC:
+      // Defects can be repaired on the line and are counted in good production.
+      // Rejects are unrecoverable scrap and are deducted from good production.
+      const checked = Number(field === 'checkedQty' ? value : row.checkedQty) || 0;
+      const defects = Number(field === 'defectQty' ? value : row.defectQty) || 0;
+      const rejects = Number(field === 'rejectQty' ? value : (row.rejectQty || 0)) || 0;
+
+      row.passedQty = Math.max(0, checked - rejects);
+      row.defectRate = checked > 0 ? Number(((defects / checked) * 100).toFixed(2)) : 0;
+      row.rftRate =
+        checked > 0
+          ? Number((Math.max(0, (checked - defects - rejects) / checked) * 100).toFixed(1))
+          : 100;
 
       updated[index] = row;
       return updated;
@@ -493,13 +524,17 @@ export function AddProductionRecordPage({
       // Sum defects
       const sumDefects = breakdown.reduce((sum, d) => sum + d.count, 0);
       const checked = Number(row.checkedQty) || 0;
+      const rejects = Number(row.rejectQty || 0);
 
-      // Auto-calculate passed, DHU%, RFT%
+      // Defective pieces are repaired and passed into production; only scrap rejects are deducted
       row.defectBreakdown = breakdown;
       row.defectQty = sumDefects;
-      row.passedQty = Math.max(0, checked - sumDefects);
+      row.passedQty = Math.max(0, checked - rejects);
       row.defectRate = checked > 0 ? Number(((sumDefects / checked) * 100).toFixed(2)) : 0;
-      row.rftRate = checked > 0 ? Number((Math.max(0, (checked - sumDefects) / checked) * 100).toFixed(1)) : 100;
+      row.rftRate =
+        checked > 0
+          ? Number((Math.max(0, (checked - sumDefects - rejects) / checked) * 100).toFixed(1))
+          : 100;
 
       // Find top defect for this hour
       if (breakdown.length > 0) {
@@ -565,9 +600,12 @@ export function AddProductionRecordPage({
       const breakdown = sampleDefects[idx % sampleDefects.length];
       const sumDef = breakdown.reduce((s, d) => s + d.count, 0);
       const checked = 145;
-      const passed = checked - sumDef;
+      const reject = idx === 2 || idx === 6 ? 1 : 0; // occasional unrecoverable fabric defect / knife cut scrap
+      // In apparel manufacturing, defective pieces are repaired and passed into production.
+      // Only scrap rejects cannot be repaired and are deducted.
+      const passed = Math.max(0, checked - reject);
       const dhu = Number(((sumDef / checked) * 100).toFixed(2));
-      const rft = Number(((passed / checked) * 100).toFixed(1));
+      const rft = Number((Math.max(0, (checked - sumDef - reject) / checked) * 100).toFixed(1));
 
       return {
         id: `hr-std-${Date.now()}-${idx}`,
@@ -576,12 +614,13 @@ export function AddProductionRecordPage({
         checkedQty: checked,
         passedQty: passed,
         defectQty: sumDef,
+        rejectQty: reject,
         defectRate: dhu,
         rftRate: rft,
         defectBreakdown: breakdown,
         topDefect: breakdown[0].defectType,
         operatorId: `Station ${(idx % 8) + 1}`,
-        remarks: 'Standard inspection pace',
+        remarks: reject > 0 ? '1 scrap reject logged' : 'Standard inspection pace',
       };
     });
 
@@ -597,9 +636,12 @@ export function AddProductionRecordPage({
     }
     setCompletedQuantity(hourlySummary.totalPassed);
     setTotalDefects(hourlySummary.totalDefects);
+    setRejectQuantity(hourlySummary.totalRejects);
     setDhuRate(hourlySummary.avgDhu);
     setRftRate(hourlySummary.avgRft);
-    showToast(`✓ Synced ${hourlySummary.totalPassed} passed pcs & ${hourlySummary.avgDhu}% DHU to Order Summary.`);
+    showToast(
+      `✓ Synced ${hourlySummary.totalPassed} passed pcs (defects repaired), ${hourlySummary.totalRejects} scrap rejects & ${hourlySummary.avgDhu}% DHU to Order Summary.`
+    );
   };
 
   // Save Record
@@ -823,10 +865,19 @@ export function AddProductionRecordPage({
                       <div className="text-[11px] text-slate-600 truncate">
                         <span className="font-mono font-semibold text-slate-800">{bo.styleNumber}</span> — {bo.styleDescription}
                       </div>
-                      <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-0.5 font-mono">
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 mt-1 font-mono">
                         <span>Qty: <strong className="text-slate-700">{bo.orderQuantity.toLocaleString()} pcs</strong></span>
                         <span>•</span>
-                        <span>Ship Date: <strong className="text-slate-700">{bo.shipDate}</strong></span>
+                        <span className="text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                          SMV: {bo.smv ? `${bo.smv} min` : '18.5 min (Est)'}
+                        </span>
+                        {(bo.productionTarget || bo.dailyTarget) && (
+                          <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                            Target: {(bo.productionTarget || bo.dailyTarget)?.toLocaleString()} pcs/day
+                          </span>
+                        )}
+                        <span>•</span>
+                        <span>Ship: <strong className="text-slate-700">{bo.shipDate}</strong></span>
                       </div>
                     </button>
                   ))
@@ -989,7 +1040,13 @@ export function AddProductionRecordPage({
                 <Gauge className="w-3.5 h-3.5 text-indigo-600" />
                 SMV Target (Minutes)
               </label>
-              <span className="text-[10px] text-slate-400">Pacing benchmark</span>
+              {selectedBuyerOrder?.smv ? (
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-semibold">
+                  Linked from PO: {selectedBuyerOrder.smv}m
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-400">Pacing benchmark</span>
+              )}
             </div>
             <input
               type="number"
@@ -1005,6 +1062,11 @@ export function AddProductionRecordPage({
               }}
               className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
+            {selectedBuyerOrder && (selectedBuyerOrder.productionTarget || selectedBuyerOrder.dailyTarget) ? (
+              <p className="text-[10px] text-emerald-700 font-medium">
+                ✓ PO Target: {(selectedBuyerOrder.productionTarget || selectedBuyerOrder.dailyTarget)?.toLocaleString()} pcs/day (~{Math.round(((selectedBuyerOrder.productionTarget || selectedBuyerOrder.dailyTarget) || 0) / 8)} pcs/hr)
+              </p>
+            ) : null}
           </div>
 
           {/* Shipment Date (Due Date) */}
@@ -1179,16 +1241,18 @@ export function AddProductionRecordPage({
           </div>
         </div>
 
-        {/* TOP 3 IDENTIFIED DEFECTS WIDGET (AUTO-GENERATED) */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 rounded-xl text-white shadow-xs">
-          <div className="flex items-center justify-between pb-2.5 border-b border-white/10">
+        {/* TOP 3 IDENTIFIED DEFECTS WIDGET (CLEAN EXECUTIVE LIGHT DESIGN) */}
+        <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs text-slate-900">
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <Award className="w-4 h-4 text-amber-400" />
-              <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+              <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                <Award className="w-3.5 h-3.5" />
+              </div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
                 Live Top 3 Identified Defects
               </h4>
             </div>
-            <span className="text-[10px] text-slate-300 font-mono">
+            <span className="text-[10px] text-slate-500 font-mono">
               Auto-aggregated from all hourly QC inspection breakdowns
             </span>
           </div>
@@ -1202,30 +1266,32 @@ export function AddProductionRecordPage({
               top3DefectsSummary.map((td, rank) => {
                 const rankLabels = ['Rank #1 (Major)', 'Rank #2', 'Rank #3'];
                 const rankBadges = [
-                  'bg-amber-400/20 text-amber-300 border-amber-400/40',
-                  'bg-slate-300/20 text-slate-200 border-slate-300/40',
-                  'bg-amber-700/30 text-amber-200 border-amber-600/40',
+                  'bg-amber-50 text-amber-800 border-amber-200',
+                  'bg-slate-100 text-slate-700 border-slate-200',
+                  'bg-orange-50 text-orange-800 border-orange-200',
                 ];
 
                 return (
                   <div
                     key={td.defectType}
-                    className="p-3 rounded-xl bg-white/10 border border-white/10 space-y-1.5"
+                    className="p-3 rounded-xl bg-slate-50/80 border border-slate-200 space-y-1.5"
                   >
                     <div className="flex items-center justify-between">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${rankBadges[rank]}`}>
                         {rankLabels[rank]}
                       </span>
-                      <span className="font-mono font-bold text-sm text-white">
-                        {td.count} <span className="text-[10px] font-normal text-slate-300">pcs ({td.percentage}%)</span>
+                      <span className="font-mono font-bold text-xs text-slate-800">
+                        {td.count} <span className="text-[10px] font-normal text-slate-500">pcs ({td.percentage}%)</span>
                       </span>
                     </div>
-                    <div className="text-xs font-bold text-white truncate">
+                    <div className="text-xs font-bold text-slate-900 truncate" title={td.defectType}>
                       {td.defectType}
                     </div>
-                    <div className="w-full bg-white/15 h-1.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                       <div
-                        className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          rank === 0 ? 'bg-amber-500' : rank === 1 ? 'bg-blue-500' : 'bg-orange-500'
+                        }`}
                         style={{ width: `${Math.min(td.percentage, 100)}%` }}
                       />
                     </div>
@@ -1236,19 +1302,37 @@ export function AddProductionRecordPage({
           </div>
         </div>
 
-        {/* Hourly Table with Granular Defect Breakdown */}
+        {/* Quality Standard Guidance Callout */}
+        <div className="flex items-start sm:items-center gap-2.5 p-3 bg-blue-50/70 rounded-xl border border-blue-200/80 text-xs text-blue-900">
+          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 sm:mt-0" />
+          <div className="text-[11px] leading-relaxed">
+            <strong className="font-bold text-blue-950">Factory QC Inspection Protocol:</strong>{' '}
+            <strong className="text-amber-900 font-bold">Defects (Rework)</strong> are repairable alterations (repaired by line tailors & passed into production).{' '}
+            <strong className="text-rose-900 font-bold">Rejects (Scrap)</strong> are unrecoverable fabric cuts or damages permanently excluded from production (<code className="bg-blue-100 px-1 py-0.5 rounded font-mono font-bold">Passed = Checked - Rejects</code>).{' '}
+            <strong className="text-indigo-900 font-bold">RFT%</strong> measures garments passing cleanly on the first inspection without rework.
+          </div>
+        </div>
+
+        {/* Hourly Table with Granular Defect Breakdown and Scrap Rejects */}
         <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="w-full text-left text-xs border-collapse min-w-[980px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[1050px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                 <th className="py-2.5 px-3 w-12 text-center">#</th>
                 <th className="py-2.5 px-3 w-32">Hour Slot</th>
-                <th className="py-2.5 px-3 w-24 text-right">Target</th>
-                <th className="py-2.5 px-3 w-28 text-right bg-blue-50/50">Total Checked</th>
-                <th className="py-2.5 px-3 w-24 text-right bg-rose-50/50">Total Defect</th>
-                <th className="py-2.5 px-3 w-24 text-right bg-emerald-50/50">Passed Pcs</th>
-                <th className="py-2.5 px-3 w-24 text-right">DHU %</th>
-                <th className="py-2.5 px-3 w-24 text-right">RFT %</th>
+                <th className="py-2.5 px-3 w-20 text-right">Target</th>
+                <th className="py-2.5 px-3 w-24 text-right bg-blue-50/50">Checked</th>
+                <th className="py-2.5 px-3 w-24 text-right bg-amber-50/50" title="Repairable alterations reworked on the line">
+                  Defects (Rework)
+                </th>
+                <th className="py-2.5 px-3 w-24 text-right bg-rose-50/50" title="Unrecoverable scrap pieces (deducted from production)">
+                  Rejects (Scrap)
+                </th>
+                <th className="py-2.5 px-3 w-24 text-right bg-emerald-50/50" title="Good output delivered (Checked - Scrap Rejects). Repaired defects are counted.">
+                  Passed (Output)
+                </th>
+                <th className="py-2.5 px-3 w-20 text-right">DHU %</th>
+                <th className="py-2.5 px-3 w-20 text-right">RFT %</th>
                 <th className="py-2.5 px-3 min-w-[240px]">Defects & Quantities Logged</th>
                 <th className="py-2.5 px-3 w-36">Workstation / Remarks</th>
                 <th className="py-2.5 px-3 w-10 text-center">Del</th>
@@ -1257,7 +1341,17 @@ export function AddProductionRecordPage({
             <tbody className="divide-y divide-slate-100">
               {hourlyReports.map((row, index) => {
                 const dhuVal = row.defectRate || 0;
-                const rftVal = row.rftRate ?? (row.checkedQty > 0 ? Number((Math.max(0, row.checkedQty - row.defectQty) / row.checkedQty * 100).toFixed(1)) : 100);
+                const rftVal =
+                  row.rftRate ??
+                  (row.checkedQty > 0
+                    ? Number(
+                        (
+                          (Math.max(0, row.checkedQty - row.defectQty - (row.rejectQty || 0)) /
+                            row.checkedQty) *
+                          100
+                        ).toFixed(1)
+                      )
+                    : 100);
 
                 const dhuBadgeColor =
                   dhuVal === 0
@@ -1320,16 +1414,36 @@ export function AddProductionRecordPage({
                       />
                     </td>
 
-                    {/* Total Defects Found (Auto calculated from breakdown) */}
-                    <td className="py-2.5 px-3 text-right bg-rose-50/20">
-                      <span className="font-mono font-bold text-xs text-rose-700 bg-rose-100/60 px-2 py-1 rounded-md border border-rose-200">
+                    {/* Defects Found (Repairable rework - auto calculated from breakdown) */}
+                    <td className="py-2.5 px-3 text-right bg-amber-50/20">
+                      <span
+                        className="font-mono font-bold text-xs text-amber-800 bg-amber-100/70 px-2 py-1 rounded-md border border-amber-300"
+                        title="Repairable defects reworked on the line by tailors"
+                      >
                         {row.defectQty}
                       </span>
                     </td>
 
-                    {/* Passed Pcs (Auto-calculated: checked - defects) */}
+                    {/* Rejects / Scrap (Unrecoverable pieces deducted from output) */}
+                    <td className="py-2.5 px-3 bg-rose-50/20">
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.rejectQty ?? 0}
+                        onChange={(e) =>
+                          updateHourlyRow(index, 'rejectQty', parseInt(e.target.value, 10) || 0)
+                        }
+                        title="Unrecoverable scrap pieces (deducted from good output)"
+                        className="w-full px-2 py-1 text-xs font-mono text-right font-bold bg-white border border-rose-300 rounded-lg text-rose-900 focus:outline-hidden focus:ring-2 focus:ring-rose-500 shadow-xs"
+                      />
+                    </td>
+
+                    {/* Passed Pcs (Auto-calculated: Checked - Rejects. Repaired defects included.) */}
                     <td className="py-2.5 px-3 text-right bg-emerald-50/20">
-                      <span className="font-mono font-bold text-xs text-emerald-700 bg-emerald-100/60 px-2 py-1 rounded-md border border-emerald-200">
+                      <span
+                        className="font-mono font-bold text-xs text-emerald-700 bg-emerald-100/60 px-2 py-1 rounded-md border border-emerald-200"
+                        title="Good production pieces passed (Checked - Scrap Rejects). Repaired defects are included."
+                      >
                         {row.passedQty}
                       </span>
                     </td>
@@ -1361,14 +1475,14 @@ export function AddProductionRecordPage({
                           breakdown.map((d) => (
                             <span
                               key={d.defectType}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-800 border border-rose-200"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200"
                             >
                               <span>{d.defectType}:</span>
-                              <strong className="font-mono text-rose-900">{d.count}</strong>
+                              <strong className="font-mono text-amber-950">{d.count}</strong>
                               <button
                                 type="button"
                                 onClick={() => handleAddDefectToHour(index, d.defectType, -1)}
-                                className="ml-0.5 text-rose-400 hover:text-rose-700"
+                                className="ml-0.5 text-amber-600 hover:text-amber-900"
                                 title="Reduce count by 1"
                               >
                                 ×
@@ -1439,36 +1553,36 @@ export function AddProductionRecordPage({
           </div>
 
           <div>
+            <div className="text-[10px] uppercase font-bold text-amber-700 tracking-wider">
+              Repairable Defects
+            </div>
+            <div className="text-base font-black font-mono text-amber-800 mt-0.5">
+              {hourlySummary.totalDefects.toLocaleString()}{' '}
+              <span className="text-[10px] font-normal text-slate-400">def</span>
+            </div>
+            <div className="text-[10px] text-amber-700 font-medium">DHU: {hourlySummary.avgDhu}%</div>
+          </div>
+
+          <div>
+            <div className="text-[10px] uppercase font-bold text-rose-600 tracking-wider">
+              Scrap Rejects
+            </div>
+            <div className="text-base font-black font-mono text-rose-700 mt-0.5">
+              {hourlySummary.totalRejects.toLocaleString()}{' '}
+              <span className="text-[10px] font-normal text-slate-400">pcs</span>
+            </div>
+            <div className="text-[10px] text-rose-600 font-medium">{hourlySummary.rejectRate}% scrap</div>
+          </div>
+
+          <div>
             <div className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider">
-              Total Passed
+              Total Passed (Output)
             </div>
             <div className="text-base font-black font-mono text-emerald-700 mt-0.5">
               {hourlySummary.totalPassed.toLocaleString()}{' '}
               <span className="text-[10px] font-normal text-slate-400">pcs</span>
             </div>
-          </div>
-
-          <div>
-            <div className="text-[10px] uppercase font-bold text-rose-600 tracking-wider">
-              Total Defects
-            </div>
-            <div className="text-base font-black font-mono text-rose-700 mt-0.5">
-              {hourlySummary.totalDefects.toLocaleString()}{' '}
-              <span className="text-[10px] font-normal text-slate-400">def</span>
-            </div>
-          </div>
-
-          <div>
-            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-              Auto-DHU%
-            </div>
-            <div
-              className={`text-base font-black font-mono mt-0.5 ${
-                hourlySummary.avgDhu <= 2.0 ? 'text-emerald-700' : 'text-rose-700'
-              }`}
-            >
-              {hourlySummary.avgDhu}%
-            </div>
+            <div className="text-[10px] text-emerald-700 font-medium">Checked - Rejects</div>
           </div>
 
           <div>
@@ -1478,6 +1592,7 @@ export function AddProductionRecordPage({
             <div className="text-base font-black font-mono text-indigo-700 mt-0.5">
               {hourlySummary.avgRft}%
             </div>
+            <div className="text-[10px] text-indigo-600 font-medium">First-pass clean</div>
           </div>
         </div>
       </div>
@@ -1562,7 +1677,18 @@ export function AddProductionRecordPage({
 
           {/* Unrecoverable Reject / Scrap */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-800">Reject / Scrap (Pcs)</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800">Reject / Scrap (Pcs)</label>
+              {hourlySummary.totalRejects > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRejectQuantity(hourlySummary.totalRejects)}
+                  className="text-[10px] text-rose-700 font-bold hover:underline cursor-pointer"
+                >
+                  Use Hourly ({hourlySummary.totalRejects})
+                </button>
+              )}
+            </div>
             <input
               type="number"
               min="0"
@@ -1593,19 +1719,19 @@ export function AddProductionRecordPage({
       {activeDefectModalHourIndex !== null && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden space-y-4">
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold">
+                <h3 className="text-sm font-bold text-slate-900">
                   Log Defects for Hour: {hourlyReports[activeDefectModalHourIndex]?.hourSlot}
                 </h3>
-                <p className="text-[11px] text-slate-300">
+                <p className="text-[11px] text-slate-500">
                   Select defect type and tap + to add count. DHU% and RFT% update automatically.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveDefectModalHourIndex(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -12,6 +12,7 @@ import { DashboardView } from '@/components/views/DashboardView';
 import { InventoryView } from '@/components/views/InventoryView';
 import { InspectionsView } from '@/components/views/InspectionsView';
 import { ProductionView } from '@/components/views/ProductionView';
+import { PlanningAndIeView } from '@/components/views/PlanningAndIeView';
 import { StandardsView } from '@/components/views/StandardsView';
 import { ArchitectureView } from '@/components/views/ArchitectureView';
 
@@ -42,6 +43,7 @@ import { TrainingView } from '@/components/views/TrainingView';
 import { MeetingMinutesView } from '@/components/views/MeetingMinutesView';
 import { EventsView } from '@/components/views/EventsView';
 import { CommunicationPortalView } from '@/components/views/CommunicationPortalView';
+import { TexpediaView } from '@/components/views/TexpediaView';
 import { SettingsView } from '@/components/views/SettingsView';
 
 // Modals
@@ -456,24 +458,27 @@ function ErpAppContent() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col bg-slate-50 font-sans antialiased text-slate-900">
-      {/* Universal Industrial Header */}
-      <ErpHeader
-        onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-        isSidebarOpen={isMobileSidebarOpen}
+    <div className="h-screen w-screen overflow-hidden flex bg-slate-50 font-sans antialiased text-slate-900">
+      {/* Unified Standard Sidebar - Positioned full-height on the left */}
+      <ErpSidebar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        isOpenMobile={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
       />
 
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Unified Standard Sidebar */}
-        <ErpSidebar
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          isOpenMobile={isMobileSidebarOpen}
-          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+      {/* Right Column: Top Bar + Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* Universal Topbar */}
+        <ErpHeader
+          onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          isSidebarOpen={isMobileSidebarOpen}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+          activeTab={activeTab}
+          onNavigateTab={setActiveTab}
         />
 
         {/* Main Content Area - Full fluid widescreen up to 1920px with smooth independent vertical scrolling */}
@@ -528,6 +533,12 @@ function ErpAppContent() {
                 }}
               />
             )}
+            {activeTab === 'planning_ie' && (
+              <PlanningAndIeView
+                orders={orders}
+                productionOrders={productionOrders}
+              />
+            )}
             {activeTab === 'production' && (
               <ProductionView
                 orders={productionOrders}
@@ -566,6 +577,7 @@ function ErpAppContent() {
             {activeTab === 'meeting_minutes' && <MeetingMinutesView />}
             {activeTab === 'events' && <EventsView />}
             {activeTab === 'communication' && <CommunicationPortalView />}
+            {activeTab === 'texpedia' && <TexpediaView />}
             {activeTab === 'settings' && <SettingsView />}
 
             {/* Architecture and Standards Reference */}

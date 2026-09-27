@@ -651,6 +651,45 @@ export function BuyerOrderEditPage({
               />
             </div>
 
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                Standard Minute Value (SMV / SAM)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="0.5"
+                value={formData.smv ?? 18.5}
+                onChange={(e) => handleInputChange('smv', parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="18.5"
+              />
+              <span className="text-[10px] text-slate-400 mt-0.5 block">
+                Target minutes per piece (auto-links to Production & Quality)
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                Planned Daily Production Target (Pcs)
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={formData.productionTarget ?? formData.dailyTarget ?? 1200}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 0;
+                  handleInputChange('productionTarget', val);
+                  handleInputChange('dailyTarget', val);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="1200"
+              />
+              <span className="text-[10px] text-slate-400 mt-0.5 block">
+                Scheduled daily line output for production monitoring
+              </span>
+            </div>
+
             {/* Merchandiser Information Header Banner */}
             <div className="md:col-span-3 pt-3 pb-1 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">

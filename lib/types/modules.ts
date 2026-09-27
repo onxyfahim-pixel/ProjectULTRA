@@ -70,6 +70,9 @@ export interface BuyerOrder {
   merchandiserName?: string;
   merchandiserEmail?: string;
   merchandiserPhone?: string;
+  smv?: number; // Standard Minute Value (SMV / SAM in minutes, e.g. 18.5)
+  productionTarget?: number; // Planned Daily or Hourly Production Target (linked to IE & Production)
+  dailyTarget?: number; // Planned Daily Output Target (pcs/day)
   productionTracking?: {
     currentStage: 'PLANNED' | 'CUTTING' | 'SEWING' | 'PACKING' | 'READY_AUDIT' | 'SHIPPED';
     stages: ProductionStageDetail[];
@@ -388,30 +391,111 @@ export interface CalibrationDevice {
 }
 
 // 8. KPI Metric
+export type KpiCategory = 'QUALITY' | 'PRODUCTIVITY' | 'DELIVERY' | 'COST' | 'SAFETY' | 'COMPLIANCE';
+export type KpiStatus = 'ON_TRACK' | 'AT_RISK' | 'CRITICAL' | 'EXCEEDED';
+export type KpiTrend = 'UP' | 'DOWN' | 'STABLE';
+export type KpiFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'PER_SHIPMENT';
+
+export interface KpiHistoryPoint {
+  id: string;
+  period: string;
+  value: number;
+  target?: number;
+  sampleSize?: number;
+  loggedBy?: string;
+  remarks?: string;
+}
+
+export interface KpiActionItem {
+  id: string;
+  task: string;
+  assignee: string;
+  department?: string;
+  dueDate: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  completed: boolean;
+  completedDate?: string;
+}
+
 export interface KpiMetric {
   id: string;
+  kpiCode?: string;
   metricName: string;
-  category: 'QUALITY' | 'PRODUCTIVITY' | 'DELIVERY' | 'COST';
+  category: KpiCategory | 'QUALITY' | 'PRODUCTIVITY' | 'DELIVERY' | 'COST';
+  department?: string;
+  ownerName?: string;
   currentValue: number;
   targetValue: number;
   unit: string;
   benchmark: string;
-  status: 'ON_TRACK' | 'AT_RISK' | 'CRITICAL';
-  trend: 'UP' | 'DOWN' | 'STABLE';
+  status: KpiStatus | 'ON_TRACK' | 'AT_RISK' | 'CRITICAL';
+  trend: KpiTrend | 'UP' | 'DOWN' | 'STABLE';
+  frequency?: KpiFrequency | string;
+  formula?: string;
+  desiredDirection?: 'LOWER_IS_BETTER' | 'HIGHER_IS_BETTER';
+  toleranceThreshold?: number;
+  history?: KpiHistoryPoint[];
+  actionItems?: KpiActionItem[];
+  description?: string;
+  lastUpdated?: string;
+  createdAt?: string;
 }
 
 // 9. Quality Goal & Achieve
+export type GoalPillar =
+  | 'CUSTOMER_SATISFACTION'
+  | 'DEFECT_REDUCTION'
+  | 'PROCESS_EFFICIENCY'
+  | 'COMPLIANCE_STANDARDS'
+  | 'LAB_TESTING'
+  | 'SUSTAINABILITY';
+
+export type GoalStatus = 'ACHIEVED' | 'IN_PROGRESS' | 'BEHIND' | 'PLANNED';
+export type GoalPriority = 'CRITICAL' | 'HIGH' | 'MEDIUM';
+
+export interface GoalMilestone {
+  id: string;
+  title: string;
+  targetDate: string;
+  completed: boolean;
+  completedDate?: string;
+  weightPercentage?: number;
+}
+
+export interface GoalActionPlan {
+  id: string;
+  task: string;
+  assignee: string;
+  department?: string;
+  dueDate: string;
+  completed: boolean;
+  completedDate?: string;
+}
+
 export interface QualityGoal {
   id: string;
+  goalCode?: string;
   goalTitle: string;
+  pillar?: GoalPillar;
+  department?: string;
   targetMetric: string;
   baseline: string;
   target: string;
   currentAchievement: string;
   percentageAchieved: number;
   ownerName: string;
+  startDate?: string;
   deadline: string;
-  status: 'ACHIEVED' | 'IN_PROGRESS' | 'BEHIND';
+  status: GoalStatus | 'ACHIEVED' | 'IN_PROGRESS' | 'BEHIND';
+  priority?: GoalPriority;
+  description?: string;
+  milestones?: GoalMilestone[];
+  actionPlans?: GoalActionPlan[];
+  reviewCycle?: 'QUARTERLY' | 'MONTHLY' | 'ANNUAL';
+  lastReviewedDate?: string;
+  approvedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // 10. Audit Record
@@ -599,6 +683,16 @@ export interface CapaItem {
 }
 
 // 12. Root Cause Analysis
+export type RcaStatus = 'DRAFT' | 'INVESTIGATING' | 'ROOT_CAUSE_IDENTIFIED' | 'CAPA_ASSIGNED' | 'VERIFIED_CLOSED' | 'COMPLETED';
+export type RcaSeverity = 'CRITICAL' | 'MAJOR' | 'MINOR';
+
+export interface RcaEvidenceImage {
+  id: string;
+  url: string;
+  caption?: string;
+  timestamp?: string;
+}
+
 export interface RootCauseCase {
   id: string;
   caseCode: string;
@@ -622,25 +716,122 @@ export interface RootCauseCase {
   };
   finalRootCause: string;
   createdDate: string;
-  status: 'COMPLETED' | 'DRAFT';
+  status: RcaStatus;
+  department?: string;
+  buyer?: string;
+  orderNumber?: string;
+  severity?: RcaSeverity;
+  targetClosureDate?: string;
+  actualClosureDate?: string;
+  investigationLead?: string;
+  teamMembers?: string[];
+  containmentAction?: string;
+  problemDescription?: string;
+  linkedCapaId?: string;
+  linkedDefectCode?: string;
+  correctiveAction?: string;
+  preventiveAction?: string;
+  verificationNotes?: string;
+  appliedMethods?: ('FIVE_WHY' | 'FISHBONE' | string)[];
+  evidenceImages?: RcaEvidenceImage[];
 }
 
 // 13. Risk Assessment (FMEA)
-export interface RiskFmeaItem {
+export type RiskAssessmentType = 'PRODUCT' | 'PROCESS' | 'CRITICAL_PROCESS';
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type RiskStatus = 'DRAFT' | 'IN_PROGRESS' | 'MITIGATED' | 'APPROVED' | 'CLOSED';
+
+export type RiskSectionType =
+  | 'RAW_MATERIAL'
+  | 'EMBELLISHMENT'
+  | 'PRODUCT_TESTING'
+  | 'LEGAL_REQUIREMENT'
+  | 'CUTTING'
+  | 'SEWING'
+  | 'PACKAGING_FINISHING'
+  | 'OTHER';
+
+export interface RiskSectionItem {
   id: string;
-  fmeaCode: string;
+  section: RiskSectionType;
+  sectionLabel?: string;
   processStep: string;
   potentialFailureMode: string;
   potentialEffect: string;
+  potentialCauses?: string;
+  currentControls?: string;
   severity: number; // 1-10
   occurrence: number; // 1-10
   detection: number; // 1-10
-  rpn: number; // Severity * Occurrence * Detection
+  rpn: number; // Severity * Occurrence * Detection (1-1000)
+  riskLevel?: RiskLevel;
   mitigationAction: string;
-  responsibleLead: string;
+  responsibleLead?: string;
+  targetDate?: string;
+  status?: RiskStatus;
+  notes?: string;
 }
 
-// 14. Traceability Record
+export interface RiskFmeaItem {
+  id: string;
+  fmeaCode: string;
+  assessmentType?: RiskAssessmentType;
+  assessmentDate?: string;
+  title?: string;
+  styleNumber?: string;
+  buyer?: string;
+  department?: string;
+  processStep: string;
+  potentialFailureMode: string;
+  potentialEffect: string;
+  potentialCauses?: string;
+  currentControls?: string;
+  severity: number; // 1-10
+  occurrence: number; // 1-10
+  detection: number; // 1-10
+  rpn: number; // Severity * Occurrence * Detection (1-1000)
+  riskLevel?: RiskLevel;
+  mitigationAction: string;
+  responsibleLead: string;
+  targetDate?: string;
+  status?: RiskStatus;
+  productImage?: string; // Base64 data URL or image path
+  processImage?: string; // Base64 data URL or image path
+  assessorName?: string;
+  assessorTeam?: string[];
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+
+  // Extended fields for Buyer & Order module integration & multi-section risks
+  orderNumber?: string;
+  buyerOrderId?: string;
+  styleDescription?: string;
+  season?: string;
+  orderQuantity?: number;
+  sectionRisks?: RiskSectionItem[];
+  primarySection?: RiskSectionType;
+}
+
+export type RiskAssessmentRecord = RiskFmeaItem;
+
+// 14. Traceability Record & Brand Protection Reconciliation
+export interface TraceabilityEvidenceFile {
+  id: string;
+  name: string;
+  url: string;
+  uploadDate: string;
+  fileType: string;
+  size?: string;
+}
+
+export interface TraceabilityDestructionPhoto {
+  id: string;
+  url: string;
+  caption?: string;
+  timestamp?: string;
+}
+
 export interface TraceabilityChain {
   id: string;
   cartonBarcode: string;
@@ -654,6 +845,69 @@ export interface TraceabilityChain {
   yarnLot: string;
   cottonOrigin: string;
   passedFinalDate: string;
+  // Enhanced buyer order & custody attributes
+  poNumber?: string;
+  orderNumber?: string;
+  articleName?: string;
+  styleDescription?: string;
+  orderQuantity?: number;
+  season?: string;
+  colorWay?: string;
+  status?: 'VERIFIED' | 'IN_PROGRESS' | 'FLAGGED' | 'INCOMPLETE';
+  traceabilityScore?: number;
+  certificateStandard?: string;
+  certificateNumber?: string;
+  spinningMill?: string;
+  fabricMill?: string;
+  ginningLocation?: string;
+  inspectorName?: string;
+  metalDetectionStatus?: 'PASSED' | 'FAILED' | 'PENDING';
+  needlePolicyVerified?: boolean;
+  notes?: string;
+  qrCodeUrl?: string;
+  rfidTag?: string;
+  updatedAt?: string;
+
+  // Step-by-Step Quantity Verification (Receive, Issue, Packed, Reject, Excess)
+  receivedQty?: number;
+  issuedQty?: number;
+  cutQty?: number;
+  passedQty?: number;
+  rejectQty?: number;
+  excessQty?: number;
+  wasteQty?: number;
+  varianceQty?: number;
+  reconciliationStatus?: '100%_RECONCILED' | 'PENDING_RECONCILIATION' | 'VARIANCE_FLAGGED';
+
+  // Inbound Challan & Invoice Evidence
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  challanNumber?: string;
+  challanDate?: string;
+  gatePassNumber?: string;
+  challanEvidenceFiles?: TraceabilityEvidenceFile[];
+
+  // Brand Protection & Disposal Record
+  brandProtectionStatus?: 'SECURED' | 'PENDING_DESTRUCTION' | 'DISPOSED_CERTIFIED';
+  disposalRecordId?: string;
+  disposedExcessQty?: number;
+  disposalMethod?: 'SHREDDING' | 'DE_LABELING' | 'INCINERATION' | 'AUTHORIZED_RECYCLER';
+  disposalDate?: string;
+  disposalFacility?: string;
+  witnessedBy?: string;
+  disposalWitnessSignature?: string;
+  certificateOfDestructionNumber?: string;
+  destructionEvidencePhotos?: TraceabilityDestructionPhoto[];
+  destructionCertificateFile?: string;
+}
+
+export interface CertificateAttachment {
+  id: string;
+  name: string;
+  size: string;
+  fileType: string;
+  uploadDate: string;
+  url?: string;
 }
 
 // 15. Certificate
@@ -663,15 +917,56 @@ export interface FactoryCertificate {
   name: string;
   issuingBody: string;
   certificateNumber: string;
+  category?: 'QUALITY_QMS' | 'SOCIAL_COMPLIANCE' | 'ENVIRONMENTAL' | 'CHEMICAL_SAFETY' | 'TRANSACTION_TC' | 'SUPPLY_CHAIN';
+  standardType?: string;
   validFrom: string;
   validUntil: string;
   daysRemaining: number;
   status: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED';
   scope: string;
-  documentUrl: string;
+  documentUrl?: string;
+  // Link to Buyer & Order module
+  poNumber?: string;
+  orderNumber?: string;
+  styleNumber?: string;
+  articleName?: string;
+  buyerName?: string;
+  brand?: string;
+  orderQuantity?: number;
+  season?: string;
+  // Audit & Facility Information
+  facilityLocation?: string;
+  leadAuditor?: string;
+  auditAgency?: string;
+  renewalLeadDays?: number;
+  verifiedBy?: string;
+  remarks?: string;
+  qrCode?: string;
+  attachments?: CertificateAttachment[];
+  updatedAt?: string;
 }
 
 // 16. Document Control
+export interface DocumentAttachment {
+  id: string;
+  name: string;
+  size: string;
+  fileType: string;
+  uploadDate: string;
+  url?: string;
+  revCaption?: string;
+}
+
+export interface DocumentRevision {
+  id: string;
+  version: string;
+  changeDescription: string;
+  changedBy: string;
+  approvedBy: string;
+  releaseDate: string;
+  reasonForChange?: string;
+}
+
 export interface ControlledDocument {
   id: string;
   docNumber: string;
@@ -683,45 +978,275 @@ export interface ControlledDocument {
   effectiveDate: string;
   nextReviewDate: string;
   status: 'APPROVED_ACTIVE' | 'UNDER_REVISION' | 'OBSOLETE';
+  // Rich Enterprise Document Control extensions
+  scope?: string;
+  purpose?: string;
+  preparedBy?: string;
+  reviewedBy?: string;
+  isoClause?: string;
+  distributionList?: string[];
+  confidentialityLevel?: 'INTERNAL_CONFIDENTIAL' | 'RESTRICTED' | 'GENERAL_FACILITY' | 'PUBLIC';
+  documentLocation?: string;
+  reviewFrequencyMonths?: number;
+  daysRemaining?: number;
+  changeLog?: DocumentRevision[];
+  attachments?: DocumentAttachment[];
+  remarks?: string;
+  qrCode?: string;
+  updatedAt?: string;
 }
 
-// 17. SOP Item
+// 17. SOP Item & Operational Management
+export interface SopStep {
+  id: string;
+  stepNumber: number;
+  stepTitle: string;
+  actionDetails: string;
+  qualityControlPoints?: string;
+  responsibleRole?: string;
+  safetyInstructions?: string;
+  requiredTools?: string;
+  // legacy compatibility
+  checkpoint?: string;
+  safetyPpe?: string;
+}
+
+export interface SopAcknowledgement {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  role: string;
+  department: string;
+  acknowledgedDate: string;
+  status: 'ACKNOWLEDGED' | 'PENDING' | 'OVERDUE';
+  signatureNote?: string;
+}
+
+export interface SopTrainingRecord {
+  id: string;
+  trainingTopic: string;
+  trainerName: string;
+  trainingDate: string;
+  traineesCount: number;
+  averageScorePercent: number;
+  passRatePercent: number;
+  status: 'COMPLETED' | 'SCHEDULED' | 'RETRAIN_REQUIRED';
+  notes?: string;
+}
+
+export interface SopApproval {
+  preparedBy: string;
+  preparedDate?: string;
+  reviewedBy: string;
+  reviewedDate?: string;
+  approvedBy: string;
+  approvalDate?: string;
+}
+
 export interface SopItem {
   id: string;
-  sopNumber: string;
-  title: string;
-  department: string;
-  revision: string;
-  purpose: string;
-  stepsCount: number;
-  applicability: string;
-  lastReviewed: string;
-  status: 'ACTIVE' | 'DRAFT' | 'REVIEW_DUE';
+  sopNumber: string; // SOP ID (e.g. SOP-QA-001)
+  title: string; // SOP Title
+  department: string; // Department
+  process: string; // Process (e.g. Fabric 4-Point Inspection)
+  version: string; // Version (e.g. v3.1 or Rev 3.1)
+  revision?: string; // backwards compatibility
+  effectiveDate: string; // Effective Date
+  reviewDate: string; // Review Date
+  status: 'ACTIVE' | 'UNDER_REVIEW' | 'DRAFT' | 'EXPIRED' | 'REVIEW_DUE'; // Status
+  purpose: string; // Purpose
+  scope: string; // Scope
+  responsibility: string; // Responsibility roles
+  procedure: SopStep[]; // Procedure
+  steps?: SopStep[]; // backwards compatibility
+  stepsCount: number; // Step count
+  safetyInstructions: string; // Safety Instructions
+  qualityControlPoints: string[]; // Quality Control Points
+  requiredEquipment: string[]; // Required Equipment
+  attachments?: DocumentAttachment[]; // Attachments
+  approval?: SopApproval; // Approval
+  preparedBy?: string; // backwards compatibility
+  reviewedBy?: string; // backwards compatibility
+  approvedBy?: string; // backwards compatibility
+  revisionHistory?: { date: string; version: string; description: string; author: string }[];
+  acknowledgements?: SopAcknowledgement[]; // SOP Acknowledgement
+  trainingRecords?: SopTrainingRecord[]; // SOP Training
+  expiryReminderDays?: number; // Expiry Reminder days
+  expiryStatus?: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED'; // Expiry Reminder status
+  // Additional context
+  applicability?: string; // backwards compatibility
+  lastReviewed?: string; // backwards compatibility
+  nextReviewDate?: string; // backwards compatibility
+  sopCategory?: 'PRODUCTION' | 'QUALITY' | 'MAINTENANCE' | 'SAFETY_COMPLIANCE' | 'HR_ADMIN';
+  ppeRequirements?: string[];
+  criticalSafetyRules?: string[];
+  reviewFrequencyMonths?: number;
+  daysRemaining?: number;
+  targetStations?: string[];
+  distributionList?: string[];
+  changeLog?: DocumentRevision[];
+  qrCode?: string;
+  remarks?: string;
+  updatedAt?: string;
 }
 
 // 18. Quality Manual Section
+export type QualityManualStatus = 'ACTIVE' | 'UNDER_REVIEW' | 'DRAFT' | 'OBSOLETE';
+
+export interface QualityManualComplianceItem {
+  id: string;
+  requirement: string;
+  verificationMethod: string;
+  frequency: string;
+  status: 'COMPLIANT' | 'NEEDS_ACTION' | 'NOT_APPLICABLE';
+}
+
+export interface QualityManualLinkedDoc {
+  docNumber: string;
+  title: string;
+  docType: 'SOP' | 'PROCEDURE' | 'POLICY' | 'WORK_INSTRUCTION' | 'FORM';
+}
+
+export interface QualityManualRevision {
+  revision: string;
+  changeDate: string;
+  changedBy: string;
+  description: string;
+}
+
 export interface QualityManualSection {
   id: string;
   chapterNumber: string;
   title: string;
-  clauseReference: string; // e.g. ISO 9001 Clause 7.1
+  clauseReference: string; // e.g. ISO 9001:2015 Clause 5.2
   summary: string;
   responsibleDepartment: string;
   updatedAt: string;
+  // Rich Enterprise Extensions
+  status?: QualityManualStatus;
+  version?: string;
+  effectiveDate?: string;
+  nextReviewDate?: string;
+  approvedBy?: string;
+  scope?: string;
+  isoStandard?: string;
+  confidentiality?: 'INTERNAL_RESTRICTED' | 'GENERAL_FACILITY' | 'PUBLIC_POLICY';
+  policyCommitments?: string[];
+  complianceRequirements?: QualityManualComplianceItem[];
+  linkedDocuments?: QualityManualLinkedDoc[];
+  revisionHistory?: QualityManualRevision[];
+  author?: string;
+  reviewedBy?: string;
+  notes?: string;
+  createdAt?: string;
 }
 
 // 19. Procedure
+export type ProcedureStation =
+  | 'FABRIC_INSPECTION'
+  | 'SPREADING_CUTTING'
+  | 'FUSING'
+  | 'SEWING_ASSEMBLY'
+  | 'IRONING_FINISHING'
+  | 'PACKING_CARTONING'
+  | 'FULL_PROCESS_CHAIN'
+  | 'MERCHANDISING_COMMERCIAL'
+  | 'QUALITY_ASSURANCE'
+  | 'SAMPLE_DEVELOPMENT';
+
+export type ProcedureStatus = 'DRAFT' | 'UNDER_REVIEW' | 'APPROVED' | 'ACTIVE' | 'ARCHIVED';
+
+export interface ProcedureResponsibility {
+  id?: string;
+  role: string;
+  responsibility: string;
+  authorityLevel?: string;
+}
+
+export interface ProcedureStepItem {
+  id?: string;
+  stepNumber: string; // e.g. "3.1.1"
+  title: string;
+  description: string;
+  inspectionFrequency?: string; // e.g. "100%", "10% by 4 points system", "AQL 2.5"
+  acceptanceCriteria?: string;
+  relatedFormCode?: string; // e.g. "NFFL/4/1005"
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+}
+
+export interface ProcedureDepartmentProcess {
+  id?: string;
+  departmentName: string;
+  departmentCode?: string;
+  inChargeRole?: string;
+  steps: ProcedureStepItem[];
+}
+
+export interface ProcedureRelatedDocument {
+  id?: string;
+  documentTitle: string;
+  documentCode: string;
+  category?: string;
+  frequency?: string;
+  retentionPeriod?: string;
+  isMandatory?: boolean;
+}
+
+export interface ProcedureDistributionEntry {
+  id?: string;
+  departmentOrFile: string;
+  copyType: 'CONTROLLED_PHYSICAL' | 'CONTROLLED_ELECTRONIC' | 'INFORMATIONAL';
+  recipientName?: string;
+  status?: 'DISTRIBUTED' | 'ACKNOWLEDGED' | 'PENDING';
+}
+
 export interface ProcedureItem {
   id: string;
   procedureCode: string;
   title: string;
-  station: 'FABRIC_INSPECTION' | 'SPREADING_CUTTING' | 'FUSING' | 'SEWING_ASSEMBLY' | 'IRONING_FINISHING' | 'PACKING_CARTONING';
+  companyName?: string;
+  department?: string;
+  documentType?: string;
+  documentReference?: string;
+  issueNo?: string;
+  revision: string;
+  status?: ProcedureStatus;
+  approvalDate?: string;
+  nextReviewDate?: string;
+  effectiveDate?: string;
+  authorName?: string;
+  authorSignature?: string;
+  approvedByName?: string;
+  approvedBySignature?: string;
+  controlledDocument?: boolean;
+
+  // 1.0 Purpose & Scope
+  purposeAndScope?: string;
+
+  // 2.0 Responsibilities and Authorities
+  responsibilities?: ProcedureResponsibility[];
+
+  // 3.0 Department-wise Process Control
+  departmentProcesses?: ProcedureDepartmentProcess[];
+
+  // 4.0 Related Documents
+  relatedDocuments?: ProcedureRelatedDocument[];
+
+  // 5.0 Distribution
+  distribution?: ProcedureDistributionEntry[];
+
+  // Station and legacy fields
+  station: ProcedureStation;
   criticalCheckpoints: string[];
   ppeRequirement: string;
-  revision: string;
+
+  tags?: string[];
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-// 20. Process Flow Step
+// 20. Process Flow Step & Process Flow Chart
 export interface ProcessFlowStep {
   id: string;
   stepNumber: number;
@@ -732,9 +1257,38 @@ export interface ProcessFlowStep {
   qualityGate: string;
   standardTool: string;
   leadTimeHours: number;
+  responsibleRole?: string;
+  criticalGate?: boolean;
+  toleranceSpecs?: string;
+}
+
+export type ProcessFlowStatus = 'ACTIVE' | 'DRAFT' | 'UNDER_REVIEW' | 'ARCHIVED';
+
+export interface ProcessFlowChart {
+  id: string;
+  flowCode: string;
+  title: string;
+  productCategory: string; // e.g. 'Knitwear', 'Woven Denim', 'Outerwear', 'Activewear'
+  department: string;
+  version: string;
+  status: ProcessFlowStatus;
+  author: string;
+  approvedBy: string;
+  effectiveDate: string;
+  reviewDate?: string;
+  description: string;
+  steps: ProcessFlowStep[];
+  totalLeadTimeHours?: number;
+  criticalGatesCount?: number;
+  tags?: string[];
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // 21. Organogram Node
+export type OrganogramStatus = 'ACTIVE' | 'ON_LEAVE' | 'VACANT';
+
 export interface OrganogramNode {
   id: string;
   name: string;
@@ -744,9 +1298,28 @@ export interface OrganogramNode {
   email: string;
   headcount: number;
   grade: string;
+  phone?: string;
+  officeLocation?: string;
+  status?: OrganogramStatus;
+  responsibilities?: string[];
+  certifications?: string[];
+  decisionAuthority?: string;
+  avatarUrl?: string;
+  joinedDate?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // 22. Job Description
+export type JobDescriptionStatus = 'ACTIVE' | 'VACANT' | 'UNDER_REVISION' | 'ARCHIVED';
+
+export interface JobDescriptionKpi {
+  kpiName: string;
+  target: string;
+  measurementFrequency: string;
+}
+
 export interface JobDescriptionItem {
   id: string;
   roleCode: string;
@@ -757,20 +1330,185 @@ export interface JobDescriptionItem {
   educationRequirement: string;
   experienceYears: number;
   technicalSkills: string[];
+  // Rich Enterprise & ISO Audit Extensions
+  incumbentName?: string;
+  companyIdNo?: string;
+  supervisorName?: string;
+  supervisorTitle?: string;
+  supervisorIdNo?: string;
+  status?: JobDescriptionStatus;
+  employmentType?: 'FULL_TIME' | 'CONTRACT' | 'PROBATIONARY';
+  isoClauseMapping?: string[];
+  decisionAuthority?: string;
+  kpiMetrics?: JobDescriptionKpi[];
+  certificationsRequired?: string[];
+  reportingSubordinates?: string[];
+  workstationLocation?: string;
+  effectiveDate?: string;
+  revision?: string;
+  approvedBy?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-// 23. Training Record
+// 23. Training Record & Examination System
+export type TrainingFrequency = 'ONBOARDING' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUAL' | 'ANNUAL';
+export type TrainingStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'CANCELLED';
+
+export interface TrainingAttendee {
+  id: string;
+  employeeId: string;
+  name: string;
+  department: string;
+  sectionLine?: string;
+  designation: string;
+  attendanceStatus: 'PRESENT' | 'ABSENT' | 'EXCUSED';
+  checkInTime?: string;
+  signatureVerified?: boolean;
+  preTestScore?: number;
+  postTestScore?: number;
+  practicalScore?: number;
+  finalScore?: number;
+  result?: 'PASSED' | 'FAILED' | 'RETEST_REQUIRED';
+  certificateNo?: string;
+  remarks?: string;
+}
+
+export interface AnnualTrainingScheduleItem {
+  id: string;
+  scheduleCode: string;
+  month: string;
+  monthIndex: number;
+  dayOfWeek: string;
+  date: string;
+  timeSlot: string;
+  durationHours: number;
+  section: 'CUTTING_SECTION' | 'SEWING_SECTION' | 'FINISHING_PACKING' | 'FABRIC_LAB' | 'QUALITY_ASSURANCE' | 'MAINTENANCE_SAFETY';
+  sectionName: string;
+  courseCode: string;
+  topicTitle: string;
+  trainerName: string;
+  venue: string;
+  targetSeats: number;
+  status: 'SCHEDULED' | 'UPCOMING' | 'COMPLETED' | 'OVERDUE';
+  mandatoryFor: string;
+  notes?: string;
+}
+
+export interface TrainingExamQuestion {
+  id: string;
+  questionNumber: number;
+  questionText: string;
+  type: 'MCQ' | 'TRUE_FALSE' | 'PRACTICAL_CHECK' | 'VIVA';
+  options?: string[];
+  correctAnswer?: string;
+  points: number;
+  evaluationCriteria?: string;
+}
+
+export interface TrainingExamPaper {
+  id: string;
+  examCode: string;
+  title: string;
+  courseCode: string;
+  courseTitle: string;
+  targetDepartment: string;
+  durationMinutes: number;
+  totalMarks: number;
+  passingPercentage: number;
+  questions: TrainingExamQuestion[];
+  instructions?: string;
+  status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TrainingEvaluationRecord {
+  id: string;
+  evaluationCode: string;
+  trainingId: string;
+  courseCode: string;
+  courseTitle: string;
+  sessionDate: string;
+  trainerName: string;
+  evaluatorName: string;
+  evaluatorTitle: string;
+  totalAttendees: number;
+  passedCount: number;
+  failedCount: number;
+  averageScorePercent: number;
+  trainees: TrainingAttendee[];
+  trainerRemarks?: string;
+  competencyCertified: boolean;
+  status: 'COMPLETED' | 'DRAFT' | 'VERIFIED';
+  updatedAt?: string;
+}
+
 export interface TrainingMatrixItem {
   id: string;
   courseCode: string;
   title: string;
   targetAudience: string;
   trainerName: string;
-  frequency: 'ONBOARDING' | 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
+  frequency: TrainingFrequency;
   trainedCount: number;
   passRatePercent: number;
   nextScheduledDate: string;
-  status: 'SCHEDULED' | 'COMPLETED' | 'OVERDUE';
+  status: TrainingStatus;
+  // Rich Enterprise Extensions
+  department?: string;
+  section?: string;
+  scheduledDay?: string;
+  timeSlot?: string;
+  category?: 'SAFETY_COMPLIANCE' | 'TECHNICAL_QMS' | 'MACHINE_OPERATION' | 'CHEMICAL_ENVIRONMENTAL' | 'MANAGEMENT_AUDITING';
+  durationHours?: number;
+  venue?: string;
+  maxCapacity?: number;
+  syllabusTopics?: string[];
+  prerequisites?: string;
+  isoClause?: string;
+  examPaperId?: string;
+  examCode?: string;
+  attendees?: TrainingAttendee[];
+  latestEvaluationId?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type MeetingType =
+  | 'PRE_PRODUCTION'
+  | 'BUYER_QUALITY_REVIEW'
+  | 'WEEKLY_QMS'
+  | 'NEEDLE_SAFETY'
+  | 'CUSTOMER_CLAIM_CAPA'
+  | 'MANAGEMENT_REVIEW'
+  | 'INTERNAL_AUDIT';
+
+export type MeetingStatus = 'CLOSED' | 'ACTIONS_PENDING' | 'IN_REVIEW' | 'DRAFT';
+
+export interface MeetingAttendee {
+  id: string;
+  name: string;
+  organization: 'FACTORY' | 'BUYER' | 'SUPPLIER' | 'THIRD_PARTY';
+  department: string;
+  role: string;
+  attendanceStatus: 'PRESENT' | 'ABSENT' | 'EXCUSED';
+  signatureConfirmed?: boolean;
+}
+
+export interface MeetingActionItem {
+  id?: string;
+  task: string;
+  assignee: string;
+  department?: string;
+  dueDate: string;
+  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+  completed: boolean;
+  completedDate?: string;
+  verificationNotes?: string;
 }
 
 // 24. Meeting Minutes
@@ -779,41 +1517,152 @@ export interface MeetingMinutesItem {
   meetingCode: string;
   title: string;
   meetingDate: string;
+  meetingTime?: string;
+  durationMinutes?: number;
+  venue?: string;
+  meetingType?: MeetingType;
   chairperson: string;
+  scribeName?: string;
+  buyerName?: string;
+  orderPoNumber?: string;
+  styleNumber?: string;
   attendeesCount: number;
+  attendees?: MeetingAttendee[];
   agenda: string;
-  actionItems: {
-    task: string;
-    assignee: string;
-    dueDate: string;
-    completed: boolean;
-  }[];
-  status: 'CLOSED' | 'ACTIONS_PENDING';
+  discussionNotes?: string[];
+  actionItems: MeetingActionItem[];
+  status: MeetingStatus;
+  preparedBy?: string;
+  approvedBy?: string;
+  targetClosureDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // 25. Event Item
+export type EventType =
+  | 'BUYER_VISIT'
+  | 'PRE_PRODUCTION_MEETING'
+  | 'QUALITY_MONTH'
+  | 'AUDIT_INSPECTION'
+  | 'MAINTENANCE_SHUTDOWN'
+  | 'TRAINING_SEMINAR'
+  | 'MANAGEMENT_REVIEW';
+
+export type EventStatus = 'UPCOMING' | 'IN_PROGRESS' | 'CONCLUDED' | 'POSTPONED' | 'CANCELLED';
+export type EventPriority = 'CRITICAL' | 'HIGH' | 'MEDIUM';
+
+export interface EventAttendee {
+  id: string;
+  name: string;
+  organization: 'BUYER' | 'FACTORY' | 'AUDITOR' | 'SUPPLIER';
+  department?: string;
+  role: string;
+  confirmed: boolean;
+}
+
+export interface EventScheduleItem {
+  id: string;
+  timeSlot: string;
+  activity: string;
+  location: string;
+  facilitator: string;
+  completed: boolean;
+}
+
+export interface EventChecklistItem {
+  id: string;
+  task: string;
+  responsiblePerson: string;
+  dueDate: string;
+  completed: boolean;
+  completedDate?: string;
+}
+
 export interface FactoryEventItem {
   id: string;
   eventCode: string;
   title: string;
-  type: 'BUYER_VISIT' | 'PRE_PRODUCTION_MEETING' | 'QUALITY_MONTH' | 'AUDIT_INSPECTION' | 'MAINTENANCE_SHUTDOWN';
+  type: EventType | 'BUYER_VISIT' | 'PRE_PRODUCTION_MEETING' | 'QUALITY_MONTH' | 'AUDIT_INSPECTION' | 'MAINTENANCE_SHUTDOWN';
   eventDate: string;
+  endDate?: string;
+  timeSlot?: string;
   location: string;
   leadOrganizer: string;
-  status: 'UPCOMING' | 'IN_PROGRESS' | 'CONCLUDED';
+  buyerName?: string;
+  department?: string;
+  priority?: EventPriority;
+  status: EventStatus | 'UPCOMING' | 'IN_PROGRESS' | 'CONCLUDED';
+  description?: string;
+  agendaSummary?: string;
+  readinessPercentage?: number;
+  attendeesCount?: number;
+  delegationMembers?: EventAttendee[];
+  itinerary?: EventScheduleItem[];
+  preparationChecklist?: EventChecklistItem[];
+  outcomesSummary?: string;
+  keyFindings?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // 26. Communication Notice
+export type NoticeCategory =
+  | 'QUALITY_FLASH'
+  | 'BUYER_ADVISORY'
+  | 'OPERATIONAL_CIRCULAR'
+  | 'COMPLIANCE_SAFETY'
+  | 'COMMENDATION';
+
+export type NoticeUrgency = 'HIGH_PRIORITY' | 'STANDARD' | 'INFO';
+
+export type NoticeStatus = 'PUBLISHED' | 'DRAFT' | 'ARCHIVED';
+
+export interface NoticeAcknowledgment {
+  id: string;
+  userName: string;
+  userRole: string;
+  department: string;
+  acknowledgedAt: string;
+  actionTakenNotes?: string;
+}
+
+export interface NoticeComment {
+  id: string;
+  authorName: string;
+  authorRole: string;
+  department: string;
+  timestamp: string;
+  comment: string;
+}
+
 export interface CommunicationNotice {
   id: string;
   noticeNumber: string;
   title: string;
-  urgency: 'HIGH_PRIORITY' | 'STANDARD' | 'INFO';
+  urgency: NoticeUrgency;
+  category?: NoticeCategory;
   author: string;
+  authorRole?: string;
   targetDepartment: string;
+  targetAudience?: string[];
   publishedDate: string;
+  effectiveUntil?: string;
   content: string;
+  actionRequired?: string;
   isRead: boolean;
+  status?: NoticeStatus;
+  buyerRef?: string;
+  orderRef?: string;
+  styleRef?: string;
+  attachments?: { name: string; size: string; type: string }[];
+  acknowledgments?: NoticeAcknowledgment[];
+  comments?: NoticeComment[];
+  totalRecipientsCount?: number;
+  acknowledgedCount?: number;
+  pinned?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // 27. System Setting
@@ -826,3 +1675,58 @@ export interface SystemConfigSetting {
   unit?: string;
   description: string;
 }
+
+// 28. Texpedia Textile & Garments Knowledge Community
+export type TexpediaCategory =
+  | 'FABRIC_WEAVING'
+  | 'DYEING_WASHING'
+  | 'CUTTING_PATTERN'
+  | 'SEWING_MACHINERY'
+  | 'FINISHING_PACKING'
+  | 'QUALITY_AUDIT'
+  | 'TECHNICAL_TIPS';
+
+export interface TexpediaImage {
+  id: string;
+  url: string;
+  caption: string;
+  highlightDefect?: boolean;
+}
+
+export interface TexpediaComment {
+  id: string;
+  authorName: string;
+  authorRole: string;
+  authorAvatar?: string;
+  department: string;
+  timestamp: string;
+  content: string;
+  likesCount?: number;
+}
+
+export interface TexpediaPost {
+  id: string;
+  title: string;
+  slug?: string;
+  category: TexpediaCategory;
+  tags: string[];
+  content: string;
+  summary?: string;
+  author: {
+    name: string;
+    role: string;
+    department: string;
+    avatarUrl?: string;
+    badges?: string[];
+  };
+  images: TexpediaImage[];
+  upvotesCount: number;
+  hasUpvoted?: boolean;
+  isBookmarked?: boolean;
+  isVerifiedSolution?: boolean;
+  viewsCount: number;
+  createdAt: string;
+  updatedAt?: string;
+  comments: TexpediaComment[];
+}
+

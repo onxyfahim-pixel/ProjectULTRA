@@ -148,40 +148,31 @@ export function LoginPage() {
   const [isQuickOpen, setIsQuickOpen] = useState(false);
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
 
-  // Parallax & 3D Tilt State
+  // Stable Card Ref (NO 3D transform = zero blurriness, 100% native subpixel sharpness)
   const cardRef = useRef<HTMLDivElement>(null);
-  const [cardTilt, setCardTilt] = useState({ rotateX: 0, rotateY: 0, glowX: 50, glowY: 50 });
 
-  // Antigravity Canvas Ref
+  // Antigravity Canvas Ref (Hi-DPI scaled with devicePixelRatio)
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mousePosRef = useRef({ x: -1000, y: -1000, isOver: false });
 
   const t = TRANSLATIONS[lang];
 
-  // Mouse Parallax on Card
+  // High-performance light glow follower via CSS variables directly on DOM
+  // CRITICAL: Does NOT trigger React re-renders, and does NOT apply 3D transforms.
+  // This keeps the card completely rock-solid and razor-sharp!
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!cardRef.current) return;
     const rect = cardRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
+    const glowX = Math.round((x / rect.width) * 100);
+    const glowY = Math.round((y / rect.height) * 100);
 
-    // Subtle 3D tilt angles (max ±4 deg)
-    const rotateY = ((x - centerX) / centerX) * 3.5;
-    const rotateX = -((y - centerY) / centerY) * 3.5;
-
-    const glowX = (x / rect.width) * 100;
-    const glowY = (y / rect.height) * 100;
-
-    setCardTilt({ rotateX, rotateY, glowX, glowY });
+    cardRef.current.style.setProperty('--glow-x', `${glowX}%`);
+    cardRef.current.style.setProperty('--glow-y', `${glowY}%`);
   }, []);
 
-  const handleMouseLeave = useCallback(() => {
-    setCardTilt({ rotateX: 0, rotateY: 0, glowX: 50, glowY: 50 });
-  }, []);
-
-  // Antigravity Particle Engine on Canvas
+  // Crisp Hi-DPI Antigravity Particle Engine on Canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -189,14 +180,24 @@ export function LoginPage() {
     if (!ctx) return;
 
     let animId: number;
-    let width = (canvas.width = window.innerWidth);
-    let height = (canvas.height = window.innerHeight);
+    let width = 0;
+    let height = 0;
 
     const handleResize = () => {
       if (!canvas) return;
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
+      // High-DPI support: scale canvas buffer by devicePixelRatio to prevent fuzziness
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
     };
+
+    handleResize();
     window.addEventListener('resize', handleResize);
 
     // Particle pool with antigravity physics
@@ -220,8 +221,8 @@ export function LoginPage() {
     const colors = ['#3B82F6', '#60A5FA', '#93C5FD', '#A5B4FC', '#38BDF8'];
 
     for (let i = 0; i < particleCount; i++) {
-      const x = Math.random() * width;
-      const y = Math.random() * height;
+      const x = Math.random() * (width || window.innerWidth);
+      const y = Math.random() * (height || window.innerHeight);
       particles.push({
         x,
         y,
@@ -331,7 +332,7 @@ export function LoginPage() {
 
         ctx.restore();
 
-        // 6. Connect nearby particles with subtle threads (textile / metrology lattice)
+        // 6. Connect nearby particles with subtle threads
         for (let j = i + 1; j < particles.length; j++) {
           const p2 = particles[j];
           const dist = Math.hypot(p.x - p2.x, p.y - p2.y);
@@ -384,42 +385,44 @@ export function LoginPage() {
   return (
     <div
       onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className="min-h-screen w-full bg-[#EBF1F8] flex items-center justify-center p-3 sm:p-6 lg:p-8 relative overflow-hidden select-none selection:bg-blue-600 selection:text-white"
+      className="min-h-[100dvh] w-full bg-[#EBF1F8] flex flex-col items-center justify-center p-3 sm:p-6 lg:p-8 py-6 sm:py-10 relative overflow-x-hidden overflow-y-auto select-none selection:bg-blue-600 selection:text-white"
     >
-      {/* 1. Antigravity Physics Interactive Particle Canvas Background */}
+      {/* 1. Antigravity Physics Interactive Particle Canvas Background (Fixed to viewport so it never shifts on mobile scroll) */}
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 pointer-events-none z-0 opacity-80"
+        className="fixed inset-0 pointer-events-none z-0 opacity-80"
       />
 
-      {/* 2. Soft Ambient Atmospheric Glows */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-blue-300/10 rounded-full blur-[140px] pointer-events-none" />
+      {/* 2. Soft Ambient Atmospheric Glows (Fixed to viewport so bottom glow is never pulled up on mobile) */}
+      <div className="fixed -top-32 -left-32 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl pointer-events-none z-0" />
+      <div className="fixed -bottom-32 -right-32 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none z-0" />
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-blue-300/10 rounded-full blur-[140px] pointer-events-none z-0" />
 
-      {/* 3. Main Split-Screen Card with 3D Perspective Tilt */}
+      {/* 3. Main Split-Screen Card (NO 3D transform = 100% razor-sharp, centered with my-auto) */}
       <div
         ref={cardRef}
-        style={{
-          transform: `perspective(1200px) rotateX(${cardTilt.rotateX}deg) rotateY(${cardTilt.rotateY}deg)`,
-          transition: 'transform 0.15s ease-out',
-        }}
-        className="relative z-10 w-full max-w-5xl rounded-[28px] overflow-hidden shadow-2xl shadow-slate-300/70 border border-white/80 bg-white grid grid-cols-1 lg:grid-cols-2 min-h-[600px] backdrop-blur-xs"
+        style={
+          {
+            '--glow-x': '50%',
+            '--glow-y': '50%',
+          } as React.CSSProperties
+        }
+        className="relative z-10 w-full max-w-5xl rounded-[24px] sm:rounded-[28px] overflow-hidden shadow-2xl shadow-slate-400/30 border border-white/80 bg-white grid grid-cols-1 lg:grid-cols-2 my-auto"
       >
-        {/* Dynamic Light Beam Follow Effect */}
+        {/* Dynamic Light Beam Follow Effect (Driven by CSS variables, 0% React re-render overhead) */}
         <div
-          className="absolute inset-0 pointer-events-none opacity-40 z-30 transition-opacity duration-300"
+          className="absolute inset-0 pointer-events-none opacity-30 z-30 transition-opacity duration-300"
           style={{
-            background: `radial-gradient(600px circle at ${cardTilt.glowX}% ${cardTilt.glowY}%, rgba(59, 130, 246, 0.12), transparent 70%)`,
+            background:
+              'radial-gradient(600px circle at var(--glow-x) var(--glow-y), rgba(59, 130, 246, 0.12), transparent 70%)',
           }}
         />
 
         {/* ========================================================= */}
         {/* LEFT PANEL: BRAND SHOWCASE & GARMENT QA INSPECTION SCENE */}
         {/* ========================================================= */}
-        <div className="relative p-6 sm:p-10 flex flex-col justify-between overflow-hidden bg-slate-100 min-h-[460px] lg:min-h-full">
-          {/* Background High-End Garment QA Image with soft light overlay */}
+        <div className="relative p-5 sm:p-8 lg:p-10 flex flex-col justify-between overflow-hidden bg-slate-100 min-h-[260px] sm:min-h-[320px] lg:min-h-[600px]">
+          {/* Background High-End Garment QA Image */}
           <div
             className="absolute inset-0 bg-cover bg-center transition-transform duration-700 hover:scale-105"
             style={{
@@ -427,79 +430,79 @@ export function LoginPage() {
             }}
           />
 
-          {/* Luminous Gradient Mask to ensure ultra-crisp readable typography */}
-          <div className="absolute inset-0 bg-gradient-to-b from-white/95 via-white/80 to-white/70 backdrop-blur-[2px]" />
+          {/* Clean Gradient Mask ensuring ultra-crisp readable typography without blur filters */}
+          <div className="absolute inset-0 bg-gradient-to-b from-white/95 via-white/85 to-white/75" />
 
           {/* Left Top: Brand Identity & Flow */}
-          <div className="relative z-10 space-y-3">
-            <span className="text-[11px] font-bold tracking-[0.25em] text-blue-600 uppercase font-mono block">
+          <div className="relative z-10 space-y-2 sm:space-y-3">
+            <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.25em] text-blue-600 uppercase font-mono block">
               {t.qualityBuildsTrust}
             </span>
 
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-none">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-none">
               <span className="text-slate-900">{t.qms} </span>
               <span className="text-blue-600">{t.erp}</span>
             </h1>
 
-            <p className="text-sm sm:text-base font-semibold text-slate-700 leading-snug max-w-sm">
+            <p className="text-xs sm:text-sm lg:text-base font-semibold text-slate-700 leading-snug max-w-sm">
               {t.tagline}
             </p>
 
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 pt-0.5">
+            <div className="flex items-center gap-2 text-[11px] sm:text-xs font-medium text-slate-500 pt-0.5">
               <span>{t.steps}</span>
             </div>
           </div>
 
-          {/* Left Center: 4 Feature Badge Pills (2x2 Grid) Matching the Reference Image */}
-          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-3 my-6">
+          {/* Left Center: 4 Feature Badge Pills (2x2 Grid) */}
+          <div className="relative z-10 grid grid-cols-2 gap-2 sm:gap-3 my-3 sm:my-6">
             {/* Pill 1: Quality Management (Blue) */}
-            <div className="bg-white/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                <Shield className="w-4 h-4" />
+            <div className="bg-white/95 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-2 sm:gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+              <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <span className="text-xs font-bold text-slate-800 leading-tight">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
                 {t.featQuality}
               </span>
             </div>
 
             {/* Pill 2: Audit & CAPA (Green) */}
-            <div className="bg-white/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-              <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                <FileCheck2 className="w-4 h-4" />
+            <div className="bg-white/95 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-2 sm:gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+              <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <FileCheck2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <span className="text-xs font-bold text-slate-800 leading-tight">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
                 {t.featAudit}
               </span>
             </div>
 
             {/* Pill 3: Production & Inspection (Purple) */}
-            <div className="bg-white/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-              <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
-                <Cpu className="w-4 h-4" />
+            <div className="bg-white/95 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-2 sm:gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+              <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+                <Cpu className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <span className="text-xs font-bold text-slate-800 leading-tight">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
                 {t.featProduction}
               </span>
             </div>
 
             {/* Pill 4: Reports & Analysis (Amber) */}
-            <div className="bg-white/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
-                <BarChart3 className="w-4 h-4" />
+            <div className="bg-white/95 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-2 sm:gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+              <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <span className="text-xs font-bold text-slate-800 leading-tight">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight">
                 {t.featReports}
               </span>
             </div>
           </div>
 
           {/* Left Bottom Footer: Industry Tag */}
-          <div className="relative z-10 pt-2 flex items-center justify-between text-xs text-slate-600">
-            <div className="flex items-center gap-2 font-medium">
-              <Factory className="w-4 h-4 text-blue-600" />
-              <span>{t.industry}</span>
+          <div className="relative z-10 pt-2 flex items-center justify-between text-[11px] sm:text-xs text-slate-600">
+            <div className="flex items-center gap-1.5 sm:gap-2 font-medium">
+              <Factory className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
+              <span className="truncate">{t.industry}</span>
             </div>
-            <span className="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300">
+            <span className="text-[9px] sm:text-[10px] font-mono text-emerald-700 font-bold bg-emerald-100/90 px-1.5 sm:px-2 py-0.5 rounded-full border border-emerald-300 shrink-0">
               ISO 9001 / AQL Certified
             </span>
           </div>
@@ -515,22 +518,20 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={() => setLang('en')}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  lang === 'en'
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${lang === 'en'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 EN
               </button>
               <button
                 type="button"
                 onClick={() => setLang('bn')}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  lang === 'bn'
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${lang === 'bn'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 বাংলা
               </button>
@@ -542,7 +543,7 @@ export function LoginPage() {
             {/* Logo & QMS ERP Brand Header */}
             <div className="text-center space-y-1">
               <div className="inline-flex items-center justify-center gap-2 mb-1">
-                {/* Stylized Cog + Checkmark Icon in Vivid Blue */}
+                {/* Stylized ShieldCheck Icon in Vivid Blue */}
                 <div className="relative flex items-center justify-center">
                   <div className="w-11 h-11 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
                     <ShieldCheck className="w-6 h-6 stroke-[2.2]" />
@@ -608,6 +609,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -670,9 +672,8 @@ export function LoginPage() {
                   <span>{t.quickLogin}</span>
                 </div>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                    isQuickOpen ? 'rotate-180' : ''
-                  }`}
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${isQuickOpen ? 'rotate-180' : ''
+                    }`}
                 />
               </button>
 
@@ -683,11 +684,10 @@ export function LoginPage() {
                       key={acc.username}
                       type="button"
                       onClick={() => handleSelectQuickAccount(acc)}
-                      className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
-                        identifier === acc.username
+                      className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${identifier === acc.username
                           ? 'border-blue-500 bg-blue-50/80 text-blue-900 shadow-2xs font-bold'
                           : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                      }`}
+                        }`}
                     >
                       <div className="text-[11px] font-bold truncate">{acc.label}</div>
                       <div className="text-[9px] font-mono text-slate-500 truncate">
@@ -700,7 +700,7 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Bottom Footer Section Matching Reference */}
+          {/* Bottom Footer Section */}
           <div className="pt-4 text-center space-y-2 border-t border-slate-100">
             <div className="text-[11px] font-medium text-slate-400">
               {t.secureDivider}
@@ -724,7 +724,7 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={() => setIsForgotModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
