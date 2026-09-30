@@ -196,9 +196,18 @@ export function TraceabilityDetailsPage({
     },
   ];
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
   return (
-    <div className="space-y-6">
-      {/* Top Navigation & Action Header */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
+        {/* Top Navigation & Action Header */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -249,16 +258,6 @@ export function TraceabilityDetailsPage({
               <span>{copiedKey === 'Disposal / Barcode ID' ? 'Copied!' : 'Copy ID'}</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                window.print();
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print Audit Certificate</span>
-            </button>
 
             <button
               type="button"
@@ -967,14 +966,7 @@ export function TraceabilityDetailsPage({
                   Global trade item serial passport ready for carton label printer and handheld RFID scanning
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-colors cursor-pointer self-start sm:self-auto"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Print Carton Label</span>
-              </button>
+
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
@@ -1061,6 +1053,7 @@ export function TraceabilityDetailsPage({
           selectedStyleNumber={record.styleNumber}
         />
       )}
+      </div>
     </div>
   );
 }

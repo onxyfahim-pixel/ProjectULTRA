@@ -323,23 +323,22 @@ export function QualityManualView() {
       )}
 
       {/* TOP HEADER: 3-tab layout (Summary, Chapters Index, ISO Clause Matrix) */}
-      <ModuleHeader
-        id="quality-manual-module"
-        moduleCode="MOD-27"
-        badge="Quality System Governance"
-        title="Plant Quality Policy & Master Manual (ISO 9001:2015)"
-        subtitle="Foundational corporate quality policy, leadership commitments, line-stop authority, and ISO clause mapping"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Quality Manual Chapters Index', count: sections.length },
-          { id: 'matrix', label: 'ISO 9001 Clause Matrix' },
-        ]}
-      />
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="quality-manual-module"
+          title="Quality Manual"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Manual Chapters', count: sections.length },
+            { id: 'matrix', label: 'ISO 9001 Clause Matrix' },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (
@@ -570,8 +569,7 @@ export function QualityManualView() {
             <div className="animate-in fade-in duration-200">
               <DataTable
                 id="quality-manual-table"
-                title="Quality Manual Chapters Master Index (ISO 9001:2015)"
-                subtitle="Complete registry of corporate quality chapters, standard clause references, and review cycles"
+                title="Manual Chapters Index"
                 data={filteredSections}
                 columns={columns}
                 searchPlaceholder="Search chapter number, title, clause, department, or summary..."

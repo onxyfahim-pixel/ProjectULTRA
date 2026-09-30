@@ -221,9 +221,18 @@ export function KpiDetailsPage({
     (currentKpi.trend === 'DOWN' && isLowerBetter) ||
     (currentKpi.trend === 'UP' && !isLowerBetter);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
   return (
-    <div className="space-y-6 pb-12 animate-in fade-in duration-200">
-      {/* Top Header & Navigation Bar */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
+        {/* Top Header & Navigation Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs print:hidden">
         <div className="flex items-center gap-3">
           <button
@@ -280,16 +289,6 @@ export function KpiDetailsPage({
             </select>
           </div>
 
-          {/* Print Button */}
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
-            title="Print KPI Scorecard"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden md:inline">Print</span>
-          </button>
 
           {/* Duplicate Button */}
           <button
@@ -771,6 +770,7 @@ export function KpiDetailsPage({
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

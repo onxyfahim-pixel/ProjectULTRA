@@ -373,20 +373,22 @@ export function CustomerComplaintView() {
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order module */}
-      <ModuleHeader
-        title="Customer Complaints & Claims Log"
-        activeView={complaintSubView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setComplaintSubView({ type: 'none' });
-          setViewMode(mode as 'summary' | 'list' | 'capa');
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Claims Register', count: complaints.length },
-          { id: 'capa', label: 'CAPA & 8D Cards', count: complaints.length },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {complaintSubView.type !== 'details' && (
+        <ModuleHeader
+          title="Customer Complaints"
+          activeView={complaintSubView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setComplaintSubView({ type: 'none' });
+            setViewMode(mode as 'summary' | 'list' | 'capa');
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Claims Register', count: complaints.length },
+            { id: 'capa', label: 'CAPA & 8D Cards', count: complaints.length },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGE IF ACTIVE */}
       {complaintSubView.type === 'details' ? (

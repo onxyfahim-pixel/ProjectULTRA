@@ -569,7 +569,7 @@ export function RiskAssessmentView() {
       {/* ─── MODULE HEADER (AUDIT MODULE FORMAT WITH TOPBAR BUTTON) ───────────── */}
       <ModuleHeader
         id="risk-assessment-module"
-        title="Pre-Production Risk Assessment & Process FMEA"
+        title="Risk Assessment"
         activeView={viewMode}
         onViewChange={setViewMode}
         customTabs={[
@@ -926,8 +926,7 @@ export function RiskAssessmentView() {
           {/* DataTable */}
           <DataTable
             id="risk-assessment-table"
-            title="Pre-Production Risk Assessment & Process FMEA Register"
-            subtitle="Failure Mode and Effects Analysis: Severity (S) × Occurrence (O) × Detection (D) = Risk Priority Number (RPN)"
+            title="Risk Assessment Register"
             data={filteredRecords}
             columns={columns}
             searchPlaceholder="Search risk code, process step, style, failure mode, or lead..."

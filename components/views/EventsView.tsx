@@ -405,24 +405,23 @@ export function EventsView() {
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order module */}
-      <ModuleHeader
-        id="events-module"
-        moduleCode="MOD-20"
-        badge="Quality Scheduling & Visits"
-        title="Plant Quality Events, Audits & Buyer Visit Calendar"
-        subtitle="Schedule of customer QA delegations, pre-production approvals, 5S floor audits, and ISO surveillance sessions"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Events Calendar', count: events.length },
-          { id: 'checklist', label: 'Preparation Checklist', count: pendingChecklistCount },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="events-module"
+          title="Delegations & Events"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Events Calendar', count: events.length },
+            { id: 'checklist', label: 'Preparation Checklist', count: pendingChecklistCount },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (

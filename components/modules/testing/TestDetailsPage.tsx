@@ -73,9 +73,18 @@ export function TestDetailsPage({
   const verdictConfig = VERDICT_CONFIG[test.verdict] || VERDICT_CONFIG.PENDING;
   const VerdictIcon = verdictConfig.icon;
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
   return (
-    <div className="max-w-7xl mx-auto space-y-3.5 animate-in fade-in duration-200">
-      {/* TOP ACTION BAR - Matching Buyer & Order Module */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-3.5 pb-20">
+        {/* TOP ACTION BAR - Matching Buyer & Order Module */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3">
           <button
@@ -109,18 +118,6 @@ export function TestDetailsPage({
 
         {/* Action Buttons - Styled identically to Buyer & Order module */}
         <div className="flex items-center flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              window.print();
-              showToast(`Prepared formal lab certificate for ${test.testReportNo}`);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
-            title="Print Official Accredited Lab Test Certificate"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span>Print</span>
-          </button>
 
           <button
             type="button"
@@ -469,6 +466,7 @@ export function TestDetailsPage({
             {test.remarks || 'Test conducted strictly in accordance with accredited ISO/IEC 17025 standard operating procedures. Results relate only to the specimen lot tested and are cross-referenced with production cut plans.'}
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

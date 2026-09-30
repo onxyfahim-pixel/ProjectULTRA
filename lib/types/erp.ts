@@ -165,11 +165,22 @@ export interface CheckpointItem {
   notes?: string;
 }
 
+export interface CombinedPoItem {
+  poNumber: string;
+  orderQuantity: number;
+  cartonCount?: number;
+  styleNumber?: string;
+  colorOrDestination?: string;
+}
+
 export interface InspectionRecord {
   id: string;
   inspectionCode: string;
   inspectionType?: InspectionType;
   orderNumber?: string;
+  poNumbers?: string[];
+  combinedOrders?: CombinedPoItem[];
+  isCombinedInspection?: boolean;
   buyerOrderId?: string;
   styleNumber: string;
   styleDescription?: string;
@@ -178,6 +189,15 @@ export interface InspectionRecord {
   sampleSize: number;
   orderQuantity?: number;
   lotQuantity?: number;
+  excessQuantity?: number; // Calculated overproduction (if lotQuantity > orderQuantity)
+  shortQuantity?: number; // Calculated shortage (if lotQuantity < orderQuantity)
+  quantityVariance?: number; // lotQuantity - orderQuantity
+  aqlCodeLetter?: string; // ISO 2859-1 Code letter (e.g. 'A' through 'Q')
+  maxAllowedMajor?: number; // AQL Major acceptance limit (Ac)
+  majorRejectionPoint?: number; // AQL Major rejection limit (Re)
+  maxAllowedMinor?: number; // AQL Minor acceptance limit (Ac)
+  minorRejectionPoint?: number; // AQL Minor rejection limit (Re)
+  maxAllowedCritical?: number; // AQL Critical acceptance limit (always 0)
   cartonCount?: number;
   packedPercent?: number;
   aqlLevel?: string;

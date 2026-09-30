@@ -61,13 +61,18 @@ export function OrganogramDetailsPage({
     showToast(`Status updated to ${newStatus}`);
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
-      {/* TOP NAVIGATION & ACTION BAR (EXACT STYLE OF BUYER & ORDER MODULE) */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
+        {/* TOP NAVIGATION & ACTION BAR (EXACT STYLE OF BUYER & ORDER MODULE) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs print:hidden">
         <div className="flex items-center gap-3">
           <button
@@ -121,15 +126,6 @@ export function OrganogramDetailsPage({
             <option value="VACANT">Status: Vacant</option>
           </select>
 
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
-            title="Print Role Profile"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print Profile</span>
-          </button>
 
           <button
             type="button"
@@ -425,6 +421,7 @@ export function OrganogramDetailsPage({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

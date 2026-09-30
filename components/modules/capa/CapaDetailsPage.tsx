@@ -158,9 +158,18 @@ export function CapaDetailsPage({
     </span>
   );
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-200 pb-16">
-      {/* ─── TOP HEADER BAR (Non-Sticky, Solid White) ─────────────────────── */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
+        {/* ─── TOP HEADER BAR (Non-Sticky, Solid White) ─────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3">
           <button
@@ -953,6 +962,7 @@ export function CapaDetailsPage({
         }}
         onCancel={() => setIsDeleteModalOpen(false)}
       />
+      </div>
     </div>
   );
 }

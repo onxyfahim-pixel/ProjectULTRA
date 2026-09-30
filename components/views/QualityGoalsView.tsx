@@ -402,24 +402,23 @@ export function QualityGoalsView() {
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order module */}
-      <ModuleHeader
-        id="quality-goals-module"
-        moduleCode="MOD-14"
-        badge="Strategic Objectives & Roadmaps"
-        title="Quality Policy Goals & Milestone Achievement"
-        subtitle="Departmental and plant-wide objectives for zero defects, customer satisfaction, and lab turnaround speed"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Quality Objectives', count: goals.length },
-          { id: 'milestones', label: 'Milestone Roadmap', count: totalMilestonesCount },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="quality-goals-module"
+          title="Quality Goals"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Quality Objectives', count: goals.length },
+            { id: 'milestones', label: 'Milestone Roadmap', count: totalMilestonesCount },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (

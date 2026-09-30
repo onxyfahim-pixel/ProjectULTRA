@@ -339,23 +339,22 @@ export function JobDescriptionView() {
       )}
 
       {/* TOP HEADER: 3-tab layout (Summary, Job Profiles Register, Competency & Skills Matrix) */}
-      <ModuleHeader
-        id="job-descriptions-module"
-        moduleCode="MOD-23"
-        badge="Human Capital & Roles"
-        title="Quality Assurance Job Descriptions & Competency Framework (ISO 9001:2015)"
-        subtitle="Role accountabilities, company employee IDs, supervisor reporting chains, and ISO audit competency matrices"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Job Profiles Register', count: jobs.length },
-          { id: 'competency', label: 'Competency & Skills Matrix' },
-        ]}
-      />
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="job-descriptions-module"
+          title="Job Descriptions"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Job Profiles', count: jobs.length },
+            { id: 'competency', label: 'Skills Matrix' },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (
@@ -548,8 +547,7 @@ export function JobDescriptionView() {
             <div className="animate-in fade-in duration-200">
               <DataTable
                 id="job-descriptions-table"
-                title="Quality Assurance Job Descriptions Register (ISO 9001:2015)"
-                subtitle="Complete registry of roles, employee company IDs, supervisor reporting lines, and delegated decision authorities"
+                title="Job Profiles Register"
                 data={filteredJobs}
                 columns={columns}
                 searchPlaceholder="Search role code, job title, incumbent name, company ID, or supervisor..."

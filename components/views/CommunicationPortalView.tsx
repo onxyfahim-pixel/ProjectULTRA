@@ -368,20 +368,22 @@ export function CommunicationPortalView() {
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order Module */}
-      <ModuleHeader
-        title="Quality Bulletin & Communications Log"
-        activeView={subView.type !== 'none' ? 'list' : activeTab}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setActiveTab(mode as 'summary' | 'list' | 'acknowledgments');
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Bulletins Log', count: notices.length },
-          { id: 'acknowledgments', label: 'Floor Sign-offs & Advisories', count: totalSignoffs },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          title="Communication Portal"
+          activeView={subView.type !== 'none' ? 'list' : activeTab}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setActiveTab(mode as 'summary' | 'list' | 'acknowledgments');
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Bulletins Log', count: notices.length },
+            { id: 'acknowledgments', label: 'Sign-offs & Advisories', count: totalSignoffs },
+          ]}
+        />
+      )}
 
       {/* SEPARATE FULL SUB-PAGES */}
       {subView.type === 'details' && (

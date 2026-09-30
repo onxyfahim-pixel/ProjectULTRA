@@ -13,8 +13,7 @@ import { InventoryView } from '@/components/views/InventoryView';
 import { InspectionsView } from '@/components/views/InspectionsView';
 import { ProductionView } from '@/components/views/ProductionView';
 import { PlanningAndIeView } from '@/components/views/PlanningAndIeView';
-import { StandardsView } from '@/components/views/StandardsView';
-import { ArchitectureView } from '@/components/views/ArchitectureView';
+import { ReportAndAnalysisView } from '@/components/views/ReportAndAnalysisView';
 
 // 30 Garments QMS Modules
 import { BuyerOrderView } from '@/components/views/BuyerOrderView';
@@ -580,9 +579,8 @@ function ErpAppContent() {
             {activeTab === 'texpedia' && <TexpediaView />}
             {activeTab === 'settings' && <SettingsView />}
 
-            {/* Architecture and Standards Reference */}
-            {activeTab === 'standards' && <StandardsView />}
-            {activeTab === 'architecture' && <ArchitectureView />}
+            {/* Report And Analysis */}
+            {activeTab === 'report_analysis' && <ReportAndAnalysisView />}
           </div>
         </main>
       </div>

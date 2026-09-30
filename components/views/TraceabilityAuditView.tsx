@@ -399,10 +399,10 @@ export function TraceabilityAuditView() {
         </div>
       )}
 
-      {/* Module Header styled identically to Audit Module */}
+      {/* Module Header */}
       <ModuleHeader
         id="traceability-module"
-        title="Supply Chain Traceability"
+        title="Traceability Audit"
         activeView={viewMode}
         onViewChange={setViewMode}
         customTabs={[
@@ -681,8 +681,7 @@ export function TraceabilityAuditView() {
           {/* Data Table */}
           <DataTable<TraceabilityChain>
             id="traceability-chains-table"
-            title="Traceability Chain Master Ledger"
-            subtitle="Explore all verified digital chain of custody records with direct lookup to full process genealogy"
+            title="Traceability Ledger"
             data={filteredRecords}
             columns={columns}
             batchActions={batchActions}

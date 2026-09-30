@@ -410,10 +410,10 @@ export function CapaView() {
         </div>
       )}
 
-      {/* Module Header - Matching Audit Module design without clutter */}
+      {/* Module Header */}
       <ModuleHeader
         id="capa-8d-module"
-        title="Corrective & Preventive Actions (CAPA)"
+        title="CAPA"
         activeView={viewMode}
         onViewChange={setViewMode}
         customTabs={[

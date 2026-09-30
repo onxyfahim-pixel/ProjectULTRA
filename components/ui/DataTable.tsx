@@ -80,7 +80,7 @@ export function DataTable<T extends { id: string }>({
   isLoading = false,
   defaultSortKey,
   defaultSortDirection = null,
-  dense = false,
+  dense = true,
 }: DataTableProps<T>) {
   // State
   const [searchQuery, setSearchQuery] = useState('');
@@ -285,10 +285,10 @@ export function DataTable<T extends { id: string }>({
         )}
 
         {/* Horizontally Aligned Search & Filter Options Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Left / Center: Search Input + Filters / Secondary Action */}
-          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <div className="flex flex-wrap items-center gap-2 flex-1">
+            <div className="relative flex-1 min-w-[180px] max-w-sm">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id={`${id}-search-input`}
@@ -326,7 +326,7 @@ export function DataTable<T extends { id: string }>({
           </div>
 
           {/* Right side: Showing items count, Export CSV, Primary Action */}
-          <div className="flex items-center flex-wrap gap-2 shrink-0">
+          <div className="flex items-center flex-wrap gap-2 justify-start lg:justify-end">
             <div className="text-xs text-slate-500 whitespace-nowrap hidden sm:block mr-1">
               Showing <span className="font-semibold text-slate-800">{sortedData.length}</span> of{' '}
               <span className="font-semibold text-slate-800">{data.length}</span> items
@@ -393,7 +393,7 @@ export function DataTable<T extends { id: string }>({
 
       {/* Responsive Table Wrapper */}
       <div className="overflow-x-auto min-h-[300px] relative">
-        <table className="w-full text-left border-collapse text-xs">
+        <table className="w-full min-w-max text-left border-collapse text-xs">
           {/* Table Header with integrated sorting, filtering, and multi-select */}
           <thead className="bg-slate-50/90 backdrop-blur-xs border-b border-slate-200 sticky top-0 z-10">
             <tr>
@@ -424,8 +424,8 @@ export function DataTable<T extends { id: string }>({
                 return (
                   <th
                     key={colKey}
-                    style={{ width: col.width }}
-                    className={`${dense ? 'px-2 py-2 text-[11px]' : 'px-3 py-3'} font-semibold text-slate-700 ${
+                    style={{ width: col.width, minWidth: col.width || '60px' }}
+                    className={`${dense ? 'px-2 py-2 text-[11px]' : 'px-3 py-3'} font-semibold text-slate-700 whitespace-nowrap ${
                       col.align === 'center'
                         ? 'text-center'
                         : col.align === 'right'
@@ -609,8 +609,8 @@ export function DataTable<T extends { id: string }>({
                       return (
                         <td
                           key={colKey}
-                          style={col.width ? { width: col.width, maxWidth: col.width } : undefined}
-                          className={`${dense ? 'px-2 py-1.5' : 'px-3 py-2.5'} text-slate-700 ${
+                          style={{ width: col.width, minWidth: col.width || '60px' }}
+                          className={`${dense ? 'px-2 py-1.5' : 'px-3 py-2.5'} text-slate-700 overflow-hidden ${
                             col.wrap || col.className?.includes('whitespace-normal')
                               ? 'whitespace-normal'
                               : 'whitespace-nowrap'

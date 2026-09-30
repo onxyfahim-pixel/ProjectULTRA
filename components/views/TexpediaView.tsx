@@ -182,15 +182,15 @@ export function TexpediaView() {
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order Module */}
+      {/* TOP HEADER */}
       <ModuleHeader
-        title="Texpedia — Textile & Garments Knowledge Community"
+        title="Texpedia Knowledge Base"
         activeView={activeTab === 'feed' ? 'list' : activeTab}
         onViewChange={(mode) => setActiveTab(mode as 'feed' | 'verified' | 'bookmarks')}
         customTabs={[
           { id: 'feed', label: 'Knowledge Feed', count: posts.length },
-          { id: 'verified', label: 'Verified QA Solutions', count: verifiedCount },
-          { id: 'bookmarks', label: 'Saved Bookmarks', count: posts.filter((p) => p.isBookmarked).length },
+          { id: 'verified', label: 'Verified Solutions', count: verifiedCount },
+          { id: 'bookmarks', label: 'Bookmarks', count: posts.filter((p) => p.isBookmarked).length },
         ]}
       />
 

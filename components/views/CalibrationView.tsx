@@ -413,24 +413,23 @@ export function CalibrationView() {
         </div>
       )}
 
-      {/* Module Header with Custom Tabs Matching Buyer & Order Module */}
-      <ModuleHeader
-        id="calibration-devices-module"
-        moduleCode="MOD-11"
-        badge="Metrology & Equipment"
-        title="Equipment & Measurement Devices Calibration Matrix"
-        subtitle="Digital analytical balances, GSM cutters, metal detectors, tensile testers, and light cabinets with ISO 17025 traceability"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Equipment Registry', count: devices.length },
-          { id: 'entry', label: 'Entry & Calibration', count: 'All-in-One' },
-        ]}
-      />
+      {/* Module Header */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="calibration-devices-module"
+          title="Calibration Matrix"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Equipment Registry', count: devices.length },
+            { id: 'entry', label: 'Entry & Calibration' },
+          ]}
+        />
+      )}
 
       {/* DEDICATED SEPARATE SUB-PAGES */}
       {subView.type === 'details' ? (

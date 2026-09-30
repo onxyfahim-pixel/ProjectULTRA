@@ -28,8 +28,12 @@ import {
   BadgeAlert,
   ChevronRight,
   Maximize2,
+  Scale,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import { InspectionRecord, InspectionType, InspectionStatus, InspectionStage } from '@/lib/types/erp';
+import { calculateAqlInspection, calculateQuantityVariance } from '@/lib/aql';
 
 interface InspectionDetailsPageProps {
   record: InspectionRecord;
@@ -133,6 +137,16 @@ export function InspectionDetailsPage({
   const passRate = record.sampleSize > 0 ? ((record.passCount / record.sampleSize) * 100).toFixed(1) : '100.0';
   const defectRate = record.sampleSize > 0 ? ((record.defectCount / record.sampleSize) * 100).toFixed(1) : '0.0';
 
+  const orderQty = record.orderQuantity || 10000;
+  const inspQty = record.lotQuantity || record.orderQuantity || 10000;
+  const variance = calculateQuantityVariance(orderQty, inspQty);
+  const aqlDetails = calculateAqlInspection(inspQty);
+  const maxMajor = record.maxAllowedMajor !== undefined ? record.maxAllowedMajor : aqlDetails.majorAc;
+  const reMajor = record.majorRejectionPoint !== undefined ? record.majorRejectionPoint : aqlDetails.majorRe;
+  const maxMinor = record.maxAllowedMinor !== undefined ? record.maxAllowedMinor : aqlDetails.minorAc;
+  const reMinor = record.minorRejectionPoint !== undefined ? record.minorRejectionPoint : aqlDetails.minorRe;
+  const codeLetter = record.aqlCodeLetter || aqlDetails.codeLetter;
+
   // Find other inspection records for the same style/order to demonstrate the 3-Stage Lifecycle
   const relatedStyleRecords = allRecords.filter(
     (r) =>
@@ -165,9 +179,18 @@ export function InspectionDetailsPage({
     },
   ];
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
   return (
-    <div className="max-w-7xl mx-auto space-y-3.5 animate-in fade-in duration-200">
-      {/* Top Navigation Bar - Identical styling to Buyer & Order module */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-3.5 pb-20">
+        {/* Top Navigation Bar - Identical styling to Buyer & Order module */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3">
           <button
@@ -207,18 +230,6 @@ export function InspectionDetailsPage({
 
         {/* Action Buttons - Styled identically to Buyer & Order module */}
         <div className="flex items-center flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              window.print();
-              showToast('Ready for printing / export to PDF dossier');
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
-            title="Print Inspection Report"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span>Print Report</span>
-          </button>
 
           <button
             type="button"
@@ -358,9 +369,16 @@ export function InspectionDetailsPage({
               </h1>
               <p className="text-xs sm:text-sm text-slate-200 font-medium">
                 Buyer: <span className="font-bold text-white">{record.buyer}</span> • Style: <span className="font-mono font-bold text-white">{record.styleNumber}</span>
-                {record.orderNumber && (
+                {record.isCombinedInspection || (record.poNumbers && record.poNumbers.length > 1) ? (
+                  <>
+                    {' '}•{' '}
+                    <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full text-white font-bold backdrop-blur-md">
+                      ⚡ Combined Inspection ({record.poNumbers?.length || record.combinedOrders?.length || record.orderNumber?.split(',').length} POs)
+                    </span>
+                  </>
+                ) : record.orderNumber ? (
                   <> • PO: <span className="font-mono text-white font-bold">{record.orderNumber}</span></>
-                )}
+                ) : null}
               </p>
             </div>
 
@@ -376,14 +394,14 @@ export function InspectionDetailsPage({
           </div>
         </div>
 
-        {/* METRICS KPI STRIP */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 bg-slate-50/50">
+        {/* METRICS KPI STRIP - 5 ENHANCED METRICS INCLUDING ORDER VS INSPECTED VARIANCE */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 bg-slate-50/50">
           <div className="p-4">
             <div className="text-[11px] font-semibold text-slate-500">Sampled Pieces</div>
             <div className="text-xl font-black font-mono text-slate-900 mt-0.5">
               {record.sampleSize.toLocaleString()} pcs
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">{record.aqlLevel || 'AQL 2.5 Level II'}</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">ISO 2859-1 • Code {codeLetter}</div>
           </div>
 
           <div className="p-4">
@@ -395,11 +413,43 @@ export function InspectionDetailsPage({
           </div>
 
           <div className="p-4">
-            <div className="text-[11px] font-semibold text-slate-500">Order & Lot Size</div>
-            <div className="text-xl font-black font-mono text-slate-900 mt-0.5">
-              {(record.lotQuantity || record.orderQuantity || 10000).toLocaleString()} pcs
+            <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
+              <span>Order Quantity</span>
+              <span className="text-[9px] font-bold font-mono px-1 rounded bg-blue-50 text-blue-700">Auto</span>
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">Lot: {record.lotNumber}</div>
+            <div className="text-xl font-black font-mono text-slate-900 mt-0.5">
+              {orderQty.toLocaleString()} pcs
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              {record.isCombinedInspection ? `${record.combinedOrders?.length || record.poNumbers?.length || 1} POs combined` : `Target order size`}
+            </div>
+          </div>
+
+          <div className="p-4">
+            <div className="text-[11px] font-semibold text-blue-900 flex items-center justify-between">
+              <span>Inspected Lot</span>
+              <span className="text-[9px] font-bold font-mono px-1 rounded bg-amber-50 text-amber-700">Manual</span>
+            </div>
+            <div className="text-xl font-black font-mono text-blue-700 mt-0.5">
+              {inspQty.toLocaleString()} pcs
+            </div>
+            <div className="mt-1">
+              {variance.isExcess && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  +{variance.excessQty.toLocaleString()} pcs (+{variance.percentage}% Excess)
+                </span>
+              )}
+              {variance.isShort && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                  -{variance.shortQty.toLocaleString()} pcs ({variance.percentage}% Short)
+                </span>
+              )}
+              {variance.isExact && (
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                  Exact Match (0 Variance)
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="p-4">
@@ -538,6 +588,90 @@ export function InspectionDetailsPage({
                 </div>
               </div>
 
+              {/* COMBINED PURCHASE ORDERS CARD (WHEN COMBINED INSPECTION IS ACTIVE) */}
+              {(record.isCombinedInspection || (record.poNumbers && record.poNumbers.length > 1) || (record.combinedOrders && record.combinedOrders.length > 0) || (record.orderNumber && record.orderNumber.includes(','))) && (
+                <div className="bg-white p-5 rounded-2xl border border-indigo-200/90 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-indigo-600" />
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                          Combined Purchase Orders Breakdown
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                          This inspection covers multiple buyer purchase orders audited together as a single unified lot.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      ⚡ Combined Lot ({record.combinedOrders?.length || record.poNumbers?.length || record.orderNumber?.split(',').length} POs)
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
+                          <th className="py-2 px-3">#</th>
+                          <th className="py-2 px-3">PO Number</th>
+                          <th className="py-2 px-3">Style Reference</th>
+                          <th className="py-2 px-3">Order Qty</th>
+                          <th className="py-2 px-3">Cartons</th>
+                          <th className="py-2 px-3">Destination / Split</th>
+                          <th className="py-2 px-3 text-right">Lot Share %</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {record.combinedOrders && record.combinedOrders.length > 0
+                          ? record.combinedOrders.map((po, idx) => {
+                              const share = record.orderQuantity
+                                ? ((po.orderQuantity / record.orderQuantity) * 100).toFixed(1)
+                                : '—';
+                              return (
+                                <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
+                                  <td className="py-2 px-3 font-bold text-slate-400">{idx + 1}</td>
+                                  <td className="py-2 px-3 font-mono font-bold text-indigo-700">
+                                    {po.poNumber}
+                                  </td>
+                                  <td className="py-2 px-3 font-mono text-slate-700">
+                                    {po.styleNumber || record.styleNumber}
+                                  </td>
+                                  <td className="py-2 px-3 font-bold text-slate-900 font-mono">
+                                    {po.orderQuantity.toLocaleString()} pcs
+                                  </td>
+                                  <td className="py-2 px-3 font-mono text-slate-700">
+                                    {po.cartonCount ? `${po.cartonCount} boxes` : '—'}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-600">
+                                    {po.colorOrDestination || 'Main Destination'}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono font-bold text-slate-700">
+                                    {share}%
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          : (record.poNumbers || record.orderNumber?.split(', ') || []).map((po, idx) => (
+                              <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
+                                <td className="py-2 px-3 font-bold text-slate-400">{idx + 1}</td>
+                                <td className="py-2 px-3 font-mono font-bold text-indigo-700">
+                                  {po.trim()}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-slate-700">{record.styleNumber}</td>
+                                <td className="py-2 px-3 font-mono text-slate-900">
+                                  Combined in lot
+                                </td>
+                                <td className="py-2 px-3 font-mono text-slate-700">—</td>
+                                <td className="py-2 px-3 text-slate-600">Combined PO Split</td>
+                                <td className="py-2 px-3 text-right font-mono font-bold text-slate-700">—</td>
+                              </tr>
+                            ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {/* Remarks & Corrective Action (CAPA) */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
@@ -569,45 +703,137 @@ export function InspectionDetailsPage({
 
             {/* Right Col: Defect Severity Distribution & Verdict Donut */}
             <div className="space-y-5">
-              {/* Defect Breakdown Cards */}
+              {/* QUANTITY VARIANCE SUMMARY CARD */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600" />
-                  <span>Defect Classification (AQL 2.5)</span>
-                </h3>
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <Scale className="w-4 h-4 text-indigo-600" />
+                    <span>Order vs Inspected Variance</span>
+                  </h3>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${variance.badgeCls}`}>
+                    {variance.isExcess ? 'Excess' : variance.isShort ? 'Shortage' : 'Balanced'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Order (Auto)</div>
+                    <div className="text-base font-black font-mono text-slate-900 mt-0.5">
+                      {orderQty.toLocaleString()} pcs
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-blue-50/50 border border-blue-100">
+                    <div className="text-[10px] text-blue-700 font-bold uppercase">Inspected Lot (Manual)</div>
+                    <div className="text-base font-black font-mono text-blue-700 mt-0.5">
+                      {inspQty.toLocaleString()} pcs
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`p-3 rounded-xl border text-xs ${variance.badgeCls}`}>
+                  <div className="flex items-center justify-between font-bold">
+                    <span>Net Quantity Variance:</span>
+                    <span className="font-mono text-sm">
+                      {variance.isExcess && `+${variance.excessQty.toLocaleString()} pcs`}
+                      {variance.isShort && `-${variance.shortQty.toLocaleString()} pcs`}
+                      {variance.isExact && '0 pcs'}
+                    </span>
+                  </div>
+                  <div className="text-[10px] mt-1 font-medium">
+                    {variance.isExcess && `Overproduction rate of +${variance.percentage}% presented for quality inspection.`}
+                    {variance.isShort && `Short shipment rate of ${variance.percentage}% below purchase order size.`}
+                    {variance.isExact && 'Offered inspection lot quantity exactly matches total purchase order.'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Defect Breakdown Cards with AQL Allowance */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600" />
+                    <span>AQL Defect Tolerances (Code {codeLetter})</span>
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold text-slate-500">
+                    Sample: {record.sampleSize} pcs
+                  </span>
+                </div>
 
                 <div className="space-y-2.5">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🚨</span>
-                      <div>
-                        <div className="font-bold text-xs text-rose-900">Critical Defects</div>
-                        <div className="text-[10px] text-rose-700">Immediate Lot Rejection (0 Allowed)</div>
+                  {/* Critical */}
+                  <div className={`p-3 rounded-xl border ${record.criticalDefects > 0 ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🚨</span>
+                        <div>
+                          <div className="font-bold text-xs text-rose-900">Critical Defects</div>
+                          <div className="text-[10px] text-slate-500">Max Allowed: 0 (Re: 1)</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-lg font-black font-mono text-rose-700">{record.criticalDefects}</span>
+                        <span className={`block text-[9px] font-bold px-1.5 py-0.2 rounded-full mt-0.5 ${record.criticalDefects > 0 ? 'bg-rose-200 text-rose-900' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {record.criticalDefects > 0 ? 'REJECT' : 'PASS'}
+                        </span>
                       </div>
                     </div>
-                    <span className="text-xl font-black font-mono text-rose-700">{record.criticalDefects}</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-100">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">⚠️</span>
-                      <div>
-                        <div className="font-bold text-xs text-amber-900">Major Defects</div>
-                        <div className="text-[10px] text-amber-700">Functional / Appearance flaws</div>
+                  {/* Major */}
+                  <div className={`p-3 rounded-xl border ${record.majorDefects >= reMajor ? 'bg-rose-50 border-rose-200' : record.majorDefects === maxMajor ? 'bg-amber-50 border-amber-200' : 'bg-amber-50/40 border-amber-100'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">⚠️</span>
+                        <div>
+                          <div className="font-bold text-xs text-amber-900">Major Defects</div>
+                          <div className="text-[10px] text-slate-600">
+                            Max Allowed (Ac): <strong className="text-emerald-700">{maxMajor}</strong> • Re: <strong className="text-rose-700">{reMajor}</strong>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-lg font-black font-mono text-amber-700">{record.majorDefects}</span>
+                        <span className={`block text-[9px] font-bold px-1.5 py-0.2 rounded-full mt-0.5 ${record.majorDefects >= reMajor ? 'bg-rose-200 text-rose-900' : record.majorDefects === maxMajor ? 'bg-amber-200 text-amber-900' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {record.majorDefects >= reMajor ? 'EXCEEDED' : record.majorDefects === maxMajor ? 'AT LIMIT' : 'WITHIN TOLERANCE'}
+                        </span>
                       </div>
                     </div>
-                    <span className="text-xl font-black font-mono text-amber-700">{record.majorDefects}</span>
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-200 rounded-full h-1 mt-2 overflow-hidden">
+                      <div
+                        className={`h-1 rounded-full ${record.majorDefects >= reMajor ? 'bg-rose-600' : record.majorDefects >= maxMajor * 0.7 ? 'bg-amber-500' : 'bg-emerald-600'}`}
+                        style={{ width: `${Math.min(100, (record.majorDefects / Math.max(1, reMajor)) * 100)}%` }}
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">ℹ️</span>
-                      <div>
-                        <div className="font-bold text-xs text-slate-800">Minor Defects</div>
-                        <div className="text-[10px] text-slate-500">Cosmetic trimming / loose thread</div>
+                  {/* Minor */}
+                  <div className={`p-3 rounded-xl border ${record.minorDefects >= reMinor ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">ℹ️</span>
+                        <div>
+                          <div className="font-bold text-xs text-slate-800">Minor Defects</div>
+                          <div className="text-[10px] text-slate-500">
+                            Max Allowed (Ac): <strong className="text-emerald-700">{maxMinor}</strong> • Re: <strong className="text-rose-700">{reMinor}</strong>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-lg font-black font-mono text-slate-700">{record.minorDefects}</span>
+                        <span className={`block text-[9px] font-bold px-1.5 py-0.2 rounded-full mt-0.5 ${record.minorDefects >= reMinor ? 'bg-rose-200 text-rose-900' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {record.minorDefects >= reMinor ? 'EXCEEDED' : 'WITHIN TOLERANCE'}
+                        </span>
                       </div>
                     </div>
-                    <span className="text-xl font-black font-mono text-slate-700">{record.minorDefects}</span>
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-200 rounded-full h-1 mt-2 overflow-hidden">
+                      <div
+                        className={`h-1 rounded-full ${record.minorDefects >= reMinor ? 'bg-rose-600' : 'bg-blue-600'}`}
+                        style={{ width: `${Math.min(100, (record.minorDefects / Math.max(1, reMinor)) * 100)}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -826,6 +1052,7 @@ export function InspectionDetailsPage({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

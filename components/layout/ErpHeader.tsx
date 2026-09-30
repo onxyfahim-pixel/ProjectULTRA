@@ -79,11 +79,12 @@ const INITIAL_NOTIFICATIONS: ErpNotification[] = [
 const SEARCHABLE_MODULES = [
   { id: 'dashboard', label: 'Dashboard — Factory Command Center', category: 'MAIN' },
   { id: 'buyer_order', label: 'Buyer & Order Management', category: 'MAIN' },
-  { id: 'inventory', label: 'Fabric Inventory & Stocks', category: 'MAIN' },
+  { id: 'inventory', label: 'All Inventory', category: 'MAIN' },
   { id: 'planning_ie', label: 'Planning & IE (Line Balancing, SMV & Scheduling)', category: 'MAIN' },
   { id: 'production', label: 'Production & Quality Management', category: 'MAIN' },
   { id: 'kpi_management', label: 'KPI Management & DHU Analysis', category: 'MAIN' },
   { id: 'quality_goals', label: 'Quality Goal & Achieve', category: 'MAIN' },
+  { id: 'report_analysis', label: 'Report And Analysis', category: 'MAIN' },
   { id: 'inspections', label: 'In-line & Final Inspections (AQL 2.5)', category: 'QUALITY' },
   { id: 'defects_library', label: 'Defect Library & Fixes', category: 'QUALITY' },
   { id: 'capa', label: 'CAPA (8D Corrective Actions)', category: 'QUALITY' },
@@ -110,8 +111,6 @@ const SEARCHABLE_MODULES = [
   { id: 'meeting_minutes', label: 'Quality Meeting Minutes', category: 'COMMUNITY' },
   { id: 'events', label: 'Delegations & Events', category: 'COMMUNITY' },
   { id: 'settings', label: 'System Configuration & Limits', category: 'SYSTEM' },
-  { id: 'standards', label: 'Module Standard Blueprint', category: 'SYSTEM' },
-  { id: 'architecture', label: 'PostgreSQL & Express Arch', category: 'SYSTEM' },
 ];
 
 interface ErpHeaderProps {

@@ -367,23 +367,22 @@ export function OrganogramView() {
       )}
 
       {/* TOP HEADER: 3-tab layout (Summary, Leadership Register, Interactive Hierarchy Tree) */}
-      <ModuleHeader
-        id="organogram-module"
-        moduleCode="MOD-24"
-        badge="Governance & Org Chart"
-        title="Quality Assurance & Operations Organizational Chart (Organogram)"
-        subtitle="Hierarchical reporting structure from VP Operations down to specialized quality leads and laboratory technologists"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Leadership Register', count: nodes.length },
-          { id: 'tree', label: 'Interactive Org Chart Tree' },
-        ]}
-      />
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="organogram-module"
+          title="Organogram"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Leadership Register', count: nodes.length },
+            { id: 'tree', label: 'Org Chart Tree' },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (
@@ -614,8 +613,7 @@ export function OrganogramView() {
             <div className="animate-in fade-in duration-200">
               <DataTable
                 id="organogram-table"
-                title="Quality Assurance & Operations Organogram Register"
-                subtitle="Complete tabular list of designated leaders, grades, reporting lines, and headcount allocations"
+                title="Organogram Register"
                 data={filteredNodes}
                 columns={columns}
                 searchPlaceholder="Search leader name, title, department, grade, or email..."

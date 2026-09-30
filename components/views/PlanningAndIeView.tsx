@@ -307,15 +307,15 @@ export function PlanningAndIeView({ orders = [], productionOrders = [] }: Planni
 
       {/* Module Header */}
       <ModuleHeader
-        title="Planning & Industrial Engineering (IE)"
+        title="Planning & IE"
         activeView={activeTab}
         onViewChange={(mode) => setActiveTab(mode as PlanningTab)}
         customTabs={[
-          { id: 'summary', label: 'Summary & Metrics' },
+          { id: 'summary', label: 'Summary' },
           { id: 'bulletin', label: 'Operation Bulletin (OB)', count: currentBulletin?.operations.length },
-          { id: 'planning', label: 'Production Scheduling (T&A)', count: schedules.length },
+          { id: 'planning', label: 'Production Scheduling', count: schedules.length },
           { id: 'timestudy', label: 'Time & Motion Study', count: timeStudies.length },
-          { id: 'calculator', label: 'Capacity & Target Calculator' },
+          { id: 'calculator', label: 'Capacity Calculator' },
         ]}
       />
 

@@ -419,19 +419,21 @@ export function TestingView() {
       )}
 
       {/* MODULE HEADER: 3 TABS (Summary, Lab Test Registry, ISO Test Standards) */}
-      <ModuleHeader
-        title="Apparel Physical & Chemical Laboratory Testing (QMS ISO Standards)"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Lab Test Registry', count: tests.length },
-          { id: 'standards', label: 'ISO & AATCC Garments Test Standards', count: GARMENT_ISO_TEST_METHODS.length },
-        ]}
-      />
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          title="Laboratory Testing"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Lab Test Registry', count: tests.length },
+            { id: 'standards', label: 'ISO Test Standards', count: GARMENT_ISO_TEST_METHODS.length },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES */}
       {subView.type === 'details' ? (

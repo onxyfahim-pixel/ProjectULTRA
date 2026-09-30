@@ -397,20 +397,22 @@ export function DefectsLibraryView() {
         />
       )}
 
-      {/* TOP MODULE HEADER: 3 Tabs (Summary, Defect Catalog, Zones & Standards) */}
-      <ModuleHeader
-        title="Apparel Quality Defects Library & Visual Standards"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Defect Catalog', count: defects.length },
-          { id: 'zones', label: 'Quality Zones (Zone A / B / C) & ISO Standards' },
-        ]}
-      />
+      {/* TOP MODULE HEADER */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          title="Defect Library"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Defect Catalog', count: defects.length },
+            { id: 'zones', label: 'Quality Zones & Standards' },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES */}
       {subView.type === 'details' ? (

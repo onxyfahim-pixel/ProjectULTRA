@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   ArrowLeft,
   Boxes,
@@ -44,23 +44,34 @@ export function InventoryDetailsPage({
   onDelete,
   showToast,
 }: InventoryDetailsPageProps) {
-  const [activeTab, setActiveTab] = useState<'specs' | 'warehouse' | 'quality'>('specs');
-
   const totalValueUSD = item.quantityMeters * item.unitCost;
 
+  // Listen for Escape key to quickly exit Details view
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onBack();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Top Navigation & Action Bar matching Buyer & Order module design */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Back to Stock Matrix"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
+        {/* Top Navigation & Action Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer shadow-2xs"
+              title="Back to All Inventory (Esc)"
+            >
+              <ArrowLeft className="w-4 h-4 text-slate-600" />
+              <span>Back to Inventory</span>
+            </button>
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
@@ -162,46 +173,9 @@ export function InventoryDetailsPage({
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-2 border-b border-slate-100">
-          <button
-            type="button"
-            onClick={() => setActiveTab('specs')}
-            className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-              activeTab === 'specs'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Technical Specifications
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('warehouse')}
-            className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-              activeTab === 'warehouse'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Warehouse Staging &amp; RFID
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('quality')}
-            className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-              activeTab === 'quality'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            ASTM 4-Point Quality Audit
-          </button>
-        </div>
-
-        {/* Tab 1: Technical Specifications */}
-        {activeTab === 'specs' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+        {/* Section 1: Technical Specifications & Mill Sourcing */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
             {/* Fabric Construction Parameters */}
             <div className="space-y-4">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
@@ -285,11 +259,11 @@ export function InventoryDetailsPage({
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Tab 2: Warehouse Staging & RFID */}
-        {activeTab === 'warehouse' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+        {/* Section 2: Warehouse Staging & RFID */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Warehouse Bay Details */}
             <div className="space-y-4">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
@@ -353,48 +327,47 @@ export function InventoryDetailsPage({
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Tab 3: ASTM 4-Point Quality Audit */}
-        {activeTab === 'quality' && (
-          <div className="space-y-4 pt-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>ASTM D5430 Standard 4-Point Roll Inspection Score</span>
-            </h4>
+        {/* Section 3: ASTM 4-Point Quality Audit */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>ASTM D5430 Standard 4-Point Roll Inspection Score</span>
+          </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
-                <span className="text-xs text-slate-500 block">4-Point Penalty Points</span>
-                <span className="text-2xl font-bold font-mono text-emerald-700 block">
-                  {item.fourPointScore || 14.5} pts
-                </span>
-                <span className="text-[10px] text-slate-400">Tolerance: &lt; 20 points / 100 sq yds</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
+              <span className="text-xs text-slate-500 block">4-Point Penalty Points</span>
+              <span className="text-2xl font-bold font-mono text-emerald-700 block">
+                {item.fourPointScore || 14.5} pts
+              </span>
+              <span className="text-[10px] text-slate-400">Tolerance: &lt; 20 points / 100 sq yds</span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
+              <span className="text-xs text-slate-500 block">Final QMS Classification</span>
+              <div className="pt-1">
+                <GradeBadge grade={item.qualityGrade} />
               </div>
+              <span className="text-[10px] text-slate-400 block pt-1">
+                {item.qualityGrade === 'GRADE_A'
+                  ? 'Accepted for export production'
+                  : 'Quarantined / requires QA signoff'}
+              </span>
+            </div>
 
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
-                <span className="text-xs text-slate-500 block">Final QMS Classification</span>
-                <div className="pt-1">
-                  <GradeBadge grade={item.qualityGrade} />
-                </div>
-                <span className="text-[10px] text-slate-400 block pt-1">
-                  {item.qualityGrade === 'GRADE_A'
-                    ? 'Accepted for export production'
-                    : 'Quarantined / requires QA signoff'}
-                </span>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
-                <span className="text-xs text-slate-500 block">Spectrophotometer Delta-E</span>
-                <span className="text-2xl font-bold font-mono text-blue-700 block">
-                  {item.deltaE || 0.65}
-                </span>
-                <span className="text-[10px] text-slate-400">Shade Grade 4-5 on Gray Scale</span>
-              </div>
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
+              <span className="text-xs text-slate-500 block">Spectrophotometer Delta-E</span>
+              <span className="text-2xl font-bold font-mono text-blue-700 block">
+                {item.deltaE || 0.65}
+              </span>
+              <span className="text-[10px] text-slate-400">Shade Grade 4-5 on Gray Scale</span>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
-  );
+  </div>
+);
 }

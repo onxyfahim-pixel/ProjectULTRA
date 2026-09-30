@@ -63,39 +63,39 @@ export function StatCard({
   return (
     <div
       id={id}
-      className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs hover:border-slate-300 transition-all duration-200"
+      className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xs hover:border-slate-300 transition-all duration-200 min-w-0"
     >
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1 min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 truncate block">
               {title}
             </span>
             {badge && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
                 {badge}
               </span>
             )}
           </div>
-          <div className="text-2xl font-bold text-slate-900 tracking-tight">{value}</div>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight truncate">{value}</div>
         </div>
-        <div className={`p-3 rounded-lg ${finalBgColor} ${finalIconColor} shrink-0`}>
+        <div className={`p-2.5 sm:p-3 rounded-lg ${finalBgColor} ${finalIconColor} shrink-0`}>
           {renderIcon()}
         </div>
       </div>
 
       {(subtitle || delta) && (
-        <div className="mt-3 flex items-center gap-2 text-xs">
+        <div className="mt-3 flex items-center gap-2 text-xs flex-wrap min-w-0">
           {delta && (
             <span
-              className={`font-semibold flex items-center gap-0.5 ${
+              className={`font-semibold flex items-center gap-0.5 shrink-0 ${
                 delta.isPositive ? 'text-emerald-600' : 'text-rose-600'
               }`}
             >
               {delta.isPositive ? '↑' : '↓'} {delta.value}
             </span>
           )}
-          {subtitle && <span className="text-slate-500 font-medium">{subtitle}</span>}
+          {subtitle && <span className="text-slate-500 font-medium truncate">{subtitle}</span>}
         </div>
       )}
 

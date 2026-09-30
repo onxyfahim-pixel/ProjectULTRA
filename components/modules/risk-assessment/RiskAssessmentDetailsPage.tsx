@@ -128,13 +128,19 @@ export function RiskAssessmentDetailsPage({
     showToast(`Updated risk item status to ${newStatus}`);
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
 
   return (
-    <div className="space-y-6 pb-24 animate-in fade-in duration-200">
-      {/* Lightbox Zoom Modal */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
+        {/* Lightbox Zoom Modal */}
       {selectedPhoto && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs"
@@ -209,14 +215,6 @@ export function RiskAssessmentDetailsPage({
 
         {/* Topbar Actions */}
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-            title="Print Assessment / Export PDF"
-          >
-            <Printer className="w-4 h-4" />
-          </button>
 
           <button
             type="button"
@@ -791,6 +789,7 @@ export function RiskAssessmentDetailsPage({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

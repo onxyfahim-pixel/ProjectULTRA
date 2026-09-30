@@ -463,21 +463,22 @@ export function IncomingQcView({
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order module */}
-      <ModuleHeader
-        title="Incoming Quality Control (IQC)"
-        subtitle="Raw fabric ASTM D5430 4-point frames, thread tensile sewability, zipper durability, and trims testing with live inventory synchronization"
-        activeView={qcSubView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setQcSubView({ type: 'none' });
-          setViewMode(mode as any);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary', icon: BarChart3 },
-          { id: 'list', label: 'Inspection Register', count: lots.length, icon: FileSpreadsheet },
-          { id: 'cards', label: 'Inspection Cards', count: lots.length, icon: LayoutGrid },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {qcSubView.type !== 'details' && (
+        <ModuleHeader
+          title="Incoming QC"
+          activeView={qcSubView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setQcSubView({ type: 'none' });
+            setViewMode(mode as any);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary', icon: BarChart3 },
+            { id: 'list', label: 'Inspection Register', count: lots.length, icon: FileSpreadsheet },
+            { id: 'cards', label: 'Inspection Cards', count: lots.length, icon: LayoutGrid },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGE IF ACTIVE */}
       {qcSubView.type === 'details' ? (

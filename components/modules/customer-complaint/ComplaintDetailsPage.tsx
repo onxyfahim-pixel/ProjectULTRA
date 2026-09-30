@@ -49,9 +49,18 @@ export function ComplaintDetailsPage({
 
   const defectCategoryLabel = complaint.defectCategory.replace(/_/g, ' ');
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Top Navigation & Action Bar matching Buyer & Order module design */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
+        {/* Top Navigation & Action Bar matching Buyer & Order module design */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3">
           <button
@@ -403,6 +412,7 @@ export function ComplaintDetailsPage({
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

@@ -63,25 +63,25 @@ export function ModuleHeader({
       ];
 
   return (
-    <div id={id} className={`bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs ${className}`}>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div id={id} className={`bg-white rounded-2xl border border-slate-200 p-3.5 sm:p-4 shadow-xs ${className}`}>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Left: Title & Metadata */}
-        <div className={subtitle || moduleCode || badge ? 'space-y-1' : ''}>
+        <div className={`min-w-0 ${subtitle || moduleCode || badge ? 'space-y-1' : ''}`}>
           {(moduleCode || badge) && (
             <div className="flex items-center gap-2 flex-wrap">
               {moduleCode && (
-                <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
                   {moduleCode}
                 </span>
               )}
               {badge && (
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
                   {badge}
                 </span>
               )}
             </div>
           )}
-          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 truncate">
             {title}
           </h2>
           {subtitle && (
@@ -92,11 +92,11 @@ export function ModuleHeader({
         </div>
 
         {/* Right: Summary / List / Custom Tabs & Actions */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap max-w-full">
           {/* Segmented Top View Toggle Buttons */}
           <div
             id={`${id}-tabs`}
-            className="inline-flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 shadow-2xs gap-1"
+            className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 shadow-2xs gap-1 overflow-x-auto max-w-full"
             role="tablist"
           >
             {tabsToRender.map((tab) => {
@@ -110,17 +110,17 @@ export function ModuleHeader({
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => onViewChange(tab.id)}
-                  className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer shrink-0 whitespace-nowrap ${
                     isActive
                       ? 'bg-white text-blue-700 shadow-xs border border-slate-200/80 font-bold'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                   }`}
                 >
-                  {IconComp && <IconComp className="w-3.5 h-3.5" />}
+                  {IconComp && <IconComp className="w-3.5 h-3.5 shrink-0" />}
                   <span>{tab.label}</span>
                   {tab.count !== undefined && (
                     <span
-                      className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-semibold ${
+                      className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-semibold shrink-0 ${
                         isActive
                           ? 'bg-blue-50 text-blue-700 border border-blue-100'
                           : 'bg-slate-200 text-slate-600'

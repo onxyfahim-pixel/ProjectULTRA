@@ -312,23 +312,22 @@ export function ProcedureView() {
       )}
 
       {/* TOP HEADER: 3-tab layout (Summary, Procedure Register, Department Processes) */}
-      <ModuleHeader
-        id="procedures-module"
-        moduleCode="MOD-25"
-        badge="Standard Operating Procedures"
-        title="Procedure & Standard Operating Instructions"
-        subtitle="Conforming process control schedules, workstation quality gates, and standard QA records register"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Procedure Register', count: procedures.length },
-          { id: 'departments', label: 'Department Processes', count: 6 },
-        ]}
-      />
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="procedures-module"
+          title="Guidelines & Procedures"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Procedure Register', count: procedures.length },
+            { id: 'departments', label: 'Department Processes', count: 6 },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (
@@ -508,8 +507,7 @@ export function ProcedureView() {
             <div className="space-y-4 animate-in fade-in duration-200">
               <DataTable
                 id="procedures-table"
-                title="Standard Operating Procedures & Quality Work Instructions"
-                subtitle="Governed under ISO 9001:2015 Conforming Process Control system"
+                title="Procedures & Work Instructions"
                 data={filteredProcedures}
                 columns={columns}
                 searchPlaceholder="Search procedure code, title, station, or PPE..."

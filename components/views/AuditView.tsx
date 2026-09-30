@@ -431,10 +431,10 @@ export function AuditView() {
         </div>
       )}
 
-      {/* Module Header - only Quality & Compliance Audits remains, gap fixed, action inside header */}
+      {/* Module Header */}
       <ModuleHeader
         id="audits-compliance-module"
-        title="Quality & Compliance Audits"
+        title="Audit ISO 9001:2015"
         activeView={viewMode}
         onViewChange={setViewMode}
         customTabs={[

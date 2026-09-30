@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSavedAt": "2026-09-27T17:02:19.568Z",
+  "lastSavedAt": "2026-09-30T19:14:53.109Z",
   "hostSystem": "Garments QMS ERP Host Center (MySQL Dual-Engine)",
   "inventory": [
     {
@@ -410,6 +410,155 @@
   ],
   "inspections": [
     {
+      "id": "insp-4212",
+      "inspectionCode": "QMS-2026-1697",
+      "inspectionType": "FINAL",
+      "orderNumber": "PO-HM-99201, PO-LEV-1109, PO-DEC-3310",
+      "poNumbers": [
+        "PO-HM-99201",
+        "PO-LEV-1109",
+        "PO-DEC-3310"
+      ],
+      "combinedOrders": [
+        {
+          "poNumber": "PO-HM-99201",
+          "orderQuantity": 45000,
+          "cartonCount": 1875,
+          "styleNumber": "STY-TS-2026",
+          "colorOrDestination": "H&M Hennes & Mauritz Shipment"
+        },
+        {
+          "poNumber": "PO-LEV-1109",
+          "orderQuantity": 15000,
+          "cartonCount": 625,
+          "styleNumber": "STY-JK-440",
+          "colorOrDestination": "Levi Strauss & Co Shipment"
+        },
+        {
+          "poNumber": "PO-DEC-3310",
+          "orderQuantity": 60000,
+          "cartonCount": 2500,
+          "styleNumber": "STY-HD-994",
+          "colorOrDestination": "Decathlon Sport Shipment"
+        }
+      ],
+      "isCombinedInspection": true,
+      "buyerOrderId": "",
+      "styleNumber": "STY-ZR-4882-09",
+      "styleDescription": "Slim Fit Stretch Denim Pants",
+      "lotNumber": "LOT-TX-9042D",
+      "stage": "FINISHING_PACKING",
+      "sampleSize": 315,
+      "orderQuantity": 120000,
+      "lotQuantity": 120000,
+      "cartonCount": 5000,
+      "packedPercent": 100,
+      "aqlLevel": "AQL 2.5 General Inspection Level II",
+      "passCount": 309,
+      "defectCount": 6,
+      "majorDefects": 2,
+      "minorDefects": 4,
+      "criticalDefects": 0,
+      "status": "PASSED",
+      "inspectorId": "usr_admin",
+      "inspectorName": "Kazi Farhan (Super Admin)",
+      "buyer": "Inditex (Zara)",
+      "factoryUnit": "Unit 01 (Dhaka Complex)",
+      "sewingLine": "Sewing Line 04 (Bottoms)",
+      "shift": "Morning Shift A (08:00 - 16:30)",
+      "remarks": "Quality inspection audit conducted according to ISO 2859-1 standards. All sampling pieces checked.",
+      "correctiveAction": "",
+      "createdAt": "2026-09-30T18:57:34.212Z",
+      "defects": [
+        {
+          "id": "d-init-1",
+          "defectType": "Skip Stitch",
+          "severity": "MAJOR",
+          "count": 2,
+          "location": "Side Seam Line 04"
+        },
+        {
+          "id": "d-init-2",
+          "defectType": "Loose Thread Ends",
+          "severity": "MINOR",
+          "count": 4,
+          "location": "Cuff & Hem"
+        }
+      ],
+      "measurements": [
+        {
+          "id": "m-1",
+          "point": "Chest Width (1\" below armhole)",
+          "spec": 21,
+          "actual": 21,
+          "tol": "±0.5\"",
+          "result": "PASS"
+        },
+        {
+          "id": "m-2",
+          "point": "Body Length (HPS to bottom)",
+          "spec": 28.5,
+          "actual": 28.5,
+          "tol": "±0.5\"",
+          "result": "PASS"
+        },
+        {
+          "id": "m-3",
+          "point": "Sleeve Length from Shoulder",
+          "spec": 9,
+          "actual": 9,
+          "tol": "±0.25\"",
+          "result": "PASS"
+        },
+        {
+          "id": "m-4",
+          "point": "Waist / Bottom Sweep",
+          "spec": 20.5,
+          "actual": 20.5,
+          "tol": "±0.5\"",
+          "result": "PASS"
+        },
+        {
+          "id": "m-5",
+          "point": "Neck Width / Opening",
+          "spec": 7.5,
+          "actual": 7.5,
+          "tol": "±0.25\"",
+          "result": "PASS"
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "c-1",
+          "category": "AQL 2.5 Sampling",
+          "checkpoint": "Sample cartons pulled randomly from 100% finished lot",
+          "status": "PASS",
+          "notes": ""
+        },
+        {
+          "id": "c-2",
+          "category": "Safety & Metal",
+          "checkpoint": "100% Metal Detection calibration passed (Fe 1.0mm, Non-Fe 1.2mm, SS 1.5mm)",
+          "status": "PASS",
+          "notes": ""
+        },
+        {
+          "id": "c-3",
+          "category": "Carton Drop Test",
+          "checkpoint": "ISTA 1A Carton Drop Test (1 corner, 3 edges, 6 faces) - No damage",
+          "status": "PASS",
+          "notes": ""
+        },
+        {
+          "id": "c-4",
+          "category": "Barcode & Marks",
+          "checkpoint": "Master carton export markings, PO#, Destination & EAN barcodes scannable",
+          "status": "PASS",
+          "notes": ""
+        }
+      ]
+    },
+    {
       "styleNumber": "STY-LAN-2026",
       "defectCount": 1,
       "passCount": 79,
@@ -765,6 +914,16 @@
   ],
   "auditLogs": [
     {
+      "action": "QMS_INSPECTION",
+      "entity": "InspectionRecord",
+      "entityId": "insp-4212",
+      "performedBy": "Kazi Farhan (Super Admin)",
+      "userRole": "ADMIN",
+      "details": "Conducted FINISHING_PACKING inspection (PASSED) on Lot LOT-TX-9042D",
+      "id": "log-1790794654217-343",
+      "timestamp": "2026-09-30T18:57:34.217Z"
+    },
+    {
       "action": "USER_LOGIN",
       "entity": "Authentication",
       "entityId": "usr_admin",
@@ -923,7 +1082,7 @@
         "isActive": true,
         "isSuperAdmin": true,
         "createdAt": "2026-01-01T00:00:00.000Z",
-        "lastLoginAt": "2026-09-27T17:02:19.567Z"
+        "lastLoginAt": "2026-09-30T19:14:53.109Z"
       },
       {
         "id": "usr_qa",

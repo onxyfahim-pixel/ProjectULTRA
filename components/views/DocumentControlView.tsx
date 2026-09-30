@@ -482,10 +482,10 @@ export function DocumentControlView() {
         </div>
       )}
 
-      {/* Module Header - styled identically to Certificate Module with clean tabs and blue action button */}
+      {/* Module Header */}
       <ModuleHeader
         id="document-control-module"
-        title="Master Document Register (MDR) & Version Control"
+        title="Document Control"
         activeView={viewMode}
         onViewChange={setViewMode}
         customTabs={[
@@ -497,7 +497,7 @@ export function DocumentControlView() {
           },
           {
             id: 'list',
-            label: 'Master Document Register',
+            label: 'Document Register',
             icon: Table2,
             count: `${docs.length}`,
           },

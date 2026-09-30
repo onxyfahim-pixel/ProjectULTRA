@@ -772,20 +772,22 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order Module */}
-      <ModuleHeader
-        title="Production and Quality Management"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Production & Quality Records', count: orders.length },
-          { id: 'section', label: 'Management', count: managementLinesCount },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          title="Production & Quality"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Production Records', count: orders.length },
+            { id: 'section', label: 'Management', count: managementLinesCount },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGE IF ACTIVE */}
       {subView.type === 'details' ? (

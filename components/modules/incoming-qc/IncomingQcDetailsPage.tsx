@@ -50,9 +50,18 @@ export function IncomingQcDetailsPage({
 
   const cat = lot.materialCategory;
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
-      {/* TOP HERO NAVIGATION BAR matching Buyer & Order module */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
+        {/* TOP HERO NAVIGATION BAR matching Buyer & Order module */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3">
           <button
@@ -111,18 +120,6 @@ export function IncomingQcDetailsPage({
             <span>Edit</span>
           </button>
 
-          {/* Print Certificate */}
-          <button
-            type="button"
-            onClick={() => {
-              if (showToast) showToast(`Printing inspection certificate ${lot.lotNumber}...`);
-              window.print();
-            }}
-            className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Print QC Certificate"
-          >
-            <Printer className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -566,6 +563,7 @@ export function IncomingQcDetailsPage({
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

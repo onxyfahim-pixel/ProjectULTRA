@@ -26,6 +26,13 @@ import {
   Sliders,
   Check,
   Filter,
+  Scale,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  ArrowUpRight,
+  ArrowDownRight,
+  RefreshCw,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -34,6 +41,7 @@ import { InspectionRecord, InspectionStatus, InspectionStage, InspectionType } f
 import { BuyerOrder } from '@/lib/types/modules';
 import { INITIAL_INSPECTIONS } from '@/lib/db/mock-data';
 import { useErpAuth } from '@/hooks/use-erp-auth';
+import { calculateQuantityVariance } from '@/lib/aql';
 import { InspectionDetailsPage } from '../modules/inspection/InspectionDetailsPage';
 import { InspectionEntryPage } from '../modules/inspection/InspectionEntryPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
@@ -281,14 +289,32 @@ export function InspectionsView({
       accessorKey: 'inspectionCode',
       sortable: true,
       accessor: (r) => r.inspectionCode,
-      cell: (r) => (
-        <div>
-          <span className="font-mono font-bold text-blue-700 text-xs block">{r.inspectionCode}</span>
-          {r.orderNumber && (
-            <span className="text-[10px] font-mono text-slate-500">PO: {r.orderNumber}</span>
-          )}
-        </div>
-      ),
+      cell: (r) => {
+        const isCombined =
+          r.isCombinedInspection ||
+          (r.poNumbers && r.poNumbers.length > 1) ||
+          (r.combinedOrders && r.combinedOrders.length > 1) ||
+          (r.orderNumber && r.orderNumber.includes(','));
+        const poCount =
+          r.combinedOrders?.length ||
+          r.poNumbers?.length ||
+          (r.orderNumber ? r.orderNumber.split(',').length : 1);
+
+        return (
+          <div>
+            <span className="font-mono font-bold text-blue-700 text-xs block">{r.inspectionCode}</span>
+            {isCombined ? (
+              <span className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                ⚡ Combined ({poCount} POs)
+              </span>
+            ) : r.orderNumber ? (
+              <span className="text-[10px] font-mono text-slate-500 block truncate max-w-[140px]">
+                PO: {r.orderNumber}
+              </span>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       key: 'inspectionType',
@@ -343,6 +369,47 @@ export function InspectionsView({
           )}
         </div>
       ),
+    },
+    {
+      key: 'lotQuantity',
+      header: 'Order / Inspected (Variance)',
+      accessorKey: 'lotQuantity',
+      sortable: true,
+      accessor: (r) => r.lotQuantity || r.orderQuantity || 0,
+      cell: (r) => {
+        const ord = r.orderQuantity || 10000;
+        const insp = r.lotQuantity || ord;
+        const diff = insp - ord;
+        const pct = ((diff / ord) * 100).toFixed(1);
+        const isExcess = diff > 0;
+        const isShort = diff < 0;
+
+        return (
+          <div className="text-xs">
+            <div className="flex items-center gap-1 font-mono font-bold">
+              <span className="text-blue-700">{insp.toLocaleString()}</span>
+              <span className="text-slate-400 font-normal">/ {ord.toLocaleString()} pcs</span>
+            </div>
+            <div className="mt-0.5">
+              {isExcess && (
+                <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  +{diff.toLocaleString()} pcs (+{pct}%) Excess
+                </span>
+              )}
+              {isShort && (
+                <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                  {diff.toLocaleString()} pcs ({pct}%) Short
+                </span>
+              )}
+              {!isExcess && !isShort && (
+                <span className="text-[10px] text-slate-500 font-medium">
+                  100% matched
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: 'sampleSize',
@@ -494,20 +561,22 @@ export function InspectionsView({
         />
       )}
 
-      {/* TOP MODULE HEADER: 3 Tabs (Summary, Inspection List, Stage Breakdown) */}
-      <ModuleHeader
-        title="Quality Assurance & Inspection Audits"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Inspection List', count: records.length },
-          { id: 'stages', label: '3-Stage Pipeline (Inline, Pre-Final, Final)' },
-        ]}
-      />
+      {/* TOP MODULE HEADER */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          title="Inspections"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Inspection List', count: records.length },
+            { id: 'stages', label: '3-Stage Pipeline' },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES */}
       {subView.type === 'details' ? (

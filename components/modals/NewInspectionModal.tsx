@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Check, ClipboardCheck, AlertCircle } from 'lucide-react';
+import { X, Check, ClipboardCheck, AlertCircle, Scale, TrendingUp, TrendingDown } from 'lucide-react';
 import { InspectionRecord, InspectionStage, InspectionStatus } from '@/lib/types/erp';
 import { useErpAuth } from '@/hooks/use-erp-auth';
+import { calculateAqlInspection, evaluateAqlVerdict, calculateQuantityVariance } from '@/lib/aql';
 
 interface NewInspectionModalProps {
   isOpen: boolean;
@@ -15,10 +16,19 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
   const { user, permissions } = useErpAuth();
 
   const [styleNumber, setStyleNumber] = useState('STY-ZR-4882-09');
+  const [poList, setPoList] = useState<string[]>(['PO-EXP-9920', 'PO-EXP-9921']);
+  const [newPoInput, setNewPoInput] = useState('');
   const [lotNumber, setLotNumber] = useState('LOT-TX-9042D');
   const [buyer, setBuyer] = useState('Inditex (Zara)');
   const [stage, setStage] = useState<InspectionStage>('FABRIC_INWARD');
-  const [sampleSize, setSampleSize] = useState<number>(315);
+  const [orderQuantity, setOrderQuantity] = useState<number>(10000);
+  const [lotQuantity, setLotQuantity] = useState<number>(10000);
+
+  // AQL and Variance Engine
+  const aqlCalc = React.useMemo(() => calculateAqlInspection(lotQuantity, '2.5', '4.0'), [lotQuantity]);
+  const qtyVariance = React.useMemo(() => calculateQuantityVariance(orderQuantity, lotQuantity), [orderQuantity, lotQuantity]);
+
+  const [sampleSize, setSampleSize] = useState<number>(aqlCalc.sampleSize);
   const [defectCount, setDefectCount] = useState<number>(4);
   const [majorDefects, setMajorDefects] = useState<number>(1);
   const [minorDefects, setMinorDefects] = useState<number>(3);
@@ -26,16 +36,17 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Automatically sync sample size when lot quantity changes
+  React.useEffect(() => {
+    setSampleSize(aqlCalc.sampleSize);
+  }, [aqlCalc.sampleSize]);
+
   if (!isOpen) return null;
 
-  // AQL 2.5 Calculation
+  // AQL 2.5 Dynamic Verdict Calculation
   const passCount = Math.max(0, sampleSize - defectCount);
-  const computedStatus: InspectionStatus =
-    criticalDefects > 0 || majorDefects > 5
-      ? 'REJECTED'
-      : majorDefects >= 3
-      ? 'CONDITIONAL_PASS'
-      : 'PASSED';
+  const aqlVerdictResult = evaluateAqlVerdict(criticalDefects, majorDefects, minorDefects, aqlCalc);
+  const computedStatus: InspectionStatus = aqlVerdictResult.verdict;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,12 +58,27 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
     setIsSubmitting(true);
     setError(null);
 
+    const poNumbers = poList.filter(Boolean);
     try {
       await onSave({
         styleNumber,
         lotNumber,
         buyer,
+        orderNumber: poNumbers.join(', '),
+        poNumbers: poNumbers.length > 0 ? poNumbers : undefined,
+        isCombinedInspection: poNumbers.length > 1,
         stage,
+        orderQuantity: Number(orderQuantity),
+        lotQuantity: Number(lotQuantity),
+        excessQuantity: qtyVariance.excessQty,
+        shortQuantity: qtyVariance.shortQty,
+        quantityVariance: qtyVariance.diff,
+        aqlCodeLetter: aqlCalc.codeLetter,
+        maxAllowedMajor: aqlCalc.majorAc,
+        majorRejectionPoint: aqlCalc.majorRe,
+        maxAllowedMinor: aqlCalc.minorAc,
+        minorRejectionPoint: aqlCalc.minorRe,
+        maxAllowedCritical: 0,
         sampleSize: Number(sampleSize),
         passCount,
         defectCount: Number(defectCount),
@@ -117,13 +143,13 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Style / Purchase Order
+                Garment Style Number
               </label>
               <input
                 type="text"
                 value={styleNumber}
                 onChange={(e) => setStyleNumber(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-bold"
                 required
               />
             </div>
@@ -139,6 +165,73 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 required
               />
+            </div>
+          </div>
+
+          {/* Multiple POs Combine Inspection Manager */}
+          <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200/80 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-indigo-950">
+                Purchase Orders ({poList.length} POs Combined)
+              </label>
+              {poList.length > 1 && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                  ⚡ Combine Inspection
+                </span>
+              )}
+            </div>
+
+            {/* PO Badges list */}
+            <div className="flex flex-wrap gap-1.5">
+              {poList.map((po, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-white text-indigo-700 border border-indigo-200 shadow-2xs"
+                >
+                  <span>{po}</span>
+                  {poList.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setPoList(poList.filter((_, i) => i !== idx))}
+                      className="text-slate-400 hover:text-rose-600 ml-1 cursor-pointer"
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+
+            {/* Add PO Input */}
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="text"
+                value={newPoInput}
+                onChange={(e) => setNewPoInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (newPoInput.trim() && !poList.includes(newPoInput.trim())) {
+                      setPoList([...poList, newPoInput.trim()]);
+                      setNewPoInput('');
+                    }
+                  }
+                }}
+                placeholder="Type PO# and click Add (e.g. PO-ZR-8821)"
+                className="flex-1 px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (newPoInput.trim() && !poList.includes(newPoInput.trim())) {
+                    setPoList([...poList, newPoInput.trim()]);
+                    setNewPoInput('');
+                  }
+                }}
+                className="px-2.5 py-1 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer"
+              >
+                + Add PO
+              </button>
             </div>
           </div>
 
@@ -179,12 +272,58 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
             </div>
           </div>
 
-          {/* Sample Size & Defect Counters */}
+          {/* Order vs Inspection Quantity Reconciliation */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Scale className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Order vs Inspected Lot Reconciliation</span>
+              </span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${qtyVariance.badgeCls}`}>
+                {qtyVariance.isExcess ? `+${qtyVariance.excessQty.toLocaleString()} pcs (+${qtyVariance.percentage}% Excess)` : qtyVariance.isShort ? `-${qtyVariance.shortQty.toLocaleString()} pcs (${qtyVariance.percentage}% Short)` : 'Exact Match (0 Variance)'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                  Total Order Quantity (Pcs)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={orderQuantity}
+                  onChange={(e) => setOrderQuantity(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                  className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded bg-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-blue-900 mb-0.5">
+                  Total Inspection Qty (Offered Lot)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={lotQuantity}
+                  onChange={(e) => setLotQuantity(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                  className="w-full px-2.5 py-1.5 text-xs font-bold border border-blue-300 rounded bg-blue-50/50 font-mono text-blue-800"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Sample Size & Defect Counters with AQL Allowances */}
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                AQL 2.5 Sampling Metrics
-              </span>
+              <div>
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                  AQL 2.5 Sampling Engine (Code {aqlCalc.codeLetter})
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  Major Ac: {aqlCalc.majorAc} (Re: {aqlCalc.majorRe}) • Minor Ac: {aqlCalc.minorAc} (Re: {aqlCalc.minorRe})
+                </span>
+              </div>
               <span
                 className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                   computedStatus === 'PASSED'
@@ -200,18 +339,18 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
 
             <div className="grid grid-cols-4 gap-2">
               <div>
-                <label className="block text-[11px] text-slate-500 mb-0.5">Sample Size</label>
+                <label className="block text-[11px] text-slate-500 mb-0.5">Sample (Auto)</label>
                 <input
                   type="number"
                   min="1"
                   value={sampleSize}
                   onChange={(e) => setSampleSize(parseInt(e.target.value, 10) || 1)}
-                  className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded bg-white"
+                  className="w-full px-2.5 py-1.5 text-xs font-bold border border-blue-300 rounded bg-blue-50/40 text-blue-900 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-500 mb-0.5">Minor Defects</label>
+                <label className="block text-[11px] text-slate-500 mb-0.5">Minor (Ac:{aqlCalc.minorAc})</label>
                 <input
                   type="number"
                   min="0"
@@ -226,7 +365,7 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-500 mb-0.5">Major Defects</label>
+                <label className="block text-[11px] text-slate-500 mb-0.5">Major (Ac:{aqlCalc.majorAc})</label>
                 <input
                   type="number"
                   min="0"
@@ -236,12 +375,12 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
                     setMajorDefects(val);
                     setDefectCount(minorDefects + val + criticalDefects);
                   }}
-                  className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded bg-white text-amber-700"
+                  className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded bg-white text-amber-700 font-bold"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-500 mb-0.5">Critical Flaws</label>
+                <label className="block text-[11px] text-slate-500 mb-0.5">Critical (Ac:0)</label>
                 <input
                   type="number"
                   min="0"
@@ -251,7 +390,7 @@ export function NewInspectionModal({ isOpen, onClose, onSave }: NewInspectionMod
                     setCriticalDefects(val);
                     setDefectCount(minorDefects + majorDefects + val);
                   }}
-                  className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded bg-white text-rose-700"
+                  className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-300 rounded bg-white text-rose-700 font-bold"
                 />
               </div>
             </div>

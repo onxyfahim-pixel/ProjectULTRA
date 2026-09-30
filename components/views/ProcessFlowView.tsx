@@ -336,23 +336,22 @@ export function ProcessFlowView() {
       )}
 
       {/* TOP HEADER: 3-tab layout (Summary, Flow Register, Master Pipeline) */}
-      <ModuleHeader
-        id="process-flow-module"
-        moduleCode="MOD-26"
-        badge="Manufacturing Pipeline"
-        title="Process Flow Chart & Manufacturing Pipeline"
-        subtitle="End-to-end industrial engineering stages, quality validation gates, and machine transformation cycles"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Process Flow Register', count: flows.length },
-          { id: 'pipeline', label: 'Master Pipeline Flowchart' },
-        ]}
-      />
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="process-flow-module"
+          title="Process Flow"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Flow Register', count: flows.length },
+            { id: 'pipeline', label: 'Master Pipeline Flowchart' },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (
@@ -582,8 +581,7 @@ export function ProcessFlowView() {
             <div className="space-y-4 animate-in fade-in duration-200">
               <DataTable
                 id="process-flow-table"
-                title="Industrial Engineering Process Flow Charts"
-                subtitle="Governed under standard factory motion & time studies and AQL inspection gates"
+                title="Process Flow Charts"
                 data={filteredFlows}
                 columns={columns}
                 searchPlaceholder="Search flow code, title, product category, or department..."

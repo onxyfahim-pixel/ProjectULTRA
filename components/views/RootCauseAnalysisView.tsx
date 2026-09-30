@@ -384,10 +384,7 @@ export function RootCauseAnalysisView() {
       {/* Module Header */}
       <ModuleHeader
         id="root-cause-module"
-        moduleCode="MOD-19"
-        badge="Quality Engineering & RCA"
-        title="Root Cause Analysis: 5-Why & Ishikawa Fishbone"
-        subtitle="Lean Six Sigma DMAIC methodology: sequential causality chains and 6M manufacturing factor isolation"
+        title="Root Cause Analysis"
         activeView={viewMode}
         onViewChange={setViewMode}
         summaryCount="4 KPIs"
@@ -723,8 +720,7 @@ export function RootCauseAnalysisView() {
           {/* Data Table */}
           <DataTable
             id="root-cause-cases-table"
-            title="Root Cause Analysis Cases Ledger"
-            subtitle="Full register of DMAIC quality engineering investigations with 5-Why, 6M Fishbone, and CAPA links"
+            title="Root Cause Cases"
             data={filteredCases}
             columns={columns}
             batchActions={batchActions}

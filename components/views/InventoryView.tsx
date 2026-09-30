@@ -327,38 +327,38 @@ export function InventoryView({
     },
   ];
 
-  // Stock Ledger Table Columns matching Buyer & Order design
+  // Stock Ledger Table Columns with reduced gaps and tight fit
   const stockColumns: ColumnDef<InventoryItem>[] = [
     {
       key: 'sku',
       header: 'Material & SKU',
       sortable: true,
+      width: '230px',
       render: (i) => {
         const cat = i.category || 'FABRIC';
         const catInfo = CATEGORY_LABELS[cat] || { label: cat, color: 'text-slate-700', bg: 'bg-slate-100', border: 'border-slate-200' };
 
         return (
-          <div className="flex items-start gap-3 py-1">
-            <div className="w-10 h-10 rounded-xl border border-blue-200 bg-blue-50/70 p-1 shrink-0 flex items-center justify-center text-blue-600 shadow-2xs mt-0.5">
-              <Boxes className="w-5 h-5" />
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg border border-blue-200 bg-blue-50/80 shrink-0 flex items-center justify-center text-blue-600 shadow-2xs">
+              <Boxes className="w-3.5 h-3.5" />
             </div>
-            <div className="min-w-0 max-w-xs">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-mono text-xs font-bold text-blue-700 uppercase">
+                <span className="font-mono text-xs font-bold text-blue-700 uppercase whitespace-nowrap">
                   {i.sku}
                 </span>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded border ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}>
+                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${catInfo.bg} ${catInfo.color} ${catInfo.border} whitespace-nowrap`}>
                   {catInfo.label}
                 </span>
               </div>
-              <div className="text-xs font-bold text-slate-900 truncate mt-0.5" title={i.fabricType}>
+              <div className="text-xs font-semibold text-slate-900 truncate max-w-[170px]" title={i.fabricType}>
                 {i.fabricType}
               </div>
-              <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
-                <span className="w-2 h-2 rounded-full border border-slate-300 bg-slate-300 shrink-0" />
+              <div className="text-[10px] text-slate-500 flex items-center gap-1 whitespace-nowrap">
                 <span>{i.color}</span>
                 <span className="text-slate-300">•</span>
-                <span className="font-mono text-[10px]">Lot: {i.batchLot}</span>
+                <span className="font-mono">Lot: {i.batchLot}</span>
               </div>
             </div>
           </div>
@@ -367,13 +367,14 @@ export function InventoryView({
     },
     {
       key: 'styleNumber',
-      header: 'Order / Mill Ref',
+      header: 'Order / Mill',
       sortable: true,
+      width: '130px',
       render: (i) => (
-        <div className="text-xs space-y-0.5">
-          <div className="font-mono font-bold text-slate-800">{i.styleNumber}</div>
-          <div className="text-[11px] text-slate-500 truncate max-w-[180px]">
-            {i.supplierName || 'Pacific Textiles Mills Ltd'}
+        <div className="text-xs space-y-0.5 min-w-0">
+          <div className="font-mono font-bold text-slate-800 truncate" title={i.styleNumber}>{i.styleNumber}</div>
+          <div className="text-[10px] text-slate-500 truncate max-w-[125px]" title={i.supplierName}>
+            {i.supplierName || 'Pacific Textiles'}
           </div>
         </div>
       ),
@@ -382,23 +383,24 @@ export function InventoryView({
       key: 'quantityMeters',
       header: 'On-Hand Stock',
       sortable: true,
+      width: '110px',
       render: (i) => {
         const unit = i.unit || 'Meters';
         const isFabric = !i.category || i.category === 'FABRIC';
 
         return (
-          <div className="text-xs">
-            <div className="font-mono font-bold text-blue-700 text-sm">
+          <div className="text-xs whitespace-nowrap">
+            <div className="font-mono font-bold text-blue-700">
               {i.quantityMeters.toLocaleString(undefined, { maximumFractionDigits: 1 })}{' '}
-              <span className="text-xs font-semibold text-slate-600 font-sans">{unit}</span>
+              <span className="text-[10px] font-semibold text-slate-600 font-sans">{unit}</span>
             </div>
             {isFabric && i.rollCount > 0 ? (
               <span className="text-[10px] text-slate-500 font-mono block">
-                {i.rollCount} Rolls Staged
+                {i.rollCount} Rolls
               </span>
             ) : (
               <span className="text-[10px] text-emerald-600 font-medium block">
-                Ready for Floor
+                Ready
               </span>
             )}
           </div>
@@ -407,28 +409,30 @@ export function InventoryView({
     },
     {
       key: 'warehouseLocation',
-      header: 'Storage Location',
+      header: 'Location',
       sortable: true,
+      width: '100px',
       render: (i) => (
-        <div className="flex items-center gap-1.5 text-xs">
-          <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+        <div className="flex items-center gap-1 text-xs whitespace-nowrap">
+          <MapPin className="w-3 h-3 text-blue-600 shrink-0" />
           <span className="font-mono font-semibold text-slate-800">{i.warehouseLocation}</span>
         </div>
       ),
     },
     {
       key: 'unitCost',
-      header: 'Valuation ($ USD)',
+      header: 'Valuation',
       sortable: true,
+      width: '105px',
       render: (i) => {
         const total = i.quantityMeters * i.unitCost;
         return (
-          <div className="text-xs">
+          <div className="text-xs whitespace-nowrap">
             <div className="font-mono font-bold text-emerald-700">
-              ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${total >= 1000 ? `${(total / 1000).toFixed(1)}k` : total.toFixed(0)}
             </div>
             <div className="text-[10px] text-slate-400 font-mono">
-              @ ${i.unitCost.toFixed(2)} / {i.unit || 'm'}
+              @${i.unitCost.toFixed(1)}/{i.unit?.slice(0, 1) || 'm'}
             </div>
           </div>
         );
@@ -436,21 +440,25 @@ export function InventoryView({
     },
     {
       key: 'qualityGrade',
-      header: 'Grade & QC',
+      header: 'Grade',
       sortable: true,
+      width: '90px',
       render: (i) => <GradeBadge grade={i.qualityGrade} />,
     },
     {
       key: 'status',
       header: 'Status',
       sortable: true,
+      width: '95px',
       render: (i) => <StatusBadge status={i.status} />,
     },
     {
       key: 'actions',
       header: 'Actions',
+      width: '125px',
+      align: 'right',
       render: (i) => (
-        <div className="flex items-center gap-1.5 justify-end">
+        <div className="flex items-center gap-1 justify-end">
           {/* Quick Issue Button */}
           <button
             type="button"
@@ -458,11 +466,10 @@ export function InventoryView({
               setItemToIssue(i);
               setIsIssueModalOpen(true);
             }}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold border border-amber-200 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors cursor-pointer"
             title="Issue to Floor (SIV)"
           >
             <ArrowUpRight className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">Issue</span>
           </button>
 
           {/* View Specs Button */}
@@ -502,16 +509,17 @@ export function InventoryView({
     },
   ];
 
-  // Receive Register (GRN) Table Columns
+  // Receive Register (GRN) Table Columns with compact widths
   const receiveColumns: ColumnDef<ReceiveRecord>[] = [
     {
       key: 'grnNumber',
       header: 'GRN # & Date',
       sortable: true,
+      width: '110px',
       render: (r) => (
         <div className="text-xs">
           <div className="font-mono font-bold text-blue-700">{r.grnNumber}</div>
-          <div className="text-[11px] text-slate-500">{r.date}</div>
+          <div className="text-[10px] text-slate-500">{r.date}</div>
         </div>
       ),
     },
@@ -519,46 +527,49 @@ export function InventoryView({
       key: 'supplierName',
       header: 'Supplier & Challan',
       sortable: true,
+      width: '160px',
       render: (r) => (
         <div className="text-xs">
-          <div className="font-bold text-slate-900">{r.supplierName}</div>
-          <div className="text-[11px] text-slate-500 font-mono">
-            Challan: {r.challanNumber} • PO: {r.poNumber}
+          <div className="font-semibold text-slate-900 truncate max-w-[150px]" title={r.supplierName}>{r.supplierName}</div>
+          <div className="text-[10px] text-slate-500 font-mono truncate max-w-[150px]">
+            Ch: {r.challanNumber} • PO: {r.poNumber}
           </div>
         </div>
       ),
     },
     {
       key: 'itemName',
-      header: 'Raw Material Item',
+      header: 'Material & SKU',
       sortable: true,
+      width: '210px',
       render: (r) => {
         const catInfo = CATEGORY_LABELS[r.category] || { label: r.category, bg: 'bg-slate-100', color: 'text-slate-700', border: 'border-slate-200' };
         return (
-          <div className="text-xs max-w-xs">
+          <div className="text-xs">
             <div className="flex items-center gap-1.5">
               <span className="font-mono font-bold text-slate-800">{r.sku}</span>
-              <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded border ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}>
+              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}>
                 {catInfo.label}
               </span>
             </div>
-            <div className="text-slate-600 truncate mt-0.5">{r.itemName}</div>
+            <div className="text-slate-600 truncate mt-0.5 max-w-[190px]" title={r.itemName}>{r.itemName}</div>
           </div>
         );
       },
     },
     {
       key: 'receivedQty',
-      header: 'Quantity Inwarded',
+      header: 'Inward Qty',
       sortable: true,
+      width: '110px',
       render: (r) => (
         <div className="text-xs">
-          <span className="font-mono font-bold text-emerald-700 text-sm">
+          <span className="font-mono font-bold text-emerald-700">
             +{r.receivedQty.toLocaleString()} {r.unit}
           </span>
           {r.rollsReceived && (
             <span className="block text-[10px] text-slate-500 font-mono">
-              ({r.rollsReceived} Rolls / Lot: {r.batchLot})
+              {r.rollsReceived} Rolls • Lot: {r.batchLot}
             </span>
           )}
         </div>
@@ -568,13 +579,14 @@ export function InventoryView({
       key: 'qcStatus',
       header: 'QC Inspection',
       sortable: true,
+      width: '125px',
       render: (r) => {
         const isPassed = r.qcStatus === 'PASSED';
         const isQuarantine = r.qcStatus === 'QUARANTINE';
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+              className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
                 isPassed
                   ? 'bg-emerald-100 text-emerald-800'
                   : isQuarantine
@@ -591,12 +603,13 @@ export function InventoryView({
     },
     {
       key: 'warehouseLocation',
-      header: 'Bay & Receiver',
+      header: 'Location & By',
       sortable: true,
+      width: '110px',
       render: (r) => (
         <div className="text-xs">
           <div className="flex items-center gap-1 font-mono font-semibold text-slate-800">
-            <MapPin className="w-3.5 h-3.5 text-blue-600" />
+            <MapPin className="w-3 h-3 text-blue-600" />
             <span>{r.warehouseLocation}</span>
           </div>
           <div className="text-[10px] text-slate-400">By: {r.receivedBy.split(' ')[0]}</div>
@@ -606,42 +619,45 @@ export function InventoryView({
     {
       key: 'notes',
       header: 'Remarks',
+      width: '140px',
       render: (r) => (
-        <div className="text-xs text-slate-600 truncate max-w-[200px]" title={r.notes}>
+        <div className="text-xs text-slate-600 truncate max-w-[130px]" title={r.notes}>
           {r.notes || 'Inspection passed with 0 defects.'}
         </div>
       ),
     },
   ];
 
-  // Issue Register (SIV) Table Columns
+  // Issue Register (SIV) Table Columns with compact widths
   const issueColumns: ColumnDef<IssueRecord>[] = [
     {
       key: 'sivNumber',
       header: 'SIV # & Date',
       sortable: true,
+      width: '110px',
       render: (s) => (
         <div className="text-xs">
           <div className="font-mono font-bold text-amber-800">{s.sivNumber}</div>
-          <div className="text-[11px] text-slate-500">{s.date}</div>
+          <div className="text-[10px] text-slate-500">{s.date}</div>
         </div>
       ),
     },
     {
       key: 'departmentDetail',
-      header: 'Destination Floor / Line',
+      header: 'Floor / Line',
       sortable: true,
+      width: '150px',
       render: (s) => (
-        <div className="flex items-center gap-2 text-xs">
-          <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200 shrink-0">
+        <div className="flex items-center gap-1.5 text-xs">
+          <div className="w-6 h-6 rounded-md bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200 shrink-0">
             {s.issuedTo === 'CUTTING_FLOOR' ? (
-              <Scissors className="w-3.5 h-3.5" />
+              <Scissors className="w-3 h-3" />
             ) : (
-              <Factory className="w-3.5 h-3.5" />
+              <Factory className="w-3 h-3" />
             )}
           </div>
-          <div>
-            <div className="font-bold text-slate-900">{s.departmentDetail}</div>
+          <div className="min-w-0">
+            <div className="font-semibold text-slate-900 truncate max-w-[110px]" title={s.departmentDetail}>{s.departmentDetail}</div>
             <div className="text-[10px] text-slate-500 font-mono">Req: {s.requisitionNumber}</div>
           </div>
         </div>
@@ -649,56 +665,61 @@ export function InventoryView({
     },
     {
       key: 'styleNumber',
-      header: 'Buyer Order / Style',
+      header: 'Order / Style',
       sortable: true,
+      width: '120px',
       render: (s) => (
         <div className="text-xs">
           <div className="font-mono font-bold text-blue-700">{s.poNumber}</div>
-          <div className="text-[11px] text-slate-500">Style: {s.styleNumber}</div>
+          <div className="text-[10px] text-slate-500">Style: {s.styleNumber}</div>
         </div>
       ),
     },
     {
       key: 'itemName',
-      header: 'Material Issued',
+      header: 'Material & SKU',
       sortable: true,
+      width: '210px',
       render: (s) => {
         const catInfo = CATEGORY_LABELS[s.category] || { label: s.category, bg: 'bg-slate-100', color: 'text-slate-700', border: 'border-slate-200' };
         return (
-          <div className="text-xs max-w-xs">
+          <div className="text-xs">
             <div className="flex items-center gap-1.5">
               <span className="font-mono font-bold text-slate-800">{s.sku}</span>
-              <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded border ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}>
+              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}>
                 {catInfo.label}
               </span>
             </div>
-            <div className="text-slate-600 truncate mt-0.5">{s.itemName}</div>
+            <div className="text-slate-600 truncate mt-0.5 max-w-[190px]" title={s.itemName}>{s.itemName}</div>
           </div>
         );
       },
     },
     {
       key: 'issuedQty',
-      header: 'Quantity Issued',
+      header: 'Issued Qty',
       sortable: true,
+      width: '110px',
       render: (s) => (
-        <div className="text-xs font-mono font-bold text-amber-900 text-sm">
+        <div className="text-xs font-mono font-bold text-amber-900">
           -{s.issuedQty.toLocaleString()} {s.unit}
         </div>
       ),
     },
     {
       key: 'purpose',
-      header: 'Operation Purpose',
+      header: 'Purpose',
+      width: '130px',
       render: (s) => (
-        <div className="text-xs text-slate-600 truncate max-w-[200px]" title={s.purpose}>
+        <div className="text-xs text-slate-600 truncate max-w-[120px]" title={s.purpose}>
           {s.purpose}
         </div>
       ),
     },
     {
       key: 'receivedByFloor',
-      header: 'Personnel Sign-Off',
+      header: 'Sign-Off',
+      width: '110px',
       render: (s) => (
         <div className="text-xs text-slate-600">
           <div>Floor: <span className="font-semibold text-slate-900">{s.receivedByFloor.split(' ')[0]}</span></div>
@@ -718,22 +739,23 @@ export function InventoryView({
         </div>
       )}
 
-      {/* TOP HEADER: 4-tab clean navigation matching Buyer & Order module */}
-      <ModuleHeader
-        title="Raw Material & Store Inventory"
-        subtitle="Live multi-tier raw material ledger with Goods Received Note (GRN) inwarding & Floor Issue Voucher (SIV) tracking"
-        activeView={inventorySubView.type !== 'none' ? 'stock' : viewMode}
-        onViewChange={(mode) => {
-          setInventorySubView({ type: 'none' });
-          setViewMode(mode as any);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary', icon: BarChart3 },
-          { id: 'stock', label: 'Stock Ledger', count: items.length, icon: Boxes },
-          { id: 'receive', label: 'Receive Register (GRN)', count: receiveRecords.length, icon: ArrowDownLeft },
-          { id: 'issue', label: 'Issue Register (SIV)', count: issueRecords.length, icon: ArrowUpRight },
-        ]}
-      />
+      {/* TOP HEADER: Clean navigation matching Buyer & Order module */}
+      {inventorySubView.type !== 'details' && (
+        <ModuleHeader
+          title="All Inventory"
+          activeView={inventorySubView.type !== 'none' ? 'stock' : viewMode}
+          onViewChange={(mode) => {
+            setInventorySubView({ type: 'none' });
+            setViewMode(mode as any);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary', icon: BarChart3 },
+            { id: 'stock', label: 'Stock Ledger', count: items.length, icon: Boxes },
+            { id: 'receive', label: 'Receive Register (GRN)', count: receiveRecords.length, icon: ArrowDownLeft },
+            { id: 'issue', label: 'Issue Register (SIV)', count: issueRecords.length, icon: ArrowUpRight },
+          ]}
+        />
+      )}
 
       {/* SUB-PAGE: DEDICATED ITEM DETAILS */}
       {inventorySubView.type === 'details' ? (
@@ -811,7 +833,7 @@ export function InventoryView({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
                   {(
                     [
                       { id: 'FABRIC', label: 'Fabric (Knit/Woven)', icon: Layers },
@@ -833,18 +855,18 @@ export function InventoryView({
                           setCategoryFilter(cat.id);
                           setViewMode('stock');
                         }}
-                        className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-blue-300 hover:bg-blue-50/40 transition-all cursor-pointer space-y-2 group"
+                        className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-blue-300 hover:bg-blue-50/40 transition-all cursor-pointer space-y-2 group min-w-0"
                       >
-                        <div className="flex items-center justify-between">
-                          <cat.icon className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
-                          <span className="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700">
+                        <div className="flex items-center justify-between gap-1">
+                          <cat.icon className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform shrink-0" />
+                          <span className="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700 shrink-0 whitespace-nowrap">
                             {count} SKUs
                           </span>
                         </div>
-                        <div className="text-xs font-bold text-slate-800 leading-snug">
+                        <div className="text-xs font-bold text-slate-800 leading-snug truncate" title={cat.label}>
                           {cat.label}
                         </div>
-                        <div className="text-[11px] font-mono text-emerald-700 font-semibold">
+                        <div className="text-[11px] font-mono text-emerald-700 font-semibold whitespace-nowrap">
                           ${(catValuation / 1000).toFixed(1)}k
                         </div>
                       </div>
@@ -854,20 +876,20 @@ export function InventoryView({
               </div>
 
               {/* TWO SPLIT QUICK REGISTERS */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
                 {/* Recent Receipts (GRN) */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
-                      <h3 className="text-sm font-bold text-slate-900">
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 min-w-0">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ArrowDownLeft className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <h3 className="text-sm font-bold text-slate-900 truncate">
                         Recent Material Receipts (GRN)
                       </h3>
                     </div>
                     <button
                       type="button"
                       onClick={() => setViewMode('receive')}
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer shrink-0 whitespace-nowrap"
                     >
                       All GRNs ({receiveRecords.length}) →
                     </button>
@@ -877,26 +899,26 @@ export function InventoryView({
                     {receiveRecords.slice(0, 4).map((r) => (
                       <div
                         key={r.id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/80"
+                        className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/80 gap-3"
                       >
-                        <div className="min-w-0 flex items-center gap-3">
+                        <div className="min-w-0 flex items-center gap-2.5 sm:gap-3 flex-1">
                           <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200 shrink-0 font-mono text-xs font-bold">
                             GRN
                           </div>
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold text-slate-900 truncate">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900 truncate" title={`${r.grnNumber} • ${r.supplierName}`}>
                               {r.grnNumber} • {r.supplierName}
                             </div>
-                            <div className="text-[11px] text-slate-500 truncate">
+                            <div className="text-[11px] text-slate-500 truncate" title={`${r.itemName} (${r.sku})`}>
                               {r.itemName} ({r.sku})
                             </div>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="font-mono text-xs font-bold text-emerald-700 block">
+                          <span className="font-mono text-xs font-bold text-emerald-700 block whitespace-nowrap">
                             +{r.receivedQty.toLocaleString()} {r.unit}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono">{r.date}</span>
+                          <span className="text-[10px] text-slate-400 font-mono block whitespace-nowrap">{r.date}</span>
                         </div>
                       </div>
                     ))}
@@ -904,18 +926,18 @@ export function InventoryView({
                 </div>
 
                 {/* Recent Floor Issues (SIV) */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <ArrowUpRight className="w-4 h-4 text-amber-600" />
-                      <h3 className="text-sm font-bold text-slate-900">
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 min-w-0">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ArrowUpRight className="w-4 h-4 text-amber-600 shrink-0" />
+                      <h3 className="text-sm font-bold text-slate-900 truncate">
                         Recent Factory Floor Issues (SIV)
                       </h3>
                     </div>
                     <button
                       type="button"
                       onClick={() => setViewMode('issue')}
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer shrink-0 whitespace-nowrap"
                     >
                       All SIVs ({issueRecords.length}) →
                     </button>
@@ -925,26 +947,26 @@ export function InventoryView({
                     {issueRecords.slice(0, 4).map((s) => (
                       <div
                         key={s.id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/80"
+                        className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/80 gap-3"
                       >
-                        <div className="min-w-0 flex items-center gap-3">
+                        <div className="min-w-0 flex items-center gap-2.5 sm:gap-3 flex-1">
                           <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-800 flex items-center justify-center border border-amber-200 shrink-0 font-mono text-xs font-bold">
                             SIV
                           </div>
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold text-slate-900 truncate">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900 truncate" title={`${s.sivNumber} → ${s.departmentDetail}`}>
                               {s.sivNumber} → {s.departmentDetail}
                             </div>
-                            <div className="text-[11px] text-slate-500 truncate">
+                            <div className="text-[11px] text-slate-500 truncate" title={`${s.itemName} • PO: ${s.poNumber}`}>
                               {s.itemName} • PO: {s.poNumber}
                             </div>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="font-mono text-xs font-bold text-amber-900 block">
+                          <span className="font-mono text-xs font-bold text-amber-900 block whitespace-nowrap">
                             -{s.issuedQty.toLocaleString()} {s.unit}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono">{s.date}</span>
+                          <span className="text-[10px] text-slate-400 font-mono block whitespace-nowrap">{s.date}</span>
                         </div>
                       </div>
                     ))}
@@ -1003,6 +1025,7 @@ export function InventoryView({
                 id="warehouse-master-stock-ledger"
                 data={filteredStockItems}
                 columns={stockColumns}
+                dense
                 searchPlaceholder="Search SKU, raw material, lot#, color, or bay..."
                 searchableKeys={['sku', 'fabricType', 'color', 'batchLot', 'warehouseLocation', 'styleNumber', 'supplierName']}
                 secondaryAction={
@@ -1033,16 +1056,16 @@ export function InventoryView({
                   </div>
                 }
                 primaryAction={
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setItemToEdit(null);
                         setIsAddEditModalOpen(true);
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
                     >
-                      <Plus className="w-3.5 h-3.5 text-blue-600" />
+                      <Plus className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                       <span>+ Add Item</span>
                     </button>
 
@@ -1052,19 +1075,19 @@ export function InventoryView({
                         setItemToIssue(null);
                         setIsIssueModalOpen(true);
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
                     >
-                      <ArrowUpRight className="w-3.5 h-3.5 text-amber-700" />
+                      <ArrowUpRight className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                       <span>Issue (SIV)</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setIsReceiveModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer whitespace-nowrap"
                     >
-                      <ArrowDownLeft className="w-3.5 h-3.5" />
-                      <span>Receive Material (GRN)</span>
+                      <ArrowDownLeft className="w-3.5 h-3.5 shrink-0" />
+                      <span>Receive (GRN)</span>
                     </button>
                   </div>
                 }
@@ -1080,6 +1103,7 @@ export function InventoryView({
                 id="warehouse-receive-grn-register"
                 data={receiveRecords}
                 columns={receiveColumns}
+                dense
                 searchPlaceholder="Search GRN number, supplier, challan, PO, or SKU..."
                 searchableKeys={['grnNumber', 'supplierName', 'challanNumber', 'poNumber', 'sku', 'itemName', 'batchLot']}
                 primaryAction={
@@ -1103,6 +1127,7 @@ export function InventoryView({
                 id="warehouse-issue-siv-register"
                 data={issueRecords}
                 columns={issueColumns}
+                dense
                 searchPlaceholder="Search SIV number, destination line, style, PO, or SKU..."
                 searchableKeys={['sivNumber', 'departmentDetail', 'poNumber', 'styleNumber', 'requisitionNumber', 'sku', 'itemName']}
                 primaryAction={

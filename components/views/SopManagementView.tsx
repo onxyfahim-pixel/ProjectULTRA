@@ -488,10 +488,10 @@ export function SopManagementView() {
         </div>
       )}
 
-      {/* Module Header - styled identically to Document Control Module with blue action button */}
+      {/* Module Header */}
       <ModuleHeader
         id="sop-management-module"
-        title="Standard Operating Procedures (SOP) Library & Operations"
+        title="SOP Management"
         activeView={viewMode}
         onViewChange={setViewMode}
         customTabs={[

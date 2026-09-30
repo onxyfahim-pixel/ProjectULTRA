@@ -423,24 +423,23 @@ export function MeetingMinutesView() {
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order module */}
-      <ModuleHeader
-        id="meeting-minutes-module"
-        moduleCode="MOD-21"
-        badge="Quality Governance"
-        title="Quality Assurance Meeting Minutes (MOM) & Action Tracker"
-        subtitle="Weekly quality reviews, buyer pre-production (PP) meetings, customer claim reviews, and assigned action deadlines"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Meeting Minutes', count: meetings.length },
-          { id: 'actions', label: 'Action Tracker', count: pendingActions },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="meeting-minutes-module"
+          title="Meeting Minutes"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Meeting Minutes', count: meetings.length },
+            { id: 'actions', label: 'Action Tracker', count: pendingActions },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (

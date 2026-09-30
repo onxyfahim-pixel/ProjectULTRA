@@ -33,7 +33,7 @@ import {
   CalendarDays,
   Send,
   Settings,
-  Database,
+  FileBarChart,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronRight,
@@ -78,8 +78,7 @@ export type NavTab =
   | 'communication'
   | 'texpedia'
   | 'settings'
-  | 'standards'
-  | 'architecture';
+  | 'report_analysis';
 
 interface NavItem {
   id: NavTab;
@@ -127,7 +126,7 @@ export function ErpSidebar({
         },
         {
           id: 'inventory',
-          label: 'Fabric Inventory',
+          label: 'All Inventory',
           icon: Boxes,
         },
         {
@@ -153,6 +152,11 @@ export function ErpSidebar({
           label: 'Quality Goal',
           icon: Target,
           hasChevron: true,
+        },
+        {
+          id: 'report_analysis',
+          label: 'Report And Analysis',
+          icon: FileBarChart,
         },
       ],
     },
@@ -302,22 +306,12 @@ export function ErpSidebar({
       ],
     },
     {
-      groupTitle: 'SYSTEM & ARCHITECTURE',
+      groupTitle: 'SYSTEM & SETTINGS',
       items: [
         {
           id: 'settings',
           label: 'Settings',
           icon: Settings,
-        },
-        {
-          id: 'standards',
-          label: 'Module Standard Blueprint',
-          icon: Layers,
-        },
-        {
-          id: 'architecture',
-          label: 'PostgreSQL & Express Arch',
-          icon: Database,
         },
       ],
     },

@@ -142,13 +142,18 @@ export function NoticeDetailsPage({
     showToast('Comment posted to floor bulletin thread');
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16 animate-in fade-in duration-200">
-      {/* Top Header Bar matching Buyer & Order Module */}
+    <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
+      <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
+        {/* Top Header Bar matching Buyer & Order Module */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3">
           <button
@@ -182,16 +187,6 @@ export function NoticeDetailsPage({
 
         {/* Action Buttons styled like Buyer & Order */}
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer"
-            title="Print / Export PDF"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden sm:inline">Print Memo</span>
-          </button>
-
           <button
             type="button"
             onClick={() => onDuplicate(currentNotice)}
@@ -642,6 +637,7 @@ export function NoticeDetailsPage({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

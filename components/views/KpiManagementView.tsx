@@ -395,24 +395,23 @@ export function KpiManagementView() {
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order module */}
-      <ModuleHeader
-        id="kpi-management-module"
-        moduleCode="MOD-13"
-        badge="Executive Scorecard & Analytics"
-        title="Executive Quality & Manufacturing Performance Scorecard"
-        subtitle="Key Quality Indicators: DHU, Right First Time (RFT), Cut-to-Ship Ratio, Cost of Quality, and On-Time Delivery"
-        activeView={subView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'KPI Scorecard', count: kpis.length },
-          { id: 'actions', label: 'Remediation Tracker', count: pendingActions },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="kpi-management-module"
+          title="KPI Management"
+          activeView={subView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'KPI Scorecard', count: kpis.length },
+            { id: 'actions', label: 'Remediation Tracker', count: pendingActions },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (

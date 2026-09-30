@@ -423,10 +423,10 @@ export function CertificateView() {
         </div>
       )}
 
-      {/* Module Header - styled identically to Audit Module with clean tabs and blue action button */}
+      {/* Module Header */}
       <ModuleHeader
         id="certificates-vault-module"
-        title="Factory Compliance & Sustainability Certificates Vault"
+        title="Certificates Vault"
         activeView={viewMode}
         onViewChange={setViewMode}
         customTabs={[

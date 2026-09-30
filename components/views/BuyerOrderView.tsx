@@ -742,20 +742,22 @@ export function BuyerOrderView({
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout ONLY (Summary, Order List, Buyer List) */}
-      <ModuleHeader
-        title="Buyer & Order Management"
-        activeView={orderSubView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setOrderSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Order List', count: orders.length },
-          { id: 'buyer', label: 'Buyer List', count: buyers.length },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {orderSubView.type !== 'details' && (
+        <ModuleHeader
+          title="Buyer & Order"
+          activeView={orderSubView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setOrderSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Order List', count: orders.length },
+            { id: 'buyer', label: 'Buyer List', count: buyers.length },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {orderSubView.type === 'details' ? (

@@ -701,26 +701,25 @@ export function TrainingView() {
         </div>
       )}
 
-      {/* TOP HEADER: 5-tab layout as requested by user */}
-      <ModuleHeader
-        id="training-module"
-        moduleCode="MOD-29"
-        badge="Quality Training & Competency"
-        title="Factory Quality Training Matrix & Competency Certifications (ISO 9001:2015)"
-        subtitle="Needle safety protocols, ASTM 4-point fabric grading, garment defect identification, and operator skill licensing"
-        activeView={subView.type !== 'none' ? 'records' : viewMode}
-        onViewChange={(mode) => {
-          setSubView({ type: 'none' });
-          setViewMode(mode);
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summery' },
-          { id: 'calendar', label: 'Training Calander', count: annualSchedule.length },
-          { id: 'records', label: 'Training Record', count: courses.length },
-          { id: 'exam_papers', label: 'Exam Paper record', count: examPapers.length },
-          { id: 'evaluations', label: 'Evaluation Record', count: evaluations.length },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {subView.type !== 'details' && (
+        <ModuleHeader
+          id="training-module"
+          title="Training Matrix"
+          activeView={subView.type !== 'none' ? 'records' : viewMode}
+          onViewChange={(mode) => {
+            setSubView({ type: 'none' });
+            setViewMode(mode);
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'calendar', label: 'Training Calendar', count: annualSchedule.length },
+            { id: 'records', label: 'Training Records', count: courses.length },
+            { id: 'exam_papers', label: 'Exam Papers', count: examPapers.length },
+            { id: 'evaluations', label: 'Evaluations', count: evaluations.length },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGES IF ACTIVE */}
       {subView.type === 'details' ? (
@@ -962,8 +961,7 @@ export function TrainingView() {
             <div className="animate-in fade-in duration-200">
               <DataTable
                 id="training-courses-table"
-                title="Training Matrix & Competency Certification Register"
-                subtitle="Complete registry of QMS curriculums, certified staff headcounts, historical pass rates, and upcoming sessions"
+                title="Training Records"
                 data={filteredCourses}
                 columns={courseColumns}
                 searchPlaceholder="Search course code, title, trainer, or target audience..."
@@ -1035,8 +1033,7 @@ export function TrainingView() {
             <div className="animate-in fade-in duration-200">
               <DataTable
                 id="exam-papers-table"
-                title="QMS Technical Examination Papers & Question Banks"
-                subtitle="Formal written, practical demonstration, and oral viva exam papers satisfying ISO 9001 Clause 7.2"
+                title="Examination Papers"
                 data={examPapers}
                 columns={examColumns}
                 searchPlaceholder="Search exam code, title, linked course, or department..."
@@ -1074,8 +1071,7 @@ export function TrainingView() {
             <div className="animate-in fade-in duration-200">
               <DataTable
                 id="evaluations-table"
-                title="Trainee Competency Evaluation & Examination Marks Roster"
-                subtitle="Logged assessment scorecards, theoretical and practical marks, and issued competency certificates"
+                title="Evaluation Records"
                 data={evaluations}
                 columns={evalColumns}
                 searchPlaceholder="Search evaluation code, course title, assessor, or trainer..."

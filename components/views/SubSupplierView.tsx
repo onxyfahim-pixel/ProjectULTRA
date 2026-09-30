@@ -379,20 +379,22 @@ export function SubSupplierView() {
         </div>
       )}
 
-      {/* TOP HEADER: Clean 3-tab layout matching Buyer & Order module */}
-      <ModuleHeader
-        title="Sub-Supplier & Vendor Management"
-        activeView={supplierSubView.type !== 'none' ? 'list' : viewMode}
-        onViewChange={(mode) => {
-          setSupplierSubView({ type: 'none' });
-          setViewMode(mode as 'summary' | 'list' | 'profiles');
-        }}
-        customTabs={[
-          { id: 'summary', label: 'Summary' },
-          { id: 'list', label: 'Supplier Matrix', count: suppliers.length },
-          { id: 'profiles', label: 'Vendor Profiles', count: suppliers.length },
-        ]}
-      />
+      {/* TOP HEADER */}
+      {supplierSubView.type !== 'details' && (
+        <ModuleHeader
+          title="Sub Supplier"
+          activeView={supplierSubView.type !== 'none' ? 'list' : viewMode}
+          onViewChange={(mode) => {
+            setSupplierSubView({ type: 'none' });
+            setViewMode(mode as 'summary' | 'list' | 'profiles');
+          }}
+          customTabs={[
+            { id: 'summary', label: 'Summary' },
+            { id: 'list', label: 'Supplier Matrix', count: suppliers.length },
+            { id: 'profiles', label: 'Vendor Profiles', count: suppliers.length },
+          ]}
+        />
+      )}
 
       {/* RENDER DEDICATED SEPARATE SUB-PAGE IF ACTIVE */}
       {supplierSubView.type === 'details' ? (
