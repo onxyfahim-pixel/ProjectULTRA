@@ -34,7 +34,6 @@ import {
   InspectionStatus,
   InspectionStage,
   DefectItem,
-  MeasurementAuditItem,
   CheckpointItem,
   CombinedPoItem,
 } from '@/lib/types/erp';
@@ -46,6 +45,11 @@ import {
   AqlCalculationResult,
   QuantityVarianceResult,
 } from '@/lib/aql';
+import {
+  STANDARD_11_CHECKPOINTS,
+  syncRecordCheckpoints,
+  getDefaultCheckpoints,
+} from './inspection-checkpoints';
 
 interface InspectionEntryPageProps {
   mode?: 'add' | 'edit';
@@ -71,35 +75,6 @@ const COMMON_GARMENT_DEFECTS = [
   'Polybag Barcode Unreadable',
   'Carton Marking Inaccurate',
 ];
-
-const DEFAULT_MEASUREMENT_POINTS: { point: string; spec: number; tol: string }[] = [
-  { point: 'Chest Width (1" below armhole)', spec: 21.0, tol: '±0.5"' },
-  { point: 'Body Length (HPS to bottom)', spec: 28.5, tol: '±0.5"' },
-  { point: 'Sleeve Length from Shoulder', spec: 9.0, tol: '±0.25"' },
-  { point: 'Waist / Bottom Sweep', spec: 20.5, tol: '±0.5"' },
-  { point: 'Neck Width / Opening', spec: 7.5, tol: '±0.25"' },
-];
-
-const DEFAULT_CHECKPOINTS_BY_TYPE: Record<InspectionType, { category: string; checkpoint: string }[]> = {
-  INLINE: [
-    { category: 'Sewing Process', checkpoint: 'Stitches per inch (SPI) calibrated at 11-12 SPI' },
-    { category: 'Sewing Process', checkpoint: 'Seam tension balanced across needle and looper threads' },
-    { category: 'Safety Control', checkpoint: 'Active needle breakage protocol & replacement register' },
-    { category: 'Workmanship', checkpoint: 'Workstation cleanliness & zero garment drag on floor' },
-  ],
-  PRE_FINAL: [
-    { category: 'Packing Stage', checkpoint: 'Min 50%–80% garments packed into polybags & boxes' },
-    { category: 'Assortment', checkpoint: 'Size & color pack ratio verified against buyer PO pack sheet' },
-    { category: 'Packaging', checkpoint: 'Polybag safety warning and ventilation holes standard' },
-    { category: 'Workmanship', checkpoint: 'Finishing trimming & thread suck inspection cleared' },
-  ],
-  FINAL: [
-    { category: 'AQL 2.5 Sampling', checkpoint: 'Sample cartons pulled randomly from 100% finished lot' },
-    { category: 'Safety & Metal', checkpoint: '100% Metal Detection calibration passed (Fe 1.0mm, Non-Fe 1.2mm, SS 1.5mm)' },
-    { category: 'Carton Drop Test', checkpoint: 'ISTA 1A Carton Drop Test (1 corner, 3 edges, 6 faces) - No damage' },
-    { category: 'Barcode & Marks', checkpoint: 'Master carton export markings, PO#, Destination & EAN barcodes scannable' },
-  ],
-};
 
 export function InspectionEntryPage({
   mode = 'add',
@@ -314,31 +289,9 @@ export function InspectionEntryPage({
         ]
   );
 
-  // Measurements State
-  const [measurements, setMeasurements] = useState<MeasurementAuditItem[]>(
-    record?.measurements && record.measurements.length > 0
-      ? record.measurements
-      : DEFAULT_MEASUREMENT_POINTS.map((p, idx) => ({
-          id: `m-${idx + 1}`,
-          point: p.point,
-          spec: p.spec,
-          actual: p.spec,
-          tol: p.tol,
-          result: 'PASS',
-        }))
-  );
-
-  // Checkpoints State
-  const [checkpoints, setCheckpoints] = useState<CheckpointItem[]>(
-    record?.checkpoints && record.checkpoints.length > 0
-      ? record.checkpoints
-      : DEFAULT_CHECKPOINTS_BY_TYPE[initialType].map((c, idx) => ({
-          id: `c-${idx + 1}`,
-          category: c.category,
-          checkpoint: c.checkpoint,
-          status: 'PASS',
-          notes: '',
-        }))
+  // Checkpoints State - Standard 11 Verifications with clean Tik mark
+  const [checkpoints, setCheckpoints] = useState<CheckpointItem[]>(() =>
+    syncRecordCheckpoints(record?.checkpoints)
   );
 
   // When user selects a BuyerOrder from dropdown
@@ -373,17 +326,6 @@ export function InspectionEntryPage({
       setPackedPercent(100);
       setSampleSize(315);
     }
-
-    // Refresh checkpoints with the appropriate type defaults if none are custom
-    setCheckpoints(
-      DEFAULT_CHECKPOINTS_BY_TYPE[newType].map((c, idx) => ({
-        id: `c-${Date.now()}-${idx}`,
-        category: c.category,
-        checkpoint: c.checkpoint,
-        status: 'PASS',
-        notes: '',
-      }))
-    );
   };
 
   // Calculations
@@ -431,33 +373,20 @@ export function InspectionEntryPage({
     setDefects(defects.filter((d) => d.id !== id));
   };
 
-  const handleUpdateMeasurement = (id: string, actual: number) => {
-    setMeasurements((prev) =>
-      prev.map((m) => {
-        if (m.id === id) {
-          const diff = Math.abs(actual - m.spec);
-          const isPass = diff <= 0.6; // tolerance threshold
-          return {
-            ...m,
-            actual,
-            result: isPass ? 'PASS' : 'FAIL',
-          };
-        }
-        return m;
-      })
-    );
-  };
-
   const handleToggleCheckpoint = (id: string) => {
     setCheckpoints((prev) =>
       prev.map((c) => {
         if (c.id === id) {
-          const next = c.status === 'PASS' ? 'FAIL' : c.status === 'FAIL' ? 'NA' : 'PASS';
+          const next = c.status === 'PASS' ? 'FAIL' : 'PASS';
           return { ...c, status: next };
         }
         return c;
       })
     );
+  };
+
+  const handleMarkAllCheckpoints = (status: 'PASS' | 'FAIL') => {
+    setCheckpoints((prev) => prev.map((c) => ({ ...c, status })));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -508,7 +437,7 @@ export function InspectionEntryPage({
       correctiveAction,
       createdAt: record?.createdAt || new Date().toISOString(),
       defects,
-      measurements,
+      measurements: [],
       checkpoints,
     };
 
@@ -1547,109 +1476,108 @@ export function InspectionEntryPage({
         </div>
       </div>
 
-      {/* SECTION 5: GARMENT MEASUREMENTS & TOLERANCES */}
+      {/* SECTION 5: INSPECTION CHECKPOINTS VERIFICATION (11 CHECKPOINTS WITH TIK MARK) */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-blue-600" />
-              <span>5. Garment Measurement Audit (Point of Measure vs Spec)</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>
+                5. Inspection Checkpoints Verification ({checkpoints.filter((c) => c.status === 'PASS').length} of {checkpoints.length} Tik OK ✓)
+              </span>
             </h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Tolerance evaluated according to buyer size charts</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Click individual checkpoint or toggle quick action to verify all checkpoints
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleMarkAllCheckpoints('PASS')}
+              className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Tik All ✓ OK</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleMarkAllCheckpoints('FAIL')}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition-colors cursor-pointer"
+            >
+              Reset
+            </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
-              <tr>
-                <th className="p-3">Measurement Point</th>
-                <th className="p-3 text-right font-mono">Spec (inch)</th>
-                <th className="p-3 text-right font-mono">Actual Sample</th>
-                <th className="p-3 text-center">Allowed Tol</th>
-                <th className="p-3 text-center">Verdict</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {measurements.map((m) => (
-                <tr key={m.id} className="hover:bg-slate-50/50">
-                  <td className="p-3 font-semibold text-slate-800">{m.point}</td>
-                  <td className="p-3 text-right font-mono text-slate-600">{m.spec.toFixed(1)}"</td>
-                  <td className="p-3 text-right">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={m.actual}
-                      onChange={(e) => handleUpdateMeasurement(m.id, parseFloat(e.target.value) || 0)}
-                      className="w-20 px-2 py-1 text-xs font-mono font-bold text-right border border-slate-300 rounded-lg bg-white"
-                    />
-                  </td>
-                  <td className="p-3 text-center font-mono text-slate-500">{m.tol}</td>
-                  <td className="p-3 text-center">
-                    <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        m.result === 'PASS'
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          : 'bg-rose-100 text-rose-800 border border-rose-200'
-                      }`}
-                    >
-                      {m.result}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* SECTION 6: QUALITY CHECKPOINTS AUDIT */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>6. Quality Checkpoints Checklist ({checkpoints.length} verification points)</span>
-          </h3>
-          <span className="text-[11px] text-slate-400">Click button to toggle status</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {checkpoints.map((c) => (
-            <div
-              key={c.id}
-              className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2"
-            >
-              <div className="min-w-0">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-                  {c.category}
-                </span>
-                <div className="text-xs font-bold text-slate-800 mt-1">{c.checkpoint}</div>
-              </div>
-
-              <button
-                type="button"
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {checkpoints.map((c, idx) => {
+            const isPass = c.status === 'PASS';
+            return (
+              <div
+                key={c.id || idx}
                 onClick={() => handleToggleCheckpoint(c.id)}
-                className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors cursor-pointer shrink-0 ${
-                  c.status === 'PASS'
-                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
-                    : c.status === 'FAIL'
-                    ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
-                    : 'bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300'
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer select-none flex items-center justify-between gap-3 ${
+                  isPass
+                    ? 'bg-emerald-50/50 border-emerald-200/90 hover:bg-emerald-50 hover:border-emerald-300'
+                    : 'bg-rose-50/50 border-rose-200/90 hover:bg-rose-50 hover:border-rose-300'
                 }`}
               >
-                {c.status === 'PASS' ? '✓ Pass' : c.status === 'FAIL' ? '✗ Fail' : '~ N/A'}
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono text-xs font-black shrink-0 ${
+                      isPass ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                    }`}
+                  >
+                    {idx + 1}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-slate-900 block leading-tight truncate">
+                      {c.checkpoint}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-500 block mt-0.5">
+                      {c.category}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleCheckpoint(c.id);
+                    }}
+                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs ${
+                      isPass
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        : 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300'
+                    }`}
+                  >
+                    {isPass ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>✓ OK</span>
+                      </>
+                    ) : (
+                      <>
+                        <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>✗ Issue</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* SECTION 7: FINAL VERDICT, REMARKS & SIGN-OFF */}
+      {/* SECTION 6: FINAL VERDICT, REMARKS & SIGN-OFF */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
             <FileText className="w-4 h-4 text-indigo-600" />
-            <span>7. Final Verdict & Digital Sign-off</span>
+            <span>6. Final Verdict & Digital Sign-off</span>
           </h3>
         </div>
 

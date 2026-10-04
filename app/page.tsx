@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ErpAuthProvider, useErpAuth } from '@/hooks/use-erp-auth';
+import { AppearanceProvider } from '@/hooks/use-appearance';
 import { useLiveSync } from '@/hooks/use-live-sync';
 import { ErpHeader } from '@/components/layout/ErpHeader';
 import { ErpSidebar, NavTab } from '@/components/layout/ErpSidebar';
@@ -199,15 +200,45 @@ function ErpAppContent() {
     []
   );
 
+  // Auto-sync Buyer Orders to MySQL & Local Storage
+  const handleUpdateOrders = useCallback(
+    (updatedOrdersOrUpdater: BuyerOrder[] | ((prev: BuyerOrder[]) => BuyerOrder[])) => {
+      setOrders((prev) => {
+        const next =
+          typeof updatedOrdersOrUpdater === 'function'
+            ? updatedOrdersOrUpdater(prev)
+            : updatedOrdersOrUpdater;
+        try {
+          localStorage.setItem('erp_buyer_orders_v1', JSON.stringify(next));
+          localStorage.setItem('erp_buyer_orders', JSON.stringify(next));
+          window.dispatchEvent(new CustomEvent('erp_buyer_orders_updated'));
+        } catch {
+          // ignore
+        }
+
+        // Asynchronously persist to MySQL via backend API
+        fetch('/api/modules/buyer_orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: next }),
+        }).catch((err) => console.warn('Failed to sync buyer orders to MySQL:', err));
+
+        return next;
+      });
+    },
+    []
+  );
+
   // Fetch initial live data from backend REST API
   useEffect(() => {
     let isMounted = true;
     async function loadInitialData() {
       try {
-        const [invRes, qmsRes, statsRes] = await Promise.all([
+        const [invRes, qmsRes, statsRes, boRes] = await Promise.all([
           fetch('/api/inventory'),
           fetch('/api/qms/inspections'),
           fetch('/api/dashboard/stats'),
+          fetch('/api/buyer-orders'),
         ]);
 
         if (invRes.ok) {
@@ -221,6 +252,13 @@ function ErpAppContent() {
           const qmsData = await qmsRes.json();
           if (isMounted && Array.isArray(qmsData.records) && qmsData.records.length > 0) {
             setInspections(qmsData.records);
+          }
+        }
+
+        if (boRes && boRes.ok) {
+          const boData = await boRes.json();
+          if (isMounted && Array.isArray(boData.orders) && boData.orders.length > 0) {
+            setOrders(boData.orders);
           }
         }
 
@@ -264,11 +302,11 @@ function ErpAppContent() {
           prev.map((item) =>
             ids.includes(item.id)
               ? {
-                  ...item,
-                  qualityGrade: grade,
-                  lastUpdatedAt: new Date().toISOString(),
-                  updatedBy: event.payload?.updatedBy || 'Live WS',
-                }
+                ...item,
+                qualityGrade: grade,
+                lastUpdatedAt: new Date().toISOString(),
+                updatedBy: event.payload?.updatedBy || 'Live WS',
+              }
               : item
           )
         );
@@ -343,8 +381,8 @@ function ErpAppContent() {
                 totalSewingChecked >= (st.plannedPcs || bo.orderQuantity)
                   ? ('COMPLETED' as const)
                   : totalSewingChecked > 0
-                  ? ('IN_PROGRESS' as const)
-                  : st.status,
+                    ? ('IN_PROGRESS' as const)
+                    : st.status,
               inspector: matchingSewingRecords[0]?.qualityInspector || st.inspector,
               notes: `Auto-linked from sewing records (${totalSewingChecked.toLocaleString()} checked pcs)`,
             };
@@ -457,7 +495,7 @@ function ErpAppContent() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-slate-50 font-sans antialiased text-slate-900">
+    <div className="h-screen w-screen overflow-hidden flex bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-slate-100 transition-colors">
       {/* Unified Standard Sidebar - Positioned full-height on the left */}
       <ErpSidebar
         activeTab={activeTab}
@@ -481,13 +519,17 @@ function ErpAppContent() {
         />
 
         {/* Main Content Area - Full fluid widescreen up to 1920px with smooth independent vertical scrolling */}
-        <main className="flex-1 overflow-y-auto min-h-0 w-full bg-slate-50/60">
+        <main className="flex-1 overflow-y-auto min-h-0 w-full bg-slate-50/60 dark:bg-slate-950/80 transition-colors">
           <div className="w-full max-w-[1920px] mx-auto p-3 sm:p-5 lg:p-7 xl:p-8 space-y-6 pb-20">
             {activeTab === 'dashboard' && (
               <DashboardView
                 inventory={inventory}
                 inspections={inspections}
                 productionOrders={productionOrders}
+                orders={orders}
+                receiveRecords={receiveRecords}
+                onUpdateOrders={handleUpdateOrders}
+                onUpdateProductionOrders={handleUpdateProductionOrders}
                 onNavigateTab={setActiveTab}
                 onOpenNewInspection={() => setIsNewInspectionOpen(true)}
                 onOpenStockAdjust={(item) => {
@@ -501,7 +543,7 @@ function ErpAppContent() {
             {activeTab === 'buyer_order' && (
               <BuyerOrderView
                 orders={orders}
-                onUpdateOrders={setOrders}
+                onUpdateOrders={handleUpdateOrders}
                 inventory={inventory}
                 receiveRecords={receiveRecords}
                 onReceiveMaterial={handleReceiveMaterialLinkedToOrder}
@@ -509,7 +551,7 @@ function ErpAppContent() {
             )}
             {activeTab === 'sub_supplier' && <SubSupplierView />}
             {activeTab === 'customer_complaint' && <CustomerComplaintView />}
-            
+
             {activeTab === 'inventory' && (
               <InventoryView
                 items={inventory}
@@ -544,7 +586,7 @@ function ErpAppContent() {
                 onUpdateOrders={handleUpdateProductionOrders}
               />
             )}
-            
+
             {activeTab === 'inspections' && (
               <InspectionsView
                 records={inspections}
@@ -633,8 +675,10 @@ function ErpAppShell() {
 
 export default function Page() {
   return (
-    <ErpAuthProvider>
-      <ErpAppShell />
-    </ErpAuthProvider>
+    <AppearanceProvider>
+      <ErpAuthProvider>
+        <ErpAppShell />
+      </ErpAuthProvider>
+    </AppearanceProvider>
   );
 }

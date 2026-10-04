@@ -49,12 +49,14 @@ async function migrateAllDataToMySQL() {
     console.error('\n[ERROR] Could not connect to MySQL Server on localhost:3306.');
     console.error('Please verify that:');
     console.error('1. MySQL Server is installed and running.');
+    console.error('   - If using XAMPP: Open XAMPP Control Panel and click "Start" next to MySQL.');
+    console.error('   - If using Windows Service: Run "net start MySQL80" or "net start mysql".');
     console.error('2. DATABASE_URL or MYSQL_PASSWORD in .env.local matches your MySQL root password.');
     console.error('Example .env.local: DATABASE_URL="mysql://root:password@localhost:3306/garments_erp"\n');
     process.exit(1);
   }
 
-  console.log('[OK] MySQL Server is reached. Initializing tables...');
+  console.log('[OK] MySQL Server is reached. Initializing relational schema...');
   await mysqlManager.initializeSchema();
 
   // Load existing data from local central disk store if present
@@ -66,19 +68,36 @@ async function migrateAllDataToMySQL() {
   const productionOrders = (diskData.productionOrders && diskData.productionOrders.length > 0) ? diskData.productionOrders : INITIAL_PRODUCTION_ORDERS;
   const auditLogs = (diskData.auditLogs && diskData.auditLogs.length > 0) ? diskData.auditLogs : INITIAL_AUDIT_LOGS;
 
-  // 1. Migrate Inventory
+  const buyerOrders =
+    diskData.modulesData && diskData.modulesData.buyer_orders && diskData.modulesData.buyer_orders.length > 0
+      ? diskData.modulesData.buyer_orders
+      : MOCK_BUYER_ORDERS;
+
+  // 1. Migrate Buyer Orders (with 9-Stage WIP Record)
+  console.log(`[*] Migrating ${buyerOrders.length} buyer orders into MySQL (buyer_orders)...`);
+  for (const bo of buyerOrders) {
+    await mysqlManager.upsertBuyerOrder(bo);
+  }
+
+  // 2. Migrate Production Floor Records
+  console.log(`[*] Migrating ${productionOrders.length} production floor records into MySQL (production_records)...`);
+  for (const po of productionOrders) {
+    await mysqlManager.upsertProductionRecord(po);
+  }
+
+  // 3. Migrate Inventory
   console.log(`[*] Migrating ${inventory.length} inventory items into MySQL (inventory_items)...`);
   for (const item of inventory) {
     await mysqlManager.upsertInventoryItem(item);
   }
 
-  // 2. Migrate Inspections
+  // 4. Migrate Inspections
   console.log(`[*] Migrating ${inspections.length} inspection records into MySQL (inspection_records)...`);
   for (const insp of inspections) {
     await mysqlManager.insertInspection(insp);
   }
 
-  // 3. Migrate Production Orders
+  // 5. Migrate Production Orders (Lines)
   console.log(`[*] Migrating ${productionOrders.length} production orders into MySQL (production_orders)...`);
   const pool = mysqlManager.getPool();
   for (const po of productionOrders) {
@@ -110,16 +129,16 @@ async function migrateAllDataToMySQL() {
     );
   }
 
-  // 4. Migrate Audit Logs
+  // 6. Migrate Audit Logs
   console.log(`[*] Migrating ${auditLogs.length} audit logs into MySQL (audit_logs)...`);
   for (const log of auditLogs) {
     await mysqlManager.insertAuditLog(log);
   }
 
-  // 5. Migrate ALL 28 Garments QMS Modules into MySQL module_store
+  // 7. Migrate ALL 28 Garments QMS Modules into MySQL module_store
   console.log('[*] Migrating all 28 Garments QMS module datasets into MySQL (module_store)...');
   const moduleMap: Record<string, any> = {
-    buyer_orders: MOCK_BUYER_ORDERS,
+    buyer_orders: buyerOrders,
     buyer_profiles: MOCK_BUYER_PROFILES,
     sub_suppliers: MOCK_SUB_SUPPLIERS,
     customer_complaints: MOCK_CUSTOMER_COMPLAINTS,
@@ -150,20 +169,20 @@ async function migrateAllDataToMySQL() {
   };
 
   for (const [key, data] of Object.entries(moduleMap)) {
-    // If disk store already had customized module data, prefer that over mock
     const existing = diskData.modulesData && diskData.modulesData[key] ? diskData.modulesData[key] : data;
     await mysqlManager.saveModuleData(key, existing);
   }
+
+  const tableStats = await mysqlManager.getTableStatistics();
 
   console.log('\n================================================================');
   console.log('   [SUCCESS] ALL ERP DATA STORED IN HOST PC MYSQL DATABASE!     ');
   console.log('================================================================');
   console.log('✓ Database:           garments_erp');
-  console.log('✓ Tables:             inventory_items, inspection_records, production_orders, audit_logs, module_store');
-  console.log(`✓ Inventory Items:    ${inventory.length}`);
-  console.log(`✓ Inspection Records: ${inspections.length}`);
-  console.log(`✓ Production Orders:  ${productionOrders.length}`);
-  console.log(`✓ Audit Logs:         ${auditLogs.length}`);
+  console.log('✓ Relational Tables:  buyer_orders, production_records, inspection_records, inventory_items, production_orders, planning_records, audit_logs, users, module_store');
+  for (const stat of tableStats) {
+    console.log(`  - ${stat.name.padEnd(22)}: ${stat.rowCount} rows`);
+  }
   console.log(`✓ QMS Modules Saved:  ${Object.keys(moduleMap).length} modules in module_store`);
   console.log('================================================================\n');
 

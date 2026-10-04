@@ -26,6 +26,7 @@ import {
   ArrowRight,
   Check,
   ListTodo,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -36,6 +37,8 @@ import { INITIAL_KPIS, KPI_CATEGORY_CONFIG } from '../modules/kpi-management/kpi
 import { KpiDetailsPage } from '../modules/kpi-management/KpiDetailsPage';
 import { KpiEntryPage } from '../modules/kpi-management/KpiEntryPage';
 import { DeleteKpiModal } from '../modules/kpi-management/DeleteKpiModal';
+import { KpiExportModal } from '../modules/kpi-management/KpiExportModal';
+import { KpiSingleExportModal } from '../modules/kpi-management/KpiSingleExportModal';
 
 type KpiSubView =
   | { type: 'none' }
@@ -48,6 +51,11 @@ export function KpiManagementView() {
   const [subView, setSubView] = useState<KpiSubView>({ type: 'none' });
   const [kpis, setKpis] = useState<KpiMetric[]>(INITIAL_KPIS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Export Modals State
+  const [isGlobalExportOpen, setIsGlobalExportOpen] = useState(false);
+  const [selectedForExport, setSelectedForExport] = useState<KpiMetric[]>([]);
+  const [singleExportKpi, setSingleExportKpi] = useState<KpiMetric | null>(null);
 
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -345,6 +353,14 @@ export function KpiManagementView() {
           </button>
           <button
             type="button"
+            onClick={() => setSingleExportKpi(item)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 transition-colors cursor-pointer"
+            title="Export Performance Dossier (PDF / Excel)"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
             onClick={() => handleDuplicateKpi(item)}
             className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
             title="Duplicate Metric"
@@ -379,8 +395,10 @@ export function KpiManagementView() {
     },
     {
       label: 'Export Selected',
+      icon: <FileDown className="w-3.5 h-3.5" />,
       onClick: (selected) => {
-        showToast(`Exported ${selected.length} KPI metrics`);
+        setSelectedForExport(selected);
+        setIsGlobalExportOpen(true);
       },
     },
   ];
@@ -653,14 +671,27 @@ export function KpiManagementView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Metric</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedForExport([]);
+                        setIsGlobalExportOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                    >
+                      <FileDown className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Export</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Metric</span>
+                    </button>
+                  </div>
                 }
                 batchActions={batchActions}
               />
@@ -808,6 +839,21 @@ export function KpiManagementView() {
         kpis={deleteModalState.kpis}
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteModalState({ isOpen: false, kpis: [] })}
+      />
+
+      {/* Global Export Modal */}
+      <KpiExportModal
+        isOpen={isGlobalExportOpen}
+        onClose={() => setIsGlobalExportOpen(false)}
+        allKpis={kpis}
+        selectedKpis={selectedForExport}
+      />
+
+      {/* Single KPI Export Modal */}
+      <KpiSingleExportModal
+        isOpen={!!singleExportKpi}
+        onClose={() => setSingleExportKpi(null)}
+        kpi={singleExportKpi}
       />
     </div>
   );

@@ -454,38 +454,38 @@ export function CalibrationDetailsPage({
 
             {/* Compact Table */}
             <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-xs text-left">
+              <table className="w-full min-w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
                   <tr>
-                    <th className="py-2 px-2">Calibration Date</th>
-                    <th className="py-2 px-2">Expiry Date</th>
-                    <th className="py-2 px-2">Certificate No.</th>
-                    <th className="py-2 px-2">Agency / Auditor</th>
-                    <th className="py-2 px-2">Tolerance / Deviation</th>
-                    <th className="py-2 px-2 text-center">Verdict</th>
-                    <th className="py-2 px-2 text-right">Actions</th>
+                    <th className="py-2 px-3">Calibration Date</th>
+                    <th className="py-2 px-3">Expiry Date</th>
+                    <th className="py-2 px-3">Certificate No.</th>
+                    <th className="py-2 px-3">Agency / Auditor</th>
+                    <th className="py-2 px-3">Tolerance / Deviation</th>
+                    <th className="py-2 px-3 text-center">Verdict</th>
+                    <th className="py-2 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-mono">
                   {device.calibrationHistory && device.calibrationHistory.length > 0 ? (
                     device.calibrationHistory.map((hist) => (
                       <tr key={hist.id} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-1.5 px-2 font-semibold text-slate-900 whitespace-nowrap">
+                        <td className="py-2 px-3 font-semibold text-slate-900 whitespace-nowrap">
                           {hist.calibrationDate}
                         </td>
-                        <td className="py-1.5 px-2 text-emerald-700 font-semibold whitespace-nowrap">
+                        <td className="py-2 px-3 text-emerald-700 font-semibold whitespace-nowrap">
                           {hist.expiryDate}
                         </td>
-                        <td className="py-1.5 px-2">
-                          <span className="font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px]">
+                        <td className="py-2 px-3">
+                          <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded text-[10px]">
                             {hist.certificateNumber}
                           </span>
                         </td>
-                        <td className="py-1.5 px-2 font-sans text-slate-700">
-                          <div className="font-medium text-[11px] truncate max-w-[120px]">{hist.agency}</div>
-                          <div className="text-[10px] text-slate-400 truncate max-w-[120px]">{hist.calibratedBy}</div>
+                        <td className="py-2 px-3 font-sans text-slate-700 min-w-0">
+                          <div className="font-medium text-[11px] truncate">{hist.agency}</div>
+                          <div className="text-[10px] text-slate-400 truncate">{hist.calibratedBy}</div>
                         </td>
-                        <td className="py-1.5 px-2 text-slate-600 text-[11px] truncate max-w-[140px]">
+                        <td className="py-2 px-3 text-slate-600 text-[11px] truncate">
                           {hist.toleranceFound}
                         </td>
                         <td className="py-1.5 px-2 text-center whitespace-nowrap">

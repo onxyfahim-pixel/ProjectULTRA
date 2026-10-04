@@ -29,6 +29,15 @@ export interface UserSession {
   department: string;
   avatarUrl?: string;
   isSuperAdmin?: boolean;
+  phone?: string;
+  designation?: string;
+  employeeId?: string;
+  factoryUnit?: string;
+  workShift?: string;
+  emergencyContact?: string;
+  timezone?: string;
+  language?: string;
+  bio?: string;
 }
 
 export interface AppUser extends UserSession {
@@ -135,6 +144,9 @@ export interface IssueRecord {
   issuedBy: string;
   receivedByFloor: string;
   purpose: string;
+  rollsIssued?: number;
+  buyerName?: string;
+  approvedBy?: string;
   notes?: string;
 }
 
@@ -155,6 +167,13 @@ export interface MeasurementAuditItem {
   actual: number;
   tol: string;
   result: 'PASS' | 'FAIL';
+  size?: string;
+  pointOfMeasure?: string;
+  specValue?: number;
+  tolerance?: string;
+  actualValue?: number;
+  deviation?: number;
+  status?: 'PASS' | 'FAIL';
 }
 
 export interface CheckpointItem {
@@ -250,6 +269,12 @@ export interface HourlyReportEntry {
   topDefect?: string; // Common apparel defect name (e.g., "Skip Stitch", "Puckering")
   operatorId?: string; // Operator / workstation ID
   remarks?: string; // Supervisor or QC notes
+  hour?: number | string;
+  timeSlot?: string;
+  target?: number;
+  actual?: number;
+  efficiency?: number;
+  dhuRate?: number;
 }
 
 export interface ProductionOrder {

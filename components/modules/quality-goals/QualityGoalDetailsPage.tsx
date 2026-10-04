@@ -25,6 +25,7 @@ import {
   Flag,
   AlertCircle,
   FileText,
+  FileDown,
 } from 'lucide-react';
 import {
   QualityGoal,
@@ -34,6 +35,7 @@ import {
   GoalActionPlan,
 } from '@/lib/types/modules';
 import { GOAL_PILLAR_CONFIG } from './quality-goals-data';
+import { QualityGoalSingleExportModal } from './QualityGoalSingleExportModal';
 
 interface QualityGoalDetailsPageProps {
   goal: QualityGoal;
@@ -57,6 +59,7 @@ export function QualityGoalDetailsPage({
   const [currentGoal, setCurrentGoal] = useState<QualityGoal>(goal);
   const [milestones, setMilestones] = useState<GoalMilestone[]>(goal.milestones || []);
   const [actionPlans, setActionPlans] = useState<GoalActionPlan[]>(goal.actionPlans || []);
+  const [isExportOpen, setIsExportOpen] = useState(false);
 
   // Quick Add Milestone Form
   const [showAddMilestone, setShowAddMilestone] = useState(false);
@@ -301,6 +304,17 @@ export function QualityGoalDetailsPage({
             </select>
           </div>
 
+
+          {/* Export Button */}
+          <button
+            type="button"
+            onClick={() => setIsExportOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+            title="Export Goal Charter"
+          >
+            <FileDown className="w-3.5 h-3.5 text-slate-500" />
+            <span className="hidden md:inline">Export</span>
+          </button>
 
           {/* Duplicate Button */}
           <button
@@ -778,6 +792,13 @@ export function QualityGoalDetailsPage({
         </div>
       </div>
       </div>
+
+      {/* Individual Goal Export Modal */}
+      <QualityGoalSingleExportModal
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        goal={currentGoal}
+      />
     </div>
   );
 }

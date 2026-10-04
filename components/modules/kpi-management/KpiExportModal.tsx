@@ -1,0 +1,270 @@
+'use client';
+
+import React, { useState } from 'react';
+import {
+  X,
+  FileSpreadsheet,
+  Printer,
+  FileDown,
+  ShieldCheck,
+  Check,
+  BarChart3,
+} from 'lucide-react';
+import { KpiMetric } from '@/lib/types/modules';
+import {
+  computeKpiReportKpis,
+  exportKpiSummaryPdf,
+  exportKpiSummaryExcel,
+} from './kpi-export-utils';
+import { loadPdfHeaderSettings } from '@/lib/pdf/pdf-header-store';
+
+interface KpiExportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  allKpis: KpiMetric[];
+  selectedKpis: KpiMetric[];
+}
+
+export function KpiExportModal({
+  isOpen,
+  onClose,
+  allKpis,
+  selectedKpis,
+}: KpiExportModalProps) {
+  const [exportScope, setExportScope] = useState<'all' | 'selected'>(
+    selectedKpis.length > 0 ? 'selected' : 'all'
+  );
+
+  React.useEffect(() => {
+    if (selectedKpis.length > 0) {
+      setExportScope('selected');
+    } else {
+      setExportScope('all');
+    }
+  }, [selectedKpis.length, isOpen]);
+
+  if (!isOpen) return null;
+
+  const targetKpis = exportScope === 'selected' && selectedKpis.length > 0 ? selectedKpis : allKpis;
+  const metrics = computeKpiReportKpis(targetKpis);
+  const pdfSettings = loadPdfHeaderSettings();
+
+  const handleExportPdf = () => {
+    const scopeLabel =
+      exportScope === 'selected'
+        ? `Selected Records (${targetKpis.length} of ${allKpis.length} Metrics)`
+        : `All Records (${allKpis.length} Metrics)`;
+    exportKpiSummaryPdf(targetKpis, scopeLabel);
+    onClose();
+  };
+
+  const handleExportExcel = () => {
+    const scopeLabel =
+      exportScope === 'selected'
+        ? `Selected Records (${targetKpis.length} of ${allKpis.length} Metrics)`
+        : `All Records (${allKpis.length} Metrics)`;
+    exportKpiSummaryExcel(targetKpis, scopeLabel);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden space-y-0 animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-400">
+              <FileDown className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold tracking-tight">Global Export: KPI Management</h3>
+              <p className="text-xs text-slate-400">
+                Generate factory KPI performance scorecard in PDF or Excel format
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Linked PDF Header Notice */}
+        <div className="px-6 py-2.5 bg-blue-50 border-b border-blue-100 flex items-center justify-between text-xs text-blue-900">
+          <div className="flex items-center gap-2 min-w-0">
+            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+            <span className="truncate">
+              <strong>Header Linked from Settings:</strong> {pdfSettings.companyName || 'Valiant Garments'} ({pdfSettings.layoutStyle.replace('_', ' ')})
+            </span>
+          </div>
+          <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 shrink-0">
+            Live Synced
+          </span>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Export Scope Selector */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+              Select Export Scope
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setExportScope('all')}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  exportScope === 'all'
+                    ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20'
+                    : 'border-slate-200 bg-slate-50 hover:bg-slate-100/70'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-900">All Metrics</span>
+                  {exportScope === 'all' && <Check className="w-4 h-4 text-blue-600" />}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Export complete register ({allKpis.length} performance indicators)
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExportScope('selected')}
+                disabled={selectedKpis.length === 0}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  selectedKpis.length === 0
+                    ? 'opacity-50 cursor-not-allowed border-slate-200 bg-slate-50'
+                    : exportScope === 'selected'
+                    ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20 cursor-pointer'
+                    : 'border-slate-200 bg-slate-50 hover:bg-slate-100/70 cursor-pointer'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-900">
+                    Selected Metrics ({selectedKpis.length})
+                  </span>
+                  {exportScope === 'selected' && <Check className="w-4 h-4 text-blue-600" />}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {selectedKpis.length > 0
+                    ? `Export only the ${selectedKpis.length} items checked in table`
+                    : 'Check checkboxes in table to select metrics'}
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* KPI Summary Preview */}
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+            <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>Export Scope Summary</span>
+              <span className="font-mono text-blue-700 font-bold">{targetKpis.length} Metrics Selected</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2 text-center text-xs">
+              <div className="p-2 bg-white rounded-lg border border-slate-200">
+                <div className="text-[10px] text-slate-400 font-semibold uppercase">On Track</div>
+                <div className="text-sm font-black font-mono text-emerald-600">{metrics.onTrackCount + metrics.exceededCount}</div>
+              </div>
+              <div className="p-2 bg-white rounded-lg border border-slate-200">
+                <div className="text-[10px] text-slate-400 font-semibold uppercase">At Risk</div>
+                <div className="text-sm font-black font-mono text-amber-600">{metrics.atRiskCount}</div>
+              </div>
+              <div className="p-2 bg-white rounded-lg border border-slate-200">
+                <div className="text-[10px] text-slate-400 font-semibold uppercase">Critical</div>
+                <div className="text-sm font-black font-mono text-rose-600">{metrics.criticalCount}</div>
+              </div>
+              <div className="p-2 bg-white rounded-lg border border-slate-200">
+                <div className="text-[10px] text-slate-400 font-semibold uppercase">Open Actions</div>
+                <div className="text-sm font-black font-mono text-indigo-600">{metrics.pendingActionsCount}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Export Format Action Cards */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+              Select Output Format
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* PDF Button */}
+              <div
+                onClick={handleExportPdf}
+                className="p-4 rounded-xl border-2 border-slate-200 hover:border-blue-600 bg-white hover:bg-blue-50/20 transition-all cursor-pointer group flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                    <Printer className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                        PDF Scorecard
+                      </h4>
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                        .PDF
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Formatted A4 landscape report with summary cards & action log
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="px-3.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white rounded-lg transition-colors shrink-0"
+                >
+                  Print / Save
+                </button>
+              </div>
+
+              {/* Excel Button */}
+              <div
+                onClick={handleExportExcel}
+                className="p-4 rounded-xl border-2 border-slate-200 hover:border-emerald-600 bg-white hover:bg-emerald-50/20 transition-all cursor-pointer group flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                        Excel Register
+                      </h4>
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        .XLS
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Raw data spreadsheet with indicators & remediation actions
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="px-3.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white rounded-lg transition-colors shrink-0"
+                >
+                  Export Excel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

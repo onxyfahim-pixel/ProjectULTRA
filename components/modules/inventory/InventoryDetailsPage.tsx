@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Scissors,
   Eye,
+  FileDown,
 } from 'lucide-react';
 import { InventoryItem } from '@/lib/types/erp';
 import { GradeBadge, StatusBadge } from '@/components/ui/Badge';
@@ -33,6 +34,7 @@ interface InventoryDetailsPageProps {
   onEdit: (item: InventoryItem) => void;
   onDuplicate: (item: InventoryItem) => void;
   onDelete: (item: InventoryItem) => void;
+  onExport?: (item: InventoryItem) => void;
   showToast?: (msg: string) => void;
 }
 
@@ -42,6 +44,7 @@ export function InventoryDetailsPage({
   onEdit,
   onDuplicate,
   onDelete,
+  onExport,
   showToast,
 }: InventoryDetailsPageProps) {
   const totalValueUSD = item.quantityMeters * item.unitCost;
@@ -87,6 +90,19 @@ export function InventoryDetailsPage({
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
+          {/* Individual Export Button */}
+          {onExport && (
+            <button
+              type="button"
+              onClick={() => onExport(item)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
+              title="Export Material Specification Sheet (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export Sheet</span>
+            </button>
+          )}
+
           {/* Adjust / Edit Button */}
           <button
             type="button"

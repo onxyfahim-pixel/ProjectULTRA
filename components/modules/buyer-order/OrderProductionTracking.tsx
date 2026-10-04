@@ -15,8 +15,25 @@ import {
   Plus,
   ShieldCheck,
   TrendingUp,
+  Zap,
+  Droplets,
+  Package,
+  Truck,
+  ArrowRight,
+  AlertTriangle,
 } from 'lucide-react';
-import { ProductionStageDetail } from '@/lib/types/modules';
+import { ProductionStageDetail, BuyerOrderWIPRecord } from '@/lib/types/modules';
+import {
+  getCuttingProductionTrackForPO,
+  getFinishingProductionTrackForPO,
+  getFinalInspectionTrackForPO,
+  computeWIPRecordForPO,
+  calculateWIPPipelineMetrics,
+  CuttingProductionTrackSummary,
+  FinishingProductionTrackSummary,
+  FinalInspectionTrackSummary,
+  WIP_RECORDS_UPDATED_EVENT,
+} from '@/lib/db/wip-record-store';
 import {
   getSewingProductionTrackForPO,
   calculateRecordCheckedQty,
@@ -30,6 +47,7 @@ interface OrderProductionTrackingProps {
   currentStatus: 'PLANNED' | 'CUTTING' | 'SEWING' | 'PACKING' | 'READY_AUDIT' | 'SHIPPED';
   orderQuantity: number;
   stagesData?: ProductionStageDetail[];
+  wipRecord?: BuyerOrderWIPRecord;
   onUpdateStages?: (stages: ProductionStageDetail[], newStatus: any) => void;
   showToast: (msg: string) => void;
   readOnly?: boolean;
@@ -100,6 +118,7 @@ export function OrderProductionTracking({
   currentStatus,
   orderQuantity,
   stagesData,
+  wipRecord: propWipRecord,
   onUpdateStages,
   showToast,
   readOnly = false,
@@ -110,29 +129,65 @@ export function OrderProductionTracking({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedStageForEdit, setSelectedStageForEdit] = useState<ProductionStageDetail | null>(null);
 
-  // Live Auto-Linked Sewing Production Track for this specific PO
+  // Live Auto-Linked Multi-Stage Production & Quality Tracks for this specific PO
   const [sewingTrack, setSewingTrack] = useState<SewingProductionTrackSummary>(() =>
     getSewingProductionTrackForPO(orderNumber)
   );
+  const [cuttingTrack, setCuttingTrack] = useState<CuttingProductionTrackSummary>(() =>
+    getCuttingProductionTrackForPO(orderNumber)
+  );
+  const [finishingTrack, setFinishingTrack] = useState<FinishingProductionTrackSummary>(() =>
+    getFinishingProductionTrackForPO(orderNumber)
+  );
+  const [inspectionTrack, setInspectionTrack] = useState<FinalInspectionTrackSummary>(() =>
+    getFinalInspectionTrackForPO(orderNumber)
+  );
 
   React.useEffect(() => {
-    const refreshSewing = () => {
+    const refreshAllTracks = () => {
       setSewingTrack(getSewingProductionTrackForPO(orderNumber));
+      setCuttingTrack(getCuttingProductionTrackForPO(orderNumber));
+      setFinishingTrack(getFinishingProductionTrackForPO(orderNumber));
+      setInspectionTrack(getFinalInspectionTrackForPO(orderNumber));
     };
-    refreshSewing();
+    refreshAllTracks();
 
-    const handleUpdate = () => refreshSewing();
-    window.addEventListener(SEWING_TRACK_UPDATED_EVENT, handleUpdate);
-    window.addEventListener('erp_production_records_updated', handleUpdate);
+    window.addEventListener(WIP_RECORDS_UPDATED_EVENT, refreshAllTracks);
+    window.addEventListener(SEWING_TRACK_UPDATED_EVENT, refreshAllTracks);
+    window.addEventListener('erp_production_records_updated', refreshAllTracks);
+    window.addEventListener('erp_inspection_records_updated', refreshAllTracks);
     return () => {
-      window.removeEventListener(SEWING_TRACK_UPDATED_EVENT, handleUpdate);
-      window.removeEventListener('erp_production_records_updated', handleUpdate);
+      window.removeEventListener(WIP_RECORDS_UPDATED_EVENT, refreshAllTracks);
+      window.removeEventListener(SEWING_TRACK_UPDATED_EVENT, refreshAllTracks);
+      window.removeEventListener('erp_production_records_updated', refreshAllTracks);
+      window.removeEventListener('erp_inspection_records_updated', refreshAllTracks);
     };
   }, [orderNumber]);
 
-  // Merge stages with auto-linked Sewing Total Checked Quantity
+  // Compute live WIP Record and Pipeline Metrics
+  const currentWip = React.useMemo(() => {
+    return computeWIPRecordForPO(orderNumber, orderQuantity, propWipRecord, stages);
+  }, [orderNumber, orderQuantity, propWipRecord, stages, cuttingTrack, sewingTrack, finishingTrack, inspectionTrack]);
+
+  const pipelineMetrics = React.useMemo(() => {
+    return calculateWIPPipelineMetrics(currentWip, orderQuantity);
+  }, [currentWip, orderQuantity]);
+
+  // Merge stages with auto-linked numbers from Cutting, Sewing, Finishing, and Quality Inspection
   const displayStages = React.useMemo(() => {
     return stages.map((st) => {
+      if (st.stage === 'CUTTING' && cuttingTrack.totalCutQty > 0) {
+        return {
+          ...st,
+          actualPcs: cuttingTrack.totalCutQty,
+          status:
+            cuttingTrack.totalCutQty >= (st.plannedPcs || orderQuantity)
+              ? ('COMPLETED' as const)
+              : ('IN_PROGRESS' as const),
+          inspector: cuttingTrack.inspectors[0] || st.inspector,
+          notes: `Auto-linked from cutting records (${cuttingTrack.totalCutQty.toLocaleString()} cut pcs across ${cuttingTrack.recordsCount} record${cuttingTrack.recordsCount > 1 ? 's' : ''})`,
+        };
+      }
       if (st.stage === 'SEWING' && sewingTrack.totalCheckedQty > 0) {
         return {
           ...st,
@@ -149,9 +204,33 @@ export function OrderProductionTracking({
           notes: `Auto-linked from sewing records (${sewingTrack.totalCheckedQty.toLocaleString()} checked pcs across ${sewingTrack.recordsCount} record${sewingTrack.recordsCount > 1 ? 's' : ''})`,
         };
       }
+      if (st.stage === 'PACKING' && finishingTrack.totalFinishingQty > 0) {
+        return {
+          ...st,
+          actualPcs: finishingTrack.totalFinishingQty,
+          status:
+            finishingTrack.totalFinishingQty >= (st.plannedPcs || orderQuantity)
+              ? ('COMPLETED' as const)
+              : ('IN_PROGRESS' as const),
+          inspector: finishingTrack.inspectors[0] || st.inspector,
+          notes: `Auto-linked from finishing floor records (${finishingTrack.totalFinishingQty.toLocaleString()} finished pcs)`,
+        };
+      }
+      if (st.stage === 'READY_AUDIT' && inspectionTrack.totalPassedQty > 0) {
+        return {
+          ...st,
+          actualPcs: inspectionTrack.totalPassedQty,
+          status:
+            inspectionTrack.verdict === 'PASSED'
+              ? ('COMPLETED' as const)
+              : ('IN_PROGRESS' as const),
+          inspector: inspectionTrack.inspectors[0] || st.inspector,
+          notes: `Auto-linked from final inspection records (${inspectionTrack.totalPassedQty.toLocaleString()} passed pcs per ${inspectionTrack.inspectionCodes.join(', ') || 'QA'})`,
+        };
+      }
       return st;
     });
-  }, [stages, sewingTrack, orderQuantity]);
+  }, [stages, cuttingTrack, sewingTrack, finishingTrack, inspectionTrack, orderQuantity]);
 
   // Active stage helper
   const stageWeights: Record<string, number> = {
@@ -202,18 +281,24 @@ export function OrderProductionTracking({
 
   return (
     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-      {/* Header with Title */}
+      {/* Header with Title and Multi-Stage Live Sync Indicators */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <Activity className="w-5 h-5 text-emerald-600" />
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">
-              Live Production Floor Tracking &amp; Stage Milestones
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="p-1 rounded-lg bg-emerald-50 text-emerald-600">
+              <Activity className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span>WIP Record &amp; Floor Production Pipeline</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 flex items-center gap-1">
+                <Zap className="w-3 h-3 text-emerald-500" />
+                <span>Multi-Module Live Sync</span>
+              </span>
             </h3>
-            <p className="text-[11px] text-slate-500">
-              Output monitoring across cutting, sewing lines, finishing, and pre-shipment audit
-            </p>
           </div>
+          <p className="text-[11px] text-slate-500">
+            Real-time pipeline monitoring auto-linked across Cutting, Sewing, Finishing, and Final Inspection
+          </p>
         </div>
 
         {!readOnly && (
@@ -223,12 +308,86 @@ export function OrderProductionTracking({
               const activeStageObj = stages.find((s) => s.stage === currentStatus) || stages[0];
               handleOpenEditStage(activeStageObj);
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer self-start sm:self-auto"
           >
             <Edit className="w-3.5 h-3.5 text-blue-600" />
             <span>Edit Active Stage</span>
           </button>
         )}
+      </div>
+
+      {/* 9-Stage WIP Pipeline Ribbon */}
+      <div className="p-3.5 rounded-xl bg-slate-900 text-white space-y-2.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-bold text-slate-300 text-[11px] flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-indigo-400" />
+            <span>WIP Manufacturing Pipeline Balance</span>
+          </span>
+          <span className="font-mono text-emerald-400 font-bold text-xs">
+            {pipelineMetrics.overallProgressPercent}% Throughput
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-1.5 text-[10px]">
+          <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-slate-400 block truncate">1. Cut Plan</span>
+            <span className="font-mono font-bold text-white block mt-0.5">{currentWip.cuttingPlanned.toLocaleString()}</span>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-slate-400 flex items-center gap-0.5 truncate">
+              <span>2. Cutting</span>
+              {cuttingTrack.totalCutQty > 0 && <Zap className="w-2 h-2 text-amber-400" />}
+            </span>
+            <span className="font-mono font-bold text-emerald-300 block mt-0.5">{currentWip.cuttingActual.toLocaleString()}</span>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-slate-400 block truncate">3. Sew Input</span>
+            <span className="font-mono font-bold text-white block mt-0.5">{currentWip.sewingInput.toLocaleString()}</span>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-slate-400 flex items-center gap-0.5 truncate">
+              <span>4. Sewing</span>
+              {sewingTrack.totalCheckedQty > 0 && <Zap className="w-2 h-2 text-amber-400" />}
+            </span>
+            <span className="font-mono font-bold text-indigo-300 block mt-0.5">{currentWip.sewingComplete.toLocaleString()}</span>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-slate-400 block truncate">5. Wash (S/R)</span>
+            <span className="font-mono font-bold text-sky-300 block mt-0.5">
+              {currentWip.washApplicable ? `${currentWip.washSent}/${currentWip.washReceived}` : 'Direct'}
+            </span>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-slate-400 flex items-center gap-0.5 truncate">
+              <span>6. Finishing</span>
+              {finishingTrack.totalFinishingQty > 0 && <Zap className="w-2 h-2 text-amber-400" />}
+            </span>
+            <span className="font-mono font-bold text-purple-300 block mt-0.5">{currentWip.finishingQuantity.toLocaleString()}</span>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-slate-400 block truncate">7. Packed</span>
+            <span className="font-mono font-bold text-amber-300 block mt-0.5">{currentWip.packedQuantity.toLocaleString()}</span>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-slate-400 flex items-center gap-0.5 truncate">
+              <span>8. Final Insp</span>
+              {inspectionTrack.totalPassedQty > 0 && <Zap className="w-2 h-2 text-amber-400" />}
+            </span>
+            <span className="font-mono font-bold text-teal-300 block mt-0.5">{currentWip.inspectionCompletedQuantity.toLocaleString()}</span>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-slate-400 block truncate">9. Shipped</span>
+            <span className="font-mono font-bold text-emerald-400 block mt-0.5">{currentWip.shippedQuantity.toLocaleString()}</span>
+          </div>
+        </div>
       </div>
 
       {/* Visual Stepper Bar */}
@@ -238,6 +397,12 @@ export function OrderProductionTracking({
           const thisWeight = idx + 1;
           const isPassed = thisWeight < currentWeight || st.status === 'COMPLETED';
           const isCurrent = thisWeight === currentWeight && st.status !== 'COMPLETED';
+
+          const hasAutoSync =
+            (st.stage === 'CUTTING' && cuttingTrack.totalCutQty > 0) ||
+            (st.stage === 'SEWING' && sewingTrack.totalCheckedQty > 0) ||
+            (st.stage === 'PACKING' && finishingTrack.totalFinishingQty > 0) ||
+            (st.stage === 'READY_AUDIT' && inspectionTrack.totalPassedQty > 0);
 
           return (
             <div
@@ -257,11 +422,16 @@ export function OrderProductionTracking({
             >
               <div className="flex items-center justify-between mb-1">
                 <span
-                  className={`font-bold ${
+                  className={`font-bold flex items-center gap-1 ${
                     isCurrent ? 'text-blue-900' : isPassed ? 'text-emerald-900' : 'text-slate-600'
                   }`}
                 >
-                  {idx + 1}. {st.stage.replace('_', ' ')}
+                  <span>{idx + 1}. {st.stage.replace('_', ' ')}</span>
+                  {hasAutoSync && (
+                    <span title="Auto-synced from ERP">
+                      <Zap className="w-2.5 h-2.5 text-amber-500" />
+                    </span>
+                  )}
                 </span>
                 {isPassed ? (
                   <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -277,7 +447,7 @@ export function OrderProductionTracking({
                   {st.status.replace('_', ' ')}
                 </div>
                 {st.actualPcs !== undefined && (
-                  <div className="font-mono text-[10px] text-slate-700">
+                  <div className="font-mono text-[10px] font-bold text-slate-800">
                     {st.actualPcs.toLocaleString()} pcs
                   </div>
                 )}

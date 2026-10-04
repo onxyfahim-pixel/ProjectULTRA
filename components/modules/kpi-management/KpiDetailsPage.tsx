@@ -29,6 +29,7 @@ import {
   BarChart3,
   Activity,
   History,
+  FileDown,
 } from 'lucide-react';
 import {
   KpiMetric,
@@ -38,6 +39,7 @@ import {
   KpiActionItem,
 } from '@/lib/types/modules';
 import { KPI_CATEGORY_CONFIG } from './kpi-management-data';
+import { KpiSingleExportModal } from './KpiSingleExportModal';
 
 interface KpiDetailsPageProps {
   kpi: KpiMetric;
@@ -61,6 +63,7 @@ export function KpiDetailsPage({
   const [currentKpi, setCurrentKpi] = useState<KpiMetric>(kpi);
   const [history, setHistory] = useState<KpiHistoryPoint[]>(kpi.history || []);
   const [actionItems, setActionItems] = useState<KpiActionItem[]>(kpi.actionItems || []);
+  const [isExportOpen, setIsExportOpen] = useState(false);
 
   // Quick Log Measurement Form State
   const [showLogForm, setShowLogForm] = useState(false);
@@ -289,6 +292,17 @@ export function KpiDetailsPage({
             </select>
           </div>
 
+
+          {/* Export Button */}
+          <button
+            type="button"
+            onClick={() => setIsExportOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+            title="Export Performance Dossier (PDF / Excel)"
+          >
+            <FileDown className="w-3.5 h-3.5 text-slate-500" />
+            <span className="hidden md:inline">Export</span>
+          </button>
 
           {/* Duplicate Button */}
           <button
@@ -772,6 +786,13 @@ export function KpiDetailsPage({
         </div>
       </div>
       </div>
+
+      {/* Individual KPI Export Modal */}
+      <KpiSingleExportModal
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        kpi={currentKpi}
+      />
     </div>
   );
 }

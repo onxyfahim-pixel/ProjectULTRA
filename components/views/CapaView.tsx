@@ -166,13 +166,12 @@ export function CapaView() {
       render: (item) => (
         <div className="flex items-center gap-2">
           <div
-            className={`w-8 h-8 rounded-md border overflow-hidden shrink-0 flex items-center justify-center ${
-              item.severity === 'CRITICAL'
+            className={`w-8 h-8 rounded-md border overflow-hidden shrink-0 flex items-center justify-center ${item.severity === 'CRITICAL'
                 ? 'bg-rose-50 text-rose-600 border-rose-200'
                 : item.severity === 'MAJOR'
-                ? 'bg-amber-50 text-amber-600 border-amber-200'
-                : 'bg-blue-50 text-blue-600 border-blue-200'
-            }`}
+                  ? 'bg-amber-50 text-amber-600 border-amber-200'
+                  : 'bg-blue-50 text-blue-600 border-blue-200'
+              }`}
           >
             <GitPullRequest className="w-4 h-4" />
           </div>
@@ -280,15 +279,14 @@ export function CapaView() {
 
         return (
           <span
-            className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded-full border inline-block ${
-              isClosed
+            className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded-full border inline-block ${isClosed
                 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                 : isPending
-                ? 'bg-blue-50 text-blue-800 border-blue-200'
-                : isInProgress
-                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                : 'bg-rose-50 text-rose-800 border-rose-200'
-            }`}
+                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                  : isInProgress
+                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
+              }`}
           >
             {item.status.replace(/_/g, ' ')}
           </span>
@@ -359,11 +357,11 @@ export function CapaView() {
           prev.map((c) =>
             ids.has(c.id)
               ? {
-                  ...c,
-                  status: 'CLOSED',
-                  effectivenessVerified: true,
-                  actualCompletionDate: new Date().toISOString().split('T')[0],
-                }
+                ...c,
+                status: 'CLOSED',
+                effectivenessVerified: true,
+                actualCompletionDate: new Date().toISOString().split('T')[0],
+              }
               : c
           )
         );
@@ -579,11 +577,10 @@ export function CapaView() {
                     key={tab.value}
                     type="button"
                     onClick={() => setActiveSourceFilter(tab.value)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                      activeSourceFilter === tab.value
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${activeSourceFilter === tab.value
                         ? 'bg-blue-600 text-white shadow-2xs font-bold'
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -672,11 +669,10 @@ export function CapaView() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
-                          item.status === 'CLOSED'
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${item.status === 'CLOSED'
                             ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                             : 'bg-amber-50 text-amber-800 border-amber-200'
-                        }`}
+                          }`}
                       >
                         {item.status.replace(/_/g, ' ')}
                       </span>

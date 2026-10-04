@@ -29,6 +29,9 @@ import {
   Check,
   UserCheck,
   User,
+  FileDown,
+  Printer,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -42,6 +45,8 @@ import { BuyerOrderEditPage } from '../modules/buyer-order/BuyerOrderEditPage';
 import { AddBuyerModal } from '../modules/buyer-order/AddBuyerModal';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
 import { ReceiveMaterialModal } from '../modules/inventory/ReceiveMaterialModal';
+import { BuyerOrderExportModal } from '../modules/buyer-order/BuyerOrderExportModal';
+import { BuyerOrderSingleExportModal } from '../modules/buyer-order/BuyerOrderSingleExportModal';
 import { InventoryItem, ReceiveRecord } from '@/lib/types/erp';
 import { INITIAL_INVENTORY, INITIAL_RECEIVE_REGISTRY } from '@/lib/db/mock-data';
 
@@ -142,6 +147,12 @@ export function BuyerOrderView({
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
+
+  // Export Modals State (Global Export & Individual Record Export)
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedOrdersForExport, setSelectedOrdersForExport] = useState<BuyerOrder[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [orderForSingleExport, setOrderForSingleExport] = useState<BuyerOrder | null>(null);
 
   // KPIs
   const totalOrders = orders.length;
@@ -525,7 +536,20 @@ export function BuyerOrderView({
             <Edit className="w-3.5 h-3.5" />
           </button>
 
-          {/* 3. Duplicate Button */}
+          {/* 3. Export Single PO Record Button (PDF or Excel) */}
+          <button
+            type="button"
+            onClick={() => {
+              setOrderForSingleExport(row);
+              setIsSingleExportModalOpen(true);
+            }}
+            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+            title="Export PO Record (PDF or Excel)"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+          </button>
+
+          {/* 4. Duplicate Button */}
           <button
             type="button"
             onClick={() => handleDuplicateOrder(row)}
@@ -535,7 +559,7 @@ export function BuyerOrderView({
             <Copy className="w-3.5 h-3.5" />
           </button>
 
-          {/* 4. Delete Button */}
+          {/* 5. Delete Button */}
           <button
             type="button"
             onClick={() => setOrderDeleteModal({ isOpen: true, orders: [row] })}
@@ -756,6 +780,20 @@ export function BuyerOrderView({
             { id: 'list', label: 'Order List', count: orders.length },
             { id: 'buyer', label: 'Buyer List', count: buyers.length },
           ]}
+          actions={
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedOrdersForExport([]);
+                setIsGlobalExportModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
+              title="Global Export: Detailed Summary Sheet (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-blue-600" />
+              <span>Export Orders</span>
+            </button>
+          }
         />
       )}
 
@@ -1007,6 +1045,10 @@ export function BuyerOrderView({
                     <span>Add Order</span>
                   </button>
                 }
+                onExport={(items) => {
+                  setSelectedOrdersForExport(items.length < orders.length ? items : []);
+                  setIsGlobalExportModalOpen(true);
+                }}
                 batchActions={[
                   {
                     label: 'Delete Selected',
@@ -1020,9 +1062,11 @@ export function BuyerOrderView({
                     },
                   },
                   {
-                    label: 'Export Selected',
+                    label: 'Export Selected (PDF/Excel)',
+                    icon: <FileDown className="w-3.5 h-3.5" />,
                     onClick: (selected) => {
-                      showToast(`Exported ${selected.length} purchase orders`);
+                      setSelectedOrdersForExport(selected);
+                      setIsGlobalExportModalOpen(true);
                     },
                   },
                 ]}
@@ -1396,6 +1440,51 @@ export function BuyerOrderView({
           preSelectedStyleNumber={orderForReceiveModal?.styleNumber}
         />
       )}
+
+      {/* GLOBAL EXPORT MODAL: PDF / EXCEL Detailed Summary Sheet for All or Selected Records */}
+      <BuyerOrderExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => {
+          setIsGlobalExportModalOpen(false);
+          setSelectedOrdersForExport([]);
+        }}
+        allOrders={orders}
+        selectedOrders={selectedOrdersForExport}
+      />
+
+      {/* INDIVIDUAL RECORD EXPORT MODAL: PDF / EXCEL Single PO Specification */}
+      <BuyerOrderSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        order={orderForSingleExport}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setOrderForSingleExport(null);
+        }}
+        linkedGrn={
+          orderForSingleExport
+            ? receiveRecords.filter(
+                (r) =>
+                  r.buyerOrderId === orderForSingleExport.id ||
+                  (r.poNumber &&
+                    r.poNumber.trim().toLowerCase() === orderForSingleExport.orderNumber.trim().toLowerCase()) ||
+                  (r.styleNumber &&
+                    r.styleNumber.trim().toLowerCase() === orderForSingleExport.styleNumber.trim().toLowerCase())
+              )
+            : []
+        }
+        linkedInventory={
+          orderForSingleExport
+            ? inventory.filter(
+                (i) =>
+                  i.buyerOrderId === orderForSingleExport.id ||
+                  (i.poNumber &&
+                    i.poNumber.trim().toLowerCase() === orderForSingleExport.orderNumber.trim().toLowerCase()) ||
+                  (i.styleNumber &&
+                    i.styleNumber.trim().toLowerCase() === orderForSingleExport.styleNumber.trim().toLowerCase())
+              )
+            : []
+        }
+      />
     </div>
   );
 }

@@ -23,6 +23,7 @@ import {
   Check,
   Search,
   Filter,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -33,6 +34,8 @@ import { INITIAL_QUALITY_GOALS, GOAL_PILLAR_CONFIG } from '../modules/quality-go
 import { QualityGoalDetailsPage } from '../modules/quality-goals/QualityGoalDetailsPage';
 import { QualityGoalEntryPage } from '../modules/quality-goals/QualityGoalEntryPage';
 import { DeleteGoalModal } from '../modules/quality-goals/DeleteGoalModal';
+import { QualityGoalExportModal } from '../modules/quality-goals/QualityGoalExportModal';
+import { QualityGoalSingleExportModal } from '../modules/quality-goals/QualityGoalSingleExportModal';
 
 type GoalSubView =
   | { type: 'none' }
@@ -59,6 +62,11 @@ export function QualityGoalsView() {
     isOpen: false,
     goals: [],
   });
+
+  // Export Modal States
+  const [isGlobalExportOpen, setIsGlobalExportOpen] = useState(false);
+  const [exportSelectedGoals, setExportSelectedGoals] = useState<QualityGoal[]>([]);
+  const [singleExportGoal, setSingleExportGoal] = useState<QualityGoal | null>(null);
 
   // LocalStorage Persistence
   useEffect(() => {
@@ -352,6 +360,14 @@ export function QualityGoalsView() {
           </button>
           <button
             type="button"
+            onClick={() => setSingleExportGoal(item)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 transition-colors cursor-pointer"
+            title="Export Goal Charter"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
             onClick={() => handleDuplicateGoal(item)}
             className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
             title="Duplicate Objective"
@@ -386,8 +402,10 @@ export function QualityGoalsView() {
     },
     {
       label: 'Export Selected',
+      icon: <FileDown className="w-3.5 h-3.5" />,
       onClick: (selected) => {
-        showToast(`Exported ${selected.length} quality objectives`);
+        setExportSelectedGoals(selected);
+        setIsGlobalExportOpen(true);
       },
     },
   ];
@@ -663,14 +681,27 @@ export function QualityGoalsView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Objective</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExportSelectedGoals([]);
+                        setIsGlobalExportOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                    >
+                      <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Export</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Objective</span>
+                    </button>
+                  </div>
                 }
                 batchActions={batchActions}
               />
@@ -799,6 +830,23 @@ export function QualityGoalsView() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteModalState({ isOpen: false, goals: [] })}
       />
+
+      {/* Global Quality Goals Export Modal */}
+      <QualityGoalExportModal
+        isOpen={isGlobalExportOpen}
+        onClose={() => setIsGlobalExportOpen(false)}
+        allGoals={goals}
+        selectedGoals={exportSelectedGoals}
+      />
+
+      {/* Individual Quality Goal Single Export Modal */}
+      {singleExportGoal && (
+        <QualityGoalSingleExportModal
+          isOpen={!!singleExportGoal}
+          onClose={() => setSingleExportGoal(null)}
+          goal={singleExportGoal}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useAppearance } from '@/hooks/use-appearance';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -317,6 +318,24 @@ export function ErpSidebar({
     },
   ];
 
+  const { appearance } = useAppearance();
+
+  const isDarkSidebar =
+    appearance.sidebarStyle === 'dark_slate' ||
+    appearance.sidebarStyle === 'vibrant_accent' ||
+    appearance.sidebarStyle === 'deep_indigo';
+
+  let asideBg = 'bg-white text-slate-700 border-r border-slate-200/80';
+  if (appearance.sidebarStyle === 'dark_slate') {
+    asideBg = 'bg-slate-900 text-slate-200 border-r border-slate-800 shadow-xl';
+  } else if (appearance.sidebarStyle === 'frosted_glass') {
+    asideBg = 'bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl text-slate-800 dark:text-slate-200 border-r border-white/40 dark:border-slate-800/60 shadow-lg';
+  } else if (appearance.sidebarStyle === 'vibrant_accent') {
+    asideBg = 'bg-gradient-to-b from-blue-950 via-slate-900 to-indigo-950 text-white border-r border-blue-900/40 shadow-2xl';
+  } else if (appearance.sidebarStyle === 'deep_indigo') {
+    asideBg = 'bg-indigo-950 text-indigo-100 border-r border-indigo-900/60 shadow-2xl';
+  }
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -330,12 +349,12 @@ export function ErpSidebar({
       {/* Sidebar Container */}
       <aside
         id="erp-main-sidebar"
-        className={`fixed top-0 bottom-0 left-0 bg-white text-slate-700 border-r border-slate-200/80 z-40 transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto flex flex-col shadow-xs h-full shrink-0 ${
+        className={`fixed top-0 bottom-0 left-0 ${asideBg} z-40 transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto flex flex-col shadow-xs h-full shrink-0 ${
           isOpenMobile ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
         } ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}`}
       >
         {/* Brand Header matching QMS ERP reference design */}
-        <div className={`border-b border-slate-100 ${isCollapsed ? 'p-2.5' : 'px-4 py-3.5'}`}>
+        <div className={`border-b ${isDarkSidebar ? 'border-slate-800' : 'border-slate-100 dark:border-slate-800'} ${isCollapsed ? 'p-2.5' : 'px-4 py-3.5'}`}>
           {!isCollapsed ? (
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -343,10 +362,10 @@ export function ErpSidebar({
                   <ShieldCheck className="w-5 h-5 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="font-bold text-sm tracking-tight text-slate-900 leading-tight">
+                  <div className={`font-bold text-sm tracking-tight leading-tight ${isDarkSidebar ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
                     QMS ERP
                   </div>
-                  <div className="text-[10px] text-slate-400 font-medium tracking-tight truncate">
+                  <div className={`text-[10px] font-medium tracking-tight truncate ${isDarkSidebar ? 'text-slate-400' : 'text-slate-400'}`}>
                     Garments Quality Management
                   </div>
                 </div>
@@ -408,11 +427,13 @@ export function ErpSidebar({
           {navGroups.map((group, gIdx) => (
             <div key={gIdx} className="space-y-0.5">
               {!isCollapsed ? (
-                <div className="px-3 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 select-none">
+                <div className={`px-3 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider select-none ${
+                  isDarkSidebar ? 'text-slate-400' : 'text-slate-400 dark:text-slate-500'
+                }`}>
                   {group.groupTitle}
                 </div>
               ) : (
-                <div className="my-2 border-t border-slate-100 relative group flex justify-center">
+                <div className={`my-2 border-t relative group flex justify-center ${isDarkSidebar ? 'border-slate-800' : 'border-slate-100 dark:border-slate-800'}`}>
                   <div className="hidden group-hover:block absolute left-full ml-3 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider rounded whitespace-nowrap z-50 shadow-lg pointer-events-none">
                     {group.groupTitle}
                   </div>
@@ -422,6 +443,14 @@ export function ErpSidebar({
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
+
+                const activeClasses = isDarkSidebar
+                  ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/30'
+                  : 'bg-blue-50/90 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 font-bold shadow-2xs';
+
+                const inactiveClasses = isDarkSidebar
+                  ? 'text-slate-300 hover:text-white hover:bg-white/10 font-medium'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50/80 dark:hover:bg-slate-800/60 font-medium';
 
                 return (
                   <div key={item.id} className="relative group">
@@ -435,17 +464,15 @@ export function ErpSidebar({
                         isCollapsed
                           ? 'justify-center p-2'
                           : 'px-3 py-2 text-left'
-                      } ${
-                        isActive
-                          ? 'bg-blue-50/90 text-blue-600 font-semibold shadow-2xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/80 font-medium'
-                      }`}
+                      } ${isActive ? activeClasses : inactiveClasses}`}
                       title={isCollapsed ? item.label : undefined}
                     >
                       <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 min-w-0'}`}>
                         <Icon
                           className={`w-4 h-4 shrink-0 transition-colors ${
-                            isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'
+                            isActive
+                              ? isDarkSidebar ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                              : isDarkSidebar ? 'text-slate-400 group-hover:text-white' : 'text-slate-400 group-hover:text-slate-600'
                           }`}
                         />
 
@@ -457,7 +484,9 @@ export function ErpSidebar({
                       {!isCollapsed && item.hasChevron && (
                         <ChevronRight
                           className={`w-3.5 h-3.5 shrink-0 ${
-                            isActive ? 'text-blue-400' : 'text-slate-300 group-hover:text-slate-400'
+                            isActive
+                              ? isDarkSidebar ? 'text-white/60' : 'text-blue-400'
+                              : isDarkSidebar ? 'text-slate-500 group-hover:text-slate-300' : 'text-slate-300 group-hover:text-slate-400'
                           }`}
                         />
                       )}

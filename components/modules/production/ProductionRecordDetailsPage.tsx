@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Package,
   Award,
+  FileDown,
 } from 'lucide-react';
 import { ProductionOrder, LineStatus, TopDefectSummary } from '@/lib/types/erp';
 import { OutputLogEntry } from './LogOutputModal';
@@ -36,6 +37,7 @@ interface ProductionRecordDetailsPageProps {
   onBack: () => void;
   onEdit: (order: ProductionOrder) => void;
   onDelete: (order: ProductionOrder) => void;
+  onExport?: (order: ProductionOrder) => void;
   onLogOutput?: () => void;
   showToast: (msg: string) => void;
 }
@@ -46,6 +48,7 @@ export function ProductionRecordDetailsPage({
   onBack,
   onEdit,
   onDelete,
+  onExport,
   onLogOutput,
   showToast,
 }: ProductionRecordDetailsPageProps) {
@@ -150,6 +153,17 @@ export function ProductionRecordDetailsPage({
         </div>
 
         <div className="flex items-center gap-2">
+          {onExport && (
+            <button
+              type="button"
+              onClick={() => onExport(order)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors shadow-2xs cursor-pointer"
+              title="Export Production Record Sheet (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export Record</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onEdit(order)}

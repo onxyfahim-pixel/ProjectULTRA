@@ -151,10 +151,10 @@ export function CalibrationView() {
       header: 'Equipment',
       accessorKey: 'deviceTag',
       sortable: true,
-      width: '21%',
+      width: '24%',
       accessor: (row) => row.deviceTag,
       cell: (row) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-md border border-slate-200 overflow-hidden bg-slate-100 shrink-0">
             {row.equipmentImage ? (
               <img src={row.equipmentImage} alt={row.deviceName} className="w-full h-full object-cover" />
@@ -164,14 +164,14 @@ export function CalibrationView() {
               </div>
             )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <span className="font-mono font-bold text-blue-700 text-xs block leading-tight">
               {row.deviceTag}
             </span>
-            <span className="text-xs font-semibold text-slate-900 truncate max-w-[130px] block leading-tight" title={row.deviceName}>
+            <span className="text-xs font-semibold text-slate-900 truncate block leading-tight" title={row.deviceName}>
               {row.deviceName}
             </span>
-            <span className="text-[10px] text-slate-400 font-mono block truncate max-w-[130px] leading-tight">
+            <span className="text-[10px] text-slate-400 font-mono block truncate leading-tight" title={row.location}>
               {row.location}
             </span>
           </div>
@@ -183,13 +183,13 @@ export function CalibrationView() {
       header: 'Brand & Model',
       accessorKey: 'brandName',
       sortable: true,
-      width: '12%',
+      width: '13%',
       accessor: (row) => row.brandName || '',
       cell: (row) => (
         <div className="min-w-0">
-          <div className="font-bold text-slate-900 text-xs truncate max-w-[100px]">{row.brandName || 'Sartorius'}</div>
-          <div className="text-[10px] text-slate-600 font-mono truncate max-w-[100px]">{row.model}</div>
-          <div className="text-[10px] text-slate-400 truncate max-w-[100px]">{row.department || 'Lab'}</div>
+          <div className="font-bold text-slate-900 text-xs truncate" title={row.brandName}>{row.brandName || 'Sartorius'}</div>
+          <div className="text-[10px] text-slate-600 font-mono truncate" title={row.model}>{row.model}</div>
+          <div className="text-[10px] text-slate-400 truncate" title={row.department}>{row.department || 'Lab'}</div>
         </div>
       ),
     },
@@ -201,8 +201,8 @@ export function CalibrationView() {
       width: '10%',
       accessor: (row) => row.serialNumber || '',
       cell: (row) => (
-        <div>
-          <span className="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] inline-block truncate max-w-[100px]">
+        <div className="min-w-0">
+          <span className="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] inline-block truncate max-w-full" title={row.serialNumber}>
             {row.serialNumber || 'SN-UNKNOWN'}
           </span>
         </div>
@@ -213,14 +213,14 @@ export function CalibrationView() {
       header: 'ISO Standard',
       accessorKey: 'standardBasis',
       sortable: true,
-      width: '13%',
+      width: '15%',
       accessor: (row) => row.standardBasis || '',
       cell: (row) => (
         <div className="text-xs min-w-0">
-          <div className="font-mono font-semibold text-slate-900 truncate max-w-[115px]" title={row.standardBasis}>
+          <div className="font-mono font-semibold text-slate-900 truncate" title={row.standardBasis}>
             {row.standardBasis || 'ISO/IEC 17025'}
           </div>
-          <div className="font-mono text-emerald-700 font-bold text-[10px] truncate max-w-[115px]">
+          <div className="font-mono text-emerald-700 font-bold text-[10px] truncate" title={row.accuracyTolerance}>
             Tol: {row.accuracyTolerance || '±0.01%'}
           </div>
         </div>
@@ -231,7 +231,7 @@ export function CalibrationView() {
       header: 'Calibrated',
       accessorKey: 'lastCalibrationDate',
       sortable: true,
-      width: '9%',
+      width: '8%',
       accessor: (row) => row.lastCalibrationDate,
       cell: (row) => (
         <span className="font-mono text-xs text-slate-700 font-medium">
@@ -244,17 +244,17 @@ export function CalibrationView() {
       header: 'Expiry Date',
       accessorKey: 'nextDueDate',
       sortable: true,
-      width: '10%',
+      width: '9%',
       accessor: (row) => row.nextDueDate,
       cell: (row) => {
         const isOverdue = row.status === 'OVERDUE';
         const isDueSoon = row.status === 'DUE_SOON';
         return (
-          <div>
+          <div className="min-w-0">
             <div className={`font-mono font-bold text-xs ${isOverdue ? 'text-rose-600' : isDueSoon ? 'text-amber-600' : 'text-emerald-700'}`}>
               {row.nextDueDate}
             </div>
-            <div className="text-[10px] text-slate-400 font-mono">
+            <div className="text-[10px] text-slate-400 font-mono truncate">
               Cycle: {row.calibrationFrequencyMonths} mo
             </div>
           </div>
@@ -270,10 +270,10 @@ export function CalibrationView() {
       accessor: (row) => row.certificateNumber,
       cell: (row) => (
         <div className="text-xs min-w-0">
-          <div className="font-mono font-bold text-indigo-700 truncate max-w-[110px]" title={row.certificateNumber}>
+          <div className="font-mono font-bold text-indigo-700 truncate" title={row.certificateNumber}>
             {row.certificateNumber}
           </div>
-          <div className="text-[10px] text-slate-500 truncate max-w-[110px]" title={row.calibrationAgency}>
+          <div className="text-[10px] text-slate-500 truncate" title={row.calibrationAgency}>
             {row.calibrationAgency}
           </div>
         </div>
@@ -284,7 +284,7 @@ export function CalibrationView() {
       header: 'Status',
       accessorKey: 'status',
       sortable: true,
-      width: '6%',
+      width: '9%',
       align: 'center',
       cell: (row) => {
         const variantMap: Record<string, any> = {
@@ -298,10 +298,10 @@ export function CalibrationView() {
     {
       key: 'actions',
       header: 'Actions',
-      width: '7%',
+      width: '135px',
       align: 'right',
       cell: (row) => (
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end gap-1 shrink-0">
           {/* 1. Details Button (Eye) - Opens Separate Details Page */}
           <button
             type="button"
@@ -626,6 +626,8 @@ export function CalibrationView() {
               <DataTable
                 id="calibration-devices-table"
                 dense={true}
+                tableLayout="fixed"
+                minTableWidth="1050px"
                 data={filteredDevices}
                 columns={columns}
                 searchPlaceholder="Search equipment by tag, brand, serial, location, or certificate..."

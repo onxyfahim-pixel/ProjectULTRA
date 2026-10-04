@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   Save,
@@ -27,6 +27,15 @@ import {
   User,
   Phone,
   RefreshCw,
+  Activity,
+  Zap,
+  Droplets,
+  Package,
+  Eye,
+  AlertTriangle,
+  ArrowRight,
+  SlidersHorizontal,
+  Info,
 } from 'lucide-react';
 import {
   BuyerOrder,
@@ -34,7 +43,17 @@ import {
   BOMItem,
   ProductionStageDetail,
   LogisticsDetail,
+  BuyerOrderWIPRecord,
 } from '@/lib/types/modules';
+import {
+  computeWIPRecordForPO,
+  syncWIPToStages,
+  calculateWIPPipelineMetrics,
+  WIP_RECORDS_UPDATED_EVENT,
+} from '@/lib/db/wip-record-store';
+import {
+  SEWING_TRACK_UPDATED_EVENT,
+} from '@/lib/db/production-records-store';
 
 interface BuyerOrderEditPageProps {
   order: BuyerOrder;
@@ -154,6 +173,108 @@ export function BuyerOrderEditPage({
     bomItems: order.bomItems || [],
     logistics: order.logistics || { ...DEFAULT_LOGISTICS, etdDate: order.shipDate },
   });
+
+  // Dedicated WIP Record State (live computed & synchronized with floor records)
+  const [wipData, setWipData] = useState<BuyerOrderWIPRecord>(() =>
+    computeWIPRecordForPO(
+      order.orderNumber,
+      order.orderQuantity,
+      order.wipRecord,
+      order.productionTracking?.stages
+    )
+  );
+
+  // Sync when PO or Order changes or background events fire
+  useEffect(() => {
+    const handleWIPRefresh = () => {
+      setWipData((prev) =>
+        computeWIPRecordForPO(
+          formData.orderNumber,
+          formData.orderQuantity,
+          prev,
+          formData.productionTracking?.stages
+        )
+      );
+    };
+
+    window.addEventListener(WIP_RECORDS_UPDATED_EVENT, handleWIPRefresh);
+    window.addEventListener(SEWING_TRACK_UPDATED_EVENT, handleWIPRefresh);
+    window.addEventListener('erp_production_records_updated', handleWIPRefresh);
+    window.addEventListener('erp_inspection_records_updated', handleWIPRefresh);
+    return () => {
+      window.removeEventListener(WIP_RECORDS_UPDATED_EVENT, handleWIPRefresh);
+      window.removeEventListener(SEWING_TRACK_UPDATED_EVENT, handleWIPRefresh);
+      window.removeEventListener('erp_production_records_updated', handleWIPRefresh);
+      window.removeEventListener('erp_inspection_records_updated', handleWIPRefresh);
+    };
+  }, [formData.orderNumber, formData.orderQuantity]);
+
+  // Handle WIP Field Changes
+  const handleWIPFieldChange = (field: keyof BuyerOrderWIPRecord, value: any) => {
+    setWipData((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (
+        ['cuttingActual', 'sewingComplete', 'finishingQuantity', 'inspectionCompletedQuantity'].includes(
+          field as string
+        )
+      ) {
+        const overrideKey =
+          field === 'cuttingActual'
+            ? 'cutting'
+            : field === 'sewingComplete'
+            ? 'sewing'
+            : field === 'finishingQuantity'
+            ? 'finishing'
+            : 'inspection';
+        updated.manualOverrides = {
+          ...updated.manualOverrides,
+          [overrideKey]: true,
+        };
+        updated.syncSources = {
+          ...updated.syncSources,
+          [overrideKey]: 'Manual Override',
+        };
+      }
+      return updated;
+    });
+  };
+
+  const handleToggleManualOverride = (stageKey: 'cutting' | 'sewing' | 'finishing' | 'inspection') => {
+    setWipData((prev) => {
+      const isOverridden = prev.manualOverrides?.[stageKey];
+      const nextOverrides = { ...prev.manualOverrides, [stageKey]: !isOverridden };
+      if (isOverridden) {
+        // Recompute fresh from floor
+        return computeWIPRecordForPO(
+          formData.orderNumber,
+          formData.orderQuantity,
+          { ...prev, manualOverrides: nextOverrides },
+          formData.productionTracking?.stages
+        );
+      } else {
+        return {
+          ...prev,
+          manualOverrides: nextOverrides,
+          syncSources: {
+            ...prev.syncSources,
+            [stageKey]: 'Manual Override',
+          },
+        };
+      }
+    });
+    showToast(`Toggled ${stageKey} auto-sync mode`);
+  };
+
+  const handleManualResyncAll = () => {
+    const recomputed = computeWIPRecordForPO(
+      formData.orderNumber,
+      formData.orderQuantity,
+      null,
+      formData.productionTracking?.stages
+    );
+    setWipData(recomputed);
+    showToast(`Live re-synced all WIP floor records for ${formData.orderNumber}`);
+  };
 
   const [techPackFileName, setTechPackFileName] = useState<string>(
     'TECHPACK_' + order.styleNumber + '_v2.3.pdf'
@@ -376,9 +497,27 @@ export function BuyerOrderEditPage({
   );
 
   const handleSaveAll = () => {
-    onSave(formData);
-    showToast(`Successfully saved all changes to ${formData.orderNumber}`);
+    const updatedStages = syncWIPToStages(
+      wipData,
+      formData.productionTracking?.stages,
+      formData.orderQuantity
+    );
+    const metrics = calculateWIPPipelineMetrics(wipData, formData.orderQuantity);
+
+    const finalOrder: BuyerOrder = {
+      ...formData,
+      wipRecord: wipData,
+      productionTracking: {
+        currentStage: formData.status,
+        overallProgressPercent: metrics.overallProgressPercent,
+        stages: updatedStages,
+      },
+    };
+    onSave(finalOrder);
+    showToast(`Successfully saved WIP Record & Order ${formData.orderNumber}`);
   };
+
+  const pipelineMetrics = calculateWIPPipelineMetrics(wipData, formData.orderQuantity);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -406,7 +545,7 @@ export function BuyerOrderEditPage({
               </span>
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Unified workspace for specifications, tech pack uploads, stage tracking, BOM &amp; logistics
+              Unified workspace for specifications, tech pack uploads, WIP tracking, BOM &amp; logistics
             </p>
           </div>
         </div>
@@ -437,7 +576,7 @@ export function BuyerOrderEditPage({
         {[
           { id: 'general', label: '1. Commercial & Style Specs', icon: Tag },
           { id: 'upload', label: '2. Garment Photo & Tech Pack Upload', icon: Upload },
-          { id: 'stages', label: '3. Production Stages Tracking', icon: Clock },
+          { id: 'stages', label: '3. WIP Record & Pipeline Tracking', icon: Activity },
           { id: 'bom', label: '4. BOM & Material Matrix', icon: Layers },
           { id: 'logistics', label: '5. Logistics & Shipping', icon: Truck },
         ].map((tab) => {
@@ -942,205 +1081,830 @@ export function BuyerOrderEditPage({
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION 3: PRODUCTION STAGES & TRACKING EDITOR */}
+      {/* SECTION 3: WIP RECORD (WORK-IN-PROCESS TRACKING & PIPELINE RECORD)        */}
       {/* ========================================================================= */}
       {activeSection === 'stages' && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          {/* Header Bar with Live Sync Indicators & Status */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <span>Production Stage Milestones &amp; Line Tracking Editor</span>
-              </h3>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                  <Activity className="w-4 h-4" />
+                </span>
+                <h3 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                  <span>WIP Record (Work-In-Process Tracking &amp; Pipeline Record)</span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-emerald-500" />
+                    <span>Live ERP Synchronized</span>
+                  </span>
+                </h3>
+              </div>
               <p className="text-xs text-slate-500">
-                Update stage dates, planned vs actual quantities, sewing line assignments, QC leads, and stage notes
+                End-to-end manufacturing floor pipeline: Cutting Planned &rarr; Cutting &rarr; Sewing Input &rarr; Sewing Complete &rarr; Wash Sent/Recv &rarr; Finishing &rarr; Packed &rarr; Final Inspection &rarr; Shipped
               </p>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500">Active Order Status:</span>
-              <select
-                value={formData.status}
-                onChange={(e) => handleInputChange('status', e.target.value as any)}
-                className="px-2.5 py-1 rounded-lg border border-blue-300 bg-blue-50 text-blue-800 font-bold outline-none cursor-pointer"
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                onClick={handleManualResyncAll}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors border border-slate-200 cursor-pointer"
+                title="Fetch live production floor numbers and final inspection records"
               >
-                <option value="PLANNED">Planned</option>
-                <option value="CUTTING">Cutting</option>
-                <option value="SEWING">Sewing</option>
-                <option value="PACKING">Packing</option>
-                <option value="READY_AUDIT">Ready for Audit</option>
-                <option value="SHIPPED">Shipped</option>
-              </select>
+                <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                <span>Re-sync Floor Records</span>
+              </button>
+
+              <div className="flex items-center gap-2 text-xs bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <span className="text-slate-500 font-medium">Active Order Status:</span>
+                <select
+                  value={formData.status}
+                  onChange={(e) => handleInputChange('status', e.target.value as any)}
+                  className="px-2 py-0.5 rounded-lg border border-blue-300 bg-white text-blue-800 font-bold outline-none cursor-pointer"
+                >
+                  <option value="PLANNED">Planned</option>
+                  <option value="CUTTING">Cutting</option>
+                  <option value="SEWING">Sewing</option>
+                  <option value="PACKING">Packing</option>
+                  <option value="READY_AUDIT">Ready for Audit</option>
+                  <option value="SHIPPED">Shipped</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Stages Editor Grid */}
-          <div className="space-y-4">
-            {(formData.productionTracking?.stages || DEFAULT_STAGES).map((st, idx) => {
-              const isCurrent = formData.status === st.stage;
-              return (
-                <div
-                  key={st.stage}
-                  className={`p-4 rounded-xl border text-xs space-y-3 transition-all ${
-                    isCurrent
-                      ? 'bg-blue-50/50 border-blue-300 ring-2 ring-blue-500/20 shadow-xs'
-                      : 'bg-slate-50/70 border-slate-200'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs">
-                        {idx + 1}
-                      </span>
-                      <span className="font-bold text-slate-900 text-sm">
-                        Stage: {st.stage.replace(/_/g, ' ')}
-                      </span>
-                      {isCurrent && (
-                        <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold text-[10px]">
-                          CURRENT ACTIVE STAGE
-                        </span>
-                      )}
-                    </div>
+          {/* Visual WIP Flowchart / Pipeline Header Bar */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">
+                  Factory Floor Pipeline Balance
+                </div>
+                <div className="text-sm font-semibold text-slate-200 mt-0.5">
+                  Order PO: <span className="font-mono text-white font-bold">{formData.orderNumber}</span> • Target: <span className="font-mono text-emerald-400 font-bold">{formData.orderQuantity.toLocaleString()} pcs</span>
+                </div>
+              </div>
 
-                    <div className="flex items-center gap-2">
-                      <label className="text-slate-500 font-semibold">Stage Status:</label>
-                      <select
-                        value={st.status}
-                        onChange={(e) => handleStageChange(idx, 'status', e.target.value)}
-                        className="px-2 py-1 rounded-lg border border-slate-300 bg-white font-bold text-slate-800 outline-none"
-                      >
-                        <option value="PENDING">PENDING</option>
-                        <option value="IN_PROGRESS">IN_PROGRESS</option>
-                        <option value="COMPLETED">COMPLETED</option>
-                        <option value="DELAYED">DELAYED</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                    <div>
-                      <label className="block text-slate-600 font-semibold mb-1">
-                        Start Date
-                      </label>
-                      <input
-                        type="date"
-                        value={st.startDate || ''}
-                        onChange={(e) => handleStageChange(idx, 'startDate', e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-600 font-semibold mb-1">
-                        Target End Date
-                      </label>
-                      <input
-                        type="date"
-                        value={st.targetEndDate || ''}
-                        onChange={(e) => handleStageChange(idx, 'targetEndDate', e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-600 font-semibold mb-1">
-                        Planned Target (Pcs)
-                      </label>
-                      <input
-                        type="number"
-                        value={st.plannedPcs || 0}
-                        onChange={(e) => handleStageChange(idx, 'plannedPcs', parseInt(e.target.value) || 0)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-mono outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-600 font-semibold mb-1">
-                        Actual Output (Pcs)
-                      </label>
-                      <input
-                        type="number"
-                        value={st.actualPcs || 0}
-                        onChange={(e) => handleStageChange(idx, 'actualPcs', parseInt(e.target.value) || 0)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-mono font-bold text-blue-700 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-600 font-semibold mb-1">
-                        Efficiency (%)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={st.efficiencyPercent || ''}
-                        onChange={(e) => handleStageChange(idx, 'efficiencyPercent', parseFloat(e.target.value) || 0)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-mono outline-none"
-                        placeholder="e.g. 82.5"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-600 font-semibold mb-1">
-                        Rejections / Defects (Pcs)
-                      </label>
-                      <input
-                        type="number"
-                        value={st.rejectionPcs || ''}
-                        onChange={(e) => handleStageChange(idx, 'rejectionPcs', parseInt(e.target.value) || 0)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-mono text-rose-700 outline-none"
-                        placeholder="0"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-600 font-semibold mb-1">
-                        QC Lead / Inspector
-                      </label>
-                      <input
-                        type="text"
-                        value={st.inspector || ''}
-                        onChange={(e) => handleStageChange(idx, 'inspector', e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
-                        placeholder="e.g. Ziaur Rahman (QC)"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-600 font-semibold mb-1">
-                        Assigned Lines (comma separated)
-                      </label>
-                      <input
-                        type="text"
-                        value={(st.assignedLines || []).join(', ')}
-                        onChange={(e) =>
-                          handleStageChange(
-                            idx,
-                            'assignedLines',
-                            e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
-                          )
-                        }
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
-                        placeholder="Line 02, Line 05"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2 md:col-span-4">
-                      <label className="block text-slate-600 font-semibold mb-1">
-                        Stage Notes &amp; Quality Audit Remarks
-                      </label>
-                      <input
-                        type="text"
-                        value={st.notes || ''}
-                        onChange={(e) => handleStageChange(idx, 'notes', e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
-                        placeholder="Notes on machine setup, bottleneck resolution, or quality parameters..."
-                      />
-                    </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-400 font-medium">Pipeline Throughput</div>
+                  <div className="text-base font-black text-emerald-400 font-mono">
+                    {pipelineMetrics.overallProgressPercent}% Complete
                   </div>
                 </div>
-              );
-            })}
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center font-bold text-xs text-white">
+                  {formData.status}
+                </div>
+              </div>
+            </div>
+
+            {/* 9-Step Micro Flow Pipeline */}
+            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2 pt-2 border-t border-white/10 text-[11px]">
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                <div className="text-[10px] text-slate-400 font-medium truncate">1. Cut Planned</div>
+                <div className="font-bold font-mono text-white mt-0.5">{wipData.cuttingPlanned.toLocaleString()}</div>
+                <span className="text-[9px] text-blue-300">Target</span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                <div className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1">
+                  <span>2. Cutting</span>
+                  <Zap className="w-2.5 h-2.5 text-amber-400" />
+                </div>
+                <div className="font-bold font-mono text-emerald-300 mt-0.5">{wipData.cuttingActual.toLocaleString()}</div>
+                <span className="text-[9px] text-emerald-400">{pipelineMetrics.cuttingProgressPct}% Cut</span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                <div className="text-[10px] text-slate-400 font-medium truncate">3. Sewing Input</div>
+                <div className="font-bold font-mono text-white mt-0.5">{wipData.sewingInput.toLocaleString()}</div>
+                <span className="text-[9px] text-slate-400">Line Input</span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                <div className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1">
+                  <span>4. Sewing</span>
+                  <Zap className="w-2.5 h-2.5 text-amber-400" />
+                </div>
+                <div className="font-bold font-mono text-indigo-300 mt-0.5">{wipData.sewingComplete.toLocaleString()}</div>
+                <span className="text-[9px] text-indigo-400">
+                  {pipelineMetrics.sewingFloorWip > 0 ? `${pipelineMetrics.sewingFloorWip.toLocaleString()} WIP` : 'Clear'}
+                </span>
+              </div>
+
+              <div className={`p-2 rounded-xl border ${wipData.washApplicable ? 'bg-white/5 border-white/10' : 'bg-white/5 border-dashed border-white/10 opacity-60'}`}>
+                <div className="text-[10px] text-slate-400 font-medium truncate">5. Wash (S/R)</div>
+                <div className="font-bold font-mono text-sky-300 mt-0.5">
+                  {wipData.washApplicable ? `${wipData.washSent}/${wipData.washReceived}` : 'N/A'}
+                </div>
+                <span className="text-[9px] text-sky-400">
+                  {wipData.washApplicable ? (pipelineMetrics.washFloorWip > 0 ? `${pipelineMetrics.washFloorWip} at wash` : 'Recv Done') : 'Non-Wash'}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                <div className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1">
+                  <span>6. Finishing</span>
+                  <Zap className="w-2.5 h-2.5 text-amber-400" />
+                </div>
+                <div className="font-bold font-mono text-purple-300 mt-0.5">{wipData.finishingQuantity.toLocaleString()}</div>
+                <span className="text-[9px] text-purple-400">
+                  {pipelineMetrics.finishingFloorWip > 0 ? `${pipelineMetrics.finishingFloorWip.toLocaleString()} WIP` : 'Iron Done'}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                <div className="text-[10px] text-slate-400 font-medium truncate">7. Packed</div>
+                <div className="font-bold font-mono text-amber-300 mt-0.5">{wipData.packedQuantity.toLocaleString()}</div>
+                <span className="text-[9px] text-amber-400">
+                  {pipelineMetrics.packingFloorWip > 0 ? `${pipelineMetrics.packingFloorWip.toLocaleString()} WIP` : 'Cartoned'}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                <div className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1">
+                  <span>8. Final Insp</span>
+                  <Zap className="w-2.5 h-2.5 text-amber-400" />
+                </div>
+                <div className="font-bold font-mono text-teal-300 mt-0.5">{wipData.inspectionCompletedQuantity.toLocaleString()}</div>
+                <span className="text-[9px] text-teal-400">AQL Passed</span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+                <div className="text-[10px] text-slate-400 font-medium truncate">9. Shipped</div>
+                <div className="font-bold font-mono text-emerald-400 mt-0.5">{wipData.shippedQuantity.toLocaleString()}</div>
+                <span className="text-[9px] text-emerald-400">
+                  {pipelineMetrics.readyToShipWip > 0 ? `${pipelineMetrics.readyToShipWip.toLocaleString()} Ready` : 'Exported'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Active Bottleneck / Pipeline Health Banners */}
+          {pipelineMetrics.bottlenecks.length > 0 && (
+            <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-xs space-y-1">
+              <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Active Floor Bottleneck Warnings ({pipelineMetrics.bottlenecks.length}):</span>
+              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-amber-800 text-[11px]">
+                {pipelineMetrics.bottlenecks.map((b, i) => (
+                  <li key={i}>
+                    <strong className="font-semibold">{b.stage}:</strong> {b.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* 9 Stages / Milestones Inputs Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* 1. CUTTING PLANNED */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <Scissors className="w-3.5 h-3.5 text-blue-600" />
+                  <span>1. Cutting Planned</span>
+                </div>
+                <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">
+                  PLANNED
+                </span>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Planned Target (Pcs)
+                </label>
+                <input
+                  type="number"
+                  value={wipData.cuttingPlanned || 0}
+                  onChange={(e) => handleWIPFieldChange('cuttingPlanned', parseInt(e.target.value) || 0)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-mono font-bold text-slate-900 outline-none"
+                  placeholder="e.g. 45450"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span>Order Qty: {formData.orderQuantity.toLocaleString()}</span>
+                <span className="text-blue-600 font-medium">
+                  {wipData.cuttingPlanned > formData.orderQuantity
+                    ? `+${(((wipData.cuttingPlanned - formData.orderQuantity) / formData.orderQuantity) * 100).toFixed(1)}% buffer`
+                    : '100% target'}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. CUTTING ACTUAL (Auto-synced from Cutting floor records) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-emerald-50/30 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <Scissors className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>2. Cutting Actual</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleManualOverride('cutting')}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                    wipData.manualOverrides?.cutting
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  }`}
+                  title="Click to toggle between auto floor sync and manual input override"
+                >
+                  {wipData.manualOverrides?.cutting ? 'Manual Override' : '⚡ Auto Synced'}
+                </button>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Actual Cut Output (Pcs)
+                </label>
+                <input
+                  type="number"
+                  value={wipData.cuttingActual || 0}
+                  onChange={(e) => handleWIPFieldChange('cuttingActual', parseInt(e.target.value) || 0)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white font-mono font-bold text-emerald-800 outline-none"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 truncate" title={wipData.syncSources?.cutting}>
+                  Src: {wipData.syncSources?.cutting || 'Cutting Floor Records'}
+                </span>
+                <span className="text-emerald-700 font-bold font-mono">
+                  {wipData.cuttingActual - wipData.cuttingPlanned >= 0
+                    ? `+${(wipData.cuttingActual - wipData.cuttingPlanned).toLocaleString()}`
+                    : (wipData.cuttingActual - wipData.cuttingPlanned).toLocaleString()} pcs
+                </span>
+              </div>
+            </div>
+
+            {/* 3. INPUT (Sewing Line Input) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <ArrowRight className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>3. Sewing Line Input</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleWIPFieldChange('sewingInput', wipData.cuttingActual)}
+                  className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
+                  title="Set equal to actual cutting output"
+                >
+                  Match Cutting
+                </button>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Sewing Input Quantity (Pcs)
+                </label>
+                <input
+                  type="number"
+                  value={wipData.sewingInput || 0}
+                  onChange={(e) => handleWIPFieldChange('sewingInput', parseInt(e.target.value) || 0)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-mono font-bold text-indigo-800 outline-none"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span>Cut-to-Input Balance:</span>
+                <span className="font-mono font-bold text-slate-700">
+                  {wipData.cuttingActual - wipData.sewingInput >= 0
+                    ? `${(wipData.cuttingActual - wipData.sewingInput).toLocaleString()} pcs in cut buffer`
+                    : `${(wipData.sewingInput - wipData.cuttingActual).toLocaleString()} excess input`}
+                </span>
+              </div>
+            </div>
+
+            {/* 4. SEWING COMPLETE QUANTITY (Auto-synced from Sewing records) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-indigo-50/30 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>4. Sewing Complete</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleManualOverride('sewing')}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                    wipData.manualOverrides?.sewing
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                  }`}
+                  title="Click to toggle between auto sewing record sync and manual input override"
+                >
+                  {wipData.manualOverrides?.sewing ? 'Manual Override' : '⚡ Auto Synced'}
+                </button>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Sewing Complete Quantity (Pcs)
+                </label>
+                <input
+                  type="number"
+                  value={wipData.sewingComplete || 0}
+                  onChange={(e) => handleWIPFieldChange('sewingComplete', parseInt(e.target.value) || 0)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-indigo-300 bg-white font-mono font-bold text-indigo-900 outline-none"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 truncate" title={wipData.syncSources?.sewing}>
+                  Src: {wipData.syncSources?.sewing || 'Sewing Floor Records'}
+                </span>
+                <span className="text-indigo-700 font-bold font-mono">
+                  {pipelineMetrics.sewingFloorWip.toLocaleString()} pcs WIP
+                </span>
+              </div>
+            </div>
+
+            {/* 5. WASH SENT & RECEIVED (Toggle if applicable) */}
+            <div className={`p-4 rounded-xl border text-xs space-y-2.5 transition-all ${
+              wipData.washApplicable ? 'border-sky-300 bg-sky-50/40' : 'border-slate-200 bg-slate-50/60'
+            }`}>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <Droplets className="w-3.5 h-3.5 text-sky-600" />
+                  <span>5. Wash Sent &amp; Received</span>
+                </div>
+                <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-sky-800">
+                  <input
+                    type="checkbox"
+                    checked={wipData.washApplicable}
+                    onChange={(e) => handleWIPFieldChange('washApplicable', e.target.checked)}
+                    className="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
+                  />
+                  <span>Wash Required</span>
+                </label>
+              </div>
+
+              {wipData.washApplicable ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-slate-600 font-semibold mb-0.5 text-[10px]">
+                        Wash Sent Qty (Pcs)
+                      </label>
+                      <input
+                        type="number"
+                        value={wipData.washSent || 0}
+                        onChange={(e) => handleWIPFieldChange('washSent', parseInt(e.target.value) || 0)}
+                        className="w-full px-2 py-1 rounded-lg border border-slate-300 bg-white font-mono font-bold text-sky-900 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 font-semibold mb-0.5 text-[10px]">
+                        Wash Received (Pcs)
+                      </label>
+                      <input
+                        type="number"
+                        value={wipData.washReceived || 0}
+                        onChange={(e) => handleWIPFieldChange('washReceived', parseInt(e.target.value) || 0)}
+                        className="w-full px-2 py-1 rounded-lg border border-slate-300 bg-white font-mono font-bold text-sky-900 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-sky-800 font-medium pt-0.5">
+                    <span>At Wash: <strong className="font-mono">{pipelineMetrics.washFloorWip.toLocaleString()} pcs</strong></span>
+                    <span>Loss: <strong className="font-mono text-rose-600">{pipelineMetrics.washShortage} pcs</strong></span>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-3 text-center text-slate-400 italic text-[11px]">
+                  Non-Wash Style: Direct transfer from sewing to finishing department.
+                </div>
+              )}
+            </div>
+
+            {/* 6. FINISHING QUANTITY (Auto-synced from Finishing floor records) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-purple-50/30 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                  <span>6. Finishing Quantity</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleManualOverride('finishing')}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                    wipData.manualOverrides?.finishing
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-purple-100 text-purple-800 border border-purple-300'
+                  }`}
+                  title="Click to toggle between auto finishing sync and manual input override"
+                >
+                  {wipData.manualOverrides?.finishing ? 'Manual Override' : '⚡ Auto Synced'}
+                </button>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Finishing Complete (Pcs)
+                </label>
+                <input
+                  type="number"
+                  value={wipData.finishingQuantity || 0}
+                  onChange={(e) => handleWIPFieldChange('finishingQuantity', parseInt(e.target.value) || 0)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-purple-300 bg-white font-mono font-bold text-purple-900 outline-none"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 truncate" title={wipData.syncSources?.finishing}>
+                  Src: {wipData.syncSources?.finishing || 'Finishing Dept Records'}
+                </span>
+                <span className="text-purple-700 font-bold font-mono">
+                  {pipelineMetrics.finishingFloorWip.toLocaleString()} pcs in queue
+                </span>
+              </div>
+            </div>
+
+            {/* 7. PACKED QUANTITY (Carton packing) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <Package className="w-3.5 h-3.5 text-amber-600" />
+                  <span>7. Packed Quantity</span>
+                </div>
+                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
+                  CARTONING
+                </span>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Packed Garments (Pcs)
+                </label>
+                <input
+                  type="number"
+                  value={wipData.packedQuantity || 0}
+                  onChange={(e) => handleWIPFieldChange('packedQuantity', parseInt(e.target.value) || 0)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-mono font-bold text-amber-900 outline-none"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span>Awaiting Packing: <strong className="font-mono text-slate-800">{pipelineMetrics.packingFloorWip.toLocaleString()} pcs</strong></span>
+                <span className="text-amber-700 font-medium">
+                  &asymp; {Math.ceil((wipData.packedQuantity || 0) / 48)} cartons
+                </span>
+              </div>
+            </div>
+
+            {/* 8. INSPECTION COMPLETED QUANTITY (Auto-synced from Quality Final Inspection records) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-teal-50/30 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+                  <span>8. Inspection Completed</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleManualOverride('inspection')}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                    wipData.manualOverrides?.inspection
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-teal-100 text-teal-800 border border-teal-300'
+                  }`}
+                  title="Click to toggle between auto inspection sync and manual override"
+                >
+                  {wipData.manualOverrides?.inspection ? 'Manual Override' : '⚡ Auto Synced'}
+                </button>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Passed Final Inspection (Pcs)
+                </label>
+                <input
+                  type="number"
+                  value={wipData.inspectionCompletedQuantity || 0}
+                  onChange={(e) =>
+                    handleWIPFieldChange('inspectionCompletedQuantity', parseInt(e.target.value) || 0)
+                  }
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-teal-300 bg-white font-mono font-bold text-teal-900 outline-none"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 truncate" title={wipData.syncSources?.inspection}>
+                  Src: {wipData.syncSources?.inspection || 'Quality Inspection Terminals'}
+                </span>
+                <span className="text-teal-700 font-bold font-mono">
+                  {wipData.inspectionCompletedQuantity > 0 ? 'AQL Accepted' : 'Pending Audit'}
+                </span>
+              </div>
+            </div>
+
+            {/* 9. SHIPPED QUANTITY */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <Truck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>9. Shipped Quantity</span>
+                </div>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                  COMMERCIAL
+                </span>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Shipped / Exported (Pcs)
+                </label>
+                <input
+                  type="number"
+                  value={wipData.shippedQuantity || 0}
+                  onChange={(e) => handleWIPFieldChange('shippedQuantity', parseInt(e.target.value) || 0)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white font-mono font-bold text-emerald-800 outline-none"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span>Awaiting Dispatch:</span>
+                <span className="font-mono font-bold text-emerald-700">
+                  {pipelineMetrics.readyToShipWip.toLocaleString()} pcs ready
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed Stage Milestones & Floor Line Tracking (Backward Compatible & Enriched) */}
+          <div className="pt-4 border-t border-slate-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Floor Line Assignments &amp; Quality Inspector Allocation
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Manage assigned sewing lines, stage target dates, and inspector sign-offs
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {(formData.productionTracking?.stages || DEFAULT_STAGES).map((st, idx) => {
+                const isCurrent = formData.status === st.stage;
+                return (
+                  <div
+                    key={st.stage}
+                    className={`p-3.5 rounded-xl border text-xs space-y-2.5 transition-all ${
+                      isCurrent
+                        ? 'bg-blue-50/50 border-blue-300 ring-2 ring-blue-500/20 shadow-xs'
+                        : 'bg-slate-50/70 border-slate-200'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-[10px]">
+                          {idx + 1}
+                        </span>
+                        <span className="font-bold text-slate-900">
+                          {st.stage.replace(/_/g, ' ')}
+                        </span>
+                        {isCurrent && (
+                          <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold text-[9px]">
+                            ACTIVE STAGE
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-slate-500 font-semibold text-[11px]">Stage Status:</label>
+                        <select
+                          value={st.status}
+                          onChange={(e) => handleStageChange(idx, 'status', e.target.value)}
+                          className="px-2 py-0.5 rounded-lg border border-slate-300 bg-white font-bold text-slate-800 outline-none text-[11px]"
+                        >
+                          <option value="PENDING">PENDING</option>
+                          <option value="IN_PROGRESS">IN_PROGRESS</option>
+                          <option value="COMPLETED">COMPLETED</option>
+                          <option value="DELAYED">DELAYED</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <label className="block text-slate-600 font-semibold mb-0.5 text-[11px]">
+                          Start Date
+                        </label>
+                        <input
+                          type="date"
+                          value={st.startDate || ''}
+                          onChange={(e) => handleStageChange(idx, 'startDate', e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-600 font-semibold mb-0.5 text-[11px]">
+                          Target End Date
+                        </label>
+                        <input
+                          type="date"
+                          value={st.targetEndDate || ''}
+                          onChange={(e) => handleStageChange(idx, 'targetEndDate', e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-600 font-semibold mb-0.5 text-[11px]">
+                          Assigned Floor Lines
+                        </label>
+                        <input
+                          type="text"
+                          value={(st.assignedLines || []).join(', ')}
+                          onChange={(e) =>
+                            handleStageChange(
+                              idx,
+                              'assignedLines',
+                              e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
+                            )
+                          }
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
+                          placeholder="e.g. Line 02, Line 05"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-600 font-semibold mb-0.5 text-[11px]">
+                          QC Lead / Auditor
+                        </label>
+                        <input
+                          type="text"
+                          value={st.inspector || ''}
+                          onChange={(e) => handleStageChange(idx, 'inspector', e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
+                          placeholder="e.g. Ziaur Rahman (QC)"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2 md:col-span-4">
+                        <label className="block text-slate-600 font-semibold mb-0.5 text-[11px]">
+                          Stage Notes &amp; Line Audit Remarks
+                        </label>
+                        <input
+                          type="text"
+                          value={st.notes || ''}
+                          onChange={(e) => handleStageChange(idx, 'notes', e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white outline-none"
+                          placeholder="Notes on machine setup, bottleneck resolution, or quality parameters..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Master Multi-Stage WIP Balance Ledger */}
+          <div className="pt-4 border-t border-slate-100 space-y-3">
+            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+              <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+              <span>Multi-Stage WIP Pipeline Ledger &amp; Live Reconciliation</span>
+            </h4>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <th className="py-2.5 px-3">Stage Sequence</th>
+                    <th className="py-2.5 px-3">Inflow / Planned</th>
+                    <th className="py-2.5 px-3">Outflow / Actual</th>
+                    <th className="py-2.5 px-3">Live Stage WIP</th>
+                    <th className="py-2.5 px-3">Sync Method</th>
+                    <th className="py-2.5 px-3">Stage Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-800">
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-semibold flex items-center gap-1.5">
+                      <Scissors className="w-3.5 h-3.5 text-blue-600" />
+                      <span>1 &amp; 2. Cutting Floor</span>
+                    </td>
+                    <td className="py-2 px-3 font-mono">{wipData.cuttingPlanned.toLocaleString()} planned</td>
+                    <td className="py-2 px-3 font-mono font-bold text-emerald-700">{wipData.cuttingActual.toLocaleString()} cut</td>
+                    <td className="py-2 px-3 font-mono text-slate-600">
+                      {(wipData.cuttingActual - wipData.sewingInput).toLocaleString()} ready for sewing
+                    </td>
+                    <td className="py-2 px-3 text-[11px] text-slate-500">{wipData.syncSources?.cutting || 'Live Floor'}</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        {wipData.cuttingActual >= wipData.cuttingPlanned ? 'COMPLETED' : 'IN_PROGRESS'}
+                      </span>
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-semibold flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>3 &amp; 4. Sewing Assembly</span>
+                    </td>
+                    <td className="py-2 px-3 font-mono">{wipData.sewingInput.toLocaleString()} loaded</td>
+                    <td className="py-2 px-3 font-mono font-bold text-indigo-700">{wipData.sewingComplete.toLocaleString()} sewn</td>
+                    <td className="py-2 px-3 font-mono text-indigo-600 font-bold">
+                      {pipelineMetrics.sewingFloorWip.toLocaleString()} on lines
+                    </td>
+                    <td className="py-2 px-3 text-[11px] text-slate-500">{wipData.syncSources?.sewing || 'Production Records'}</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
+                        {wipData.sewingComplete >= formData.orderQuantity ? 'COMPLETED' : 'RUNNING'}
+                      </span>
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-semibold flex items-center gap-1.5">
+                      <Droplets className="w-3.5 h-3.5 text-sky-600" />
+                      <span>5. Garment Wash</span>
+                    </td>
+                    <td className="py-2 px-3 font-mono">{wipData.washApplicable ? `${wipData.washSent.toLocaleString()} sent` : 'N/A'}</td>
+                    <td className="py-2 px-3 font-mono font-bold text-sky-700">{wipData.washApplicable ? `${wipData.washReceived.toLocaleString()} received` : 'Non-Wash'}</td>
+                    <td className="py-2 px-3 font-mono text-sky-600">
+                      {wipData.washApplicable ? `${pipelineMetrics.washFloorWip.toLocaleString()} at laundry` : '0 pcs'}
+                    </td>
+                    <td className="py-2 px-3 text-[11px] text-slate-500">Wash Plant Log</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800">
+                        {wipData.washApplicable ? (pipelineMetrics.washFloorWip === 0 ? 'COMPLETED' : 'AT_WASH') : 'BYPASSED'}
+                      </span>
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-semibold flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                      <span>6. Finishing Dept</span>
+                    </td>
+                    <td className="py-2 px-3 font-mono">
+                      {(wipData.washApplicable ? wipData.washReceived : wipData.sewingComplete).toLocaleString()} received
+                    </td>
+                    <td className="py-2 px-3 font-mono font-bold text-purple-700">{wipData.finishingQuantity.toLocaleString()} finished</td>
+                    <td className="py-2 px-3 font-mono text-purple-600 font-bold">
+                      {pipelineMetrics.finishingFloorWip.toLocaleString()} in finishing
+                    </td>
+                    <td className="py-2 px-3 text-[11px] text-slate-500">{wipData.syncSources?.finishing || 'Finishing Records'}</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                        {wipData.finishingQuantity >= formData.orderQuantity ? 'COMPLETED' : 'IN_PROGRESS'}
+                      </span>
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-semibold flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5 text-amber-600" />
+                      <span>7. Carton Packing</span>
+                    </td>
+                    <td className="py-2 px-3 font-mono">{wipData.finishingQuantity.toLocaleString()} finished</td>
+                    <td className="py-2 px-3 font-mono font-bold text-amber-700">{wipData.packedQuantity.toLocaleString()} packed</td>
+                    <td className="py-2 px-3 font-mono text-amber-600">
+                      {pipelineMetrics.packingFloorWip.toLocaleString()} awaiting cartons
+                    </td>
+                    <td className="py-2 px-3 text-[11px] text-slate-500">Warehouse Pack Slip</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                        {wipData.packedQuantity >= formData.orderQuantity ? 'COMPLETED' : 'PACKING'}
+                      </span>
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-semibold flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+                      <span>8. Final QA Inspection</span>
+                    </td>
+                    <td className="py-2 px-3 font-mono">{wipData.packedQuantity.toLocaleString()} presented</td>
+                    <td className="py-2 px-3 font-mono font-bold text-teal-700">{wipData.inspectionCompletedQuantity.toLocaleString()} passed</td>
+                    <td className="py-2 px-3 font-mono text-teal-600">
+                      {pipelineMetrics.inspectionWip.toLocaleString()} pending audit
+                    </td>
+                    <td className="py-2 px-3 text-[11px] text-slate-500">{wipData.syncSources?.inspection || 'Quality Final Report'}</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">
+                        {wipData.inspectionCompletedQuantity > 0 ? 'AUDITED' : 'PENDING'}
+                      </span>
+                    </td>
+                  </tr>
+
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-semibold flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>9. Export Logistics</span>
+                    </td>
+                    <td className="py-2 px-3 font-mono">{wipData.inspectionCompletedQuantity.toLocaleString()} cleared</td>
+                    <td className="py-2 px-3 font-mono font-bold text-emerald-700">{wipData.shippedQuantity.toLocaleString()} shipped</td>
+                    <td className="py-2 px-3 font-mono text-emerald-600 font-bold">
+                      {pipelineMetrics.readyToShipWip.toLocaleString()} ready to load
+                    </td>
+                    <td className="py-2 px-3 text-[11px] text-slate-500">Commercial BL/Gate-Pass</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
+                        {wipData.shippedQuantity >= formData.orderQuantity ? 'SHIPPED' : 'PENDING_DISPATCH'}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

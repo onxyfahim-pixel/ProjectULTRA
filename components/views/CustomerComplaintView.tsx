@@ -241,13 +241,12 @@ export function CustomerComplaintView() {
       ],
       cell: (item) => (
         <span
-          className={`font-mono text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-            item.severity === 'CRITICAL'
+          className={`font-mono text-xs font-bold px-2.5 py-0.5 rounded-full border ${item.severity === 'CRITICAL'
               ? 'bg-rose-50 text-rose-800 border-rose-200'
               : item.severity === 'MAJOR'
-              ? 'bg-amber-50 text-amber-800 border-amber-200'
-              : 'bg-blue-50 text-blue-800 border-blue-200'
-          }`}
+                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                : 'bg-blue-50 text-blue-800 border-blue-200'
+            }`}
         >
           {item.severity}
         </span>
@@ -748,13 +747,12 @@ export function CustomerComplaintView() {
                             </div>
 
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                c.severity === 'CRITICAL'
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${c.severity === 'CRITICAL'
                                   ? 'bg-rose-50 text-rose-700 border-rose-200'
                                   : c.severity === 'MAJOR'
-                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                  : 'bg-blue-50 text-blue-700 border-blue-200'
-                              }`}
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                                }`}
                             >
                               {c.severity}
                             </span>

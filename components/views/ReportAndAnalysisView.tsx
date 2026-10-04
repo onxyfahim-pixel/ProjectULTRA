@@ -25,6 +25,19 @@ import {
   FileText,
   BarChart3,
   PieChart,
+  Gauge,
+  RotateCcw,
+  FileSpreadsheet,
+  Printer,
+  Wrench,
+  GitCommit,
+  GraduationCap,
+  MessageSquareWarning,
+  FileCheck,
+  AlertOctagon,
+  ArrowRight,
+  ChevronRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { StatCard } from '@/components/ui/StatCard';
@@ -41,31 +54,66 @@ import {
 } from '../modules/reports/reports-data';
 import { ReportDetailsPage } from '../modules/reports/ReportDetailsPage';
 import { NewReportModal } from '../modules/reports/NewReportModal';
+import {
+  ReportTypeKey,
+  ALL_REPORT_DEFINITIONS,
+  ReportMetaDefinition,
+  generateSyncedReport,
+  INITIAL_REPORT_FILTER,
+} from '../modules/reports/reports-data-sync';
+import { UniversalReportViewer } from '../modules/reports/UniversalReportViewer';
+import {
+  downloadCsv,
+  downloadExcel,
+  printReportPdf,
+  PrintableReportConfig,
+} from '../modules/reports/reports-export-utils';
 
 type ReportSubView =
   | { type: 'none' }
-  | { type: 'details'; report: ReportRecord };
+  | { type: 'details'; report: ReportRecord }
+  | { type: 'synced-report'; reportKey: ReportTypeKey };
+
+type MainNavigationTab = 'hub' | 'summary' | 'ledger';
 
 export function ReportAndAnalysisView() {
-  const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
+  const [activeTab, setActiveTab] = useState<MainNavigationTab>('hub');
   const [subView, setSubView] = useState<ReportSubView>({ type: 'none' });
   const [reports, setReports] = useState<ReportRecord[]>(INITIAL_REPORTS);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Filters for List view
+  // Hub Category Filter & Search
+  const [hubCategory, setHubCategory] = useState<'ALL' | 'PRODUCTION' | 'QUALITY' | 'COMPLIANCE' | 'EXECUTIVE'>('ALL');
+  const [hubSearchQuery, setHubSearchQuery] = useState('');
+
+  // Filters for Ledger / DataTable view
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filters for Summary view
   const [summaryPeriod, setSummaryPeriod] = useState<string>('YTD');
-  const [summaryDepartment, setSummaryDepartment] = useState<string>('ALL');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 3500);
   };
+
+  // Filtered 22-report catalogue items for the Hub
+  const filteredReportCatalog = useMemo(() => {
+    return ALL_REPORT_DEFINITIONS.filter((item) => {
+      const matchCat = hubCategory === 'ALL' || item.category === hubCategory;
+      const q = hubSearchQuery.trim().toLowerCase();
+      const matchQuery =
+        !q ||
+        item.title.toLowerCase().includes(q) ||
+        item.code.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.targetAudience.toLowerCase().includes(q);
+      return matchCat && matchQuery;
+    });
+  }, [hubCategory, hubSearchQuery]);
 
   // Filtered reports for DataTable
   const filteredReports = useMemo(() => {
@@ -107,47 +155,142 @@ export function ReportAndAnalysisView() {
       ['Metric', 'Target', 'Actual', 'Variance', 'Status'],
       ...rpt.metricsTable.map((m) => [m.metric, m.target, m.actual, m.variance, m.status]),
     ];
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      rows.map((e) => e.map((val) => `"${val}"`).join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${rpt.id}_metrics_export.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCsv(`${rpt.id}_metrics_export`, ['Metric', 'Target', 'Actual', 'Variance', 'Status'], rows);
     showToast(`Exported ${rpt.id} CSV`);
   };
 
   const handleExportAllReports = () => {
-    const rows = [
+    const rows = reports.map((r) => [
+      r.id,
+      r.title,
+      r.category,
+      r.period,
+      r.department,
+      r.generatedBy,
+      r.status,
+      r.format,
+    ]);
+    downloadCsv(
+      `all_quality_reports_${new Date().toISOString().split('T')[0]}`,
       ['ID', 'Title', 'Category', 'Period', 'Department', 'Author', 'Status', 'Format'],
-      ...reports.map((r) => [
-        r.id,
-        r.title,
-        r.category,
-        r.period,
-        r.department,
-        r.generatedBy,
-        r.status,
-        r.format,
-      ]),
-    ];
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      rows.map((e) => e.map((val) => `"${val}"`).join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `all_quality_reports_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      rows
+    );
     showToast(`Exported ${reports.length} reports to CSV`);
   };
 
-  // DataTable column definitions
+  // Quick direct downloads for any catalog report directly from the hub cards
+  const handleQuickDownloadCatalogCsv = (def: ReportMetaDefinition) => {
+    const data = generateSyncedReport(def.key, INITIAL_REPORT_FILTER);
+    downloadCsv(
+      `${def.code}_${def.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`,
+      data.tableHeaders,
+      data.tableRows,
+      data.filterSummary
+    );
+    showToast(`Exported CSV: ${def.title}`);
+  };
+
+  const handleQuickDownloadCatalogExcel = (def: ReportMetaDefinition) => {
+    const data = generateSyncedReport(def.key, INITIAL_REPORT_FILTER);
+    const config: PrintableReportConfig = {
+      reportTitle: def.title,
+      reportCode: def.code,
+      category: def.category,
+      generatedDate: new Date().toLocaleString(),
+      generatedBy: 'Apex Horizon QMS & Production IE',
+      meta: data.filterSummary,
+      kpis: data.kpis.map((k) => ({
+        label: k.label,
+        value: k.value,
+        subtext: k.subtext,
+        status: k.status,
+      })),
+      tableHeaders: data.tableHeaders,
+      tableRows: data.tableRows,
+      summaryNotes: data.notes,
+    };
+    downloadExcel(
+      `${def.code}_${def.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`,
+      config
+    );
+    showToast(`Exported Excel: ${def.title}`);
+  };
+
+  const handleQuickPrintCatalogPdf = (def: ReportMetaDefinition) => {
+    const data = generateSyncedReport(def.key, INITIAL_REPORT_FILTER);
+    const config: PrintableReportConfig = {
+      reportTitle: def.title,
+      reportCode: def.code,
+      category: def.category,
+      generatedDate: new Date().toLocaleString(),
+      generatedBy: 'Apex Horizon QMS & Production IE',
+      meta: data.filterSummary,
+      kpis: data.kpis.map((k) => ({
+        label: k.label,
+        value: k.value,
+        subtext: k.subtext,
+        status: k.status,
+      })),
+      tableHeaders: data.tableHeaders,
+      tableRows: data.tableRows,
+      summaryNotes: data.notes,
+    };
+    printReportPdf(config);
+    showToast(`Opened printable PDF window for ${def.title}`);
+  };
+
+  // Icon mapping helper
+  const renderCatalogIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Calendar':
+        return <Calendar className="w-5 h-5 text-indigo-600" />;
+      case 'Clock':
+        return <Clock className="w-5 h-5 text-blue-600" />;
+      case 'TrendingUp':
+        return <TrendingUp className="w-5 h-5 text-emerald-600" />;
+      case 'Gauge':
+        return <Gauge className="w-5 h-5 text-amber-600" />;
+      case 'Users':
+        return <Users className="w-5 h-5 text-violet-600" />;
+      case 'Layers':
+        return <Layers className="w-5 h-5 text-sky-600" />;
+      case 'AlertTriangle':
+        return <AlertTriangle className="w-5 h-5 text-rose-600" />;
+      case 'Trash2':
+        return <Trash2 className="w-5 h-5 text-rose-500" />;
+      case 'RotateCcw':
+        return <RotateCcw className="w-5 h-5 text-indigo-500" />;
+      case 'ShieldCheck':
+        return <ShieldCheck className="w-5 h-5 text-emerald-600" />;
+      case 'PieChart':
+        return <PieChart className="w-5 h-5 text-rose-600" />;
+      case 'BarChart3':
+        return <BarChart3 className="w-5 h-5 text-blue-600" />;
+      case 'CheckCircle2':
+        return <CheckCircle2 className="w-5 h-5 text-emerald-600" />;
+      case 'Award':
+        return <Award className="w-5 h-5 text-amber-600" />;
+      case 'AlertOctagon':
+        return <AlertOctagon className="w-5 h-5 text-orange-600" />;
+      case 'GitCommit':
+        return <GitCommit className="w-5 h-5 text-teal-600" />;
+      case 'MessageSquareWarning':
+        return <MessageSquareWarning className="w-5 h-5 text-rose-600" />;
+      case 'GraduationCap':
+        return <GraduationCap className="w-5 h-5 text-purple-600" />;
+      case 'Wrench':
+        return <Wrench className="w-5 h-5 text-slate-600" />;
+      case 'FileCheck':
+        return <FileCheck className="w-5 h-5 text-indigo-600" />;
+      case 'Sparkles':
+        return <Sparkles className="w-5 h-5 text-amber-500" />;
+      case 'Building2':
+      default:
+        return <Building2 className="w-5 h-5 text-indigo-600" />;
+    }
+  };
+
+  // DataTable column definitions for Ledger view
   const columns: ColumnDef<ReportRecord>[] = [
     {
       key: 'id',
@@ -303,20 +446,8 @@ export function ReportAndAnalysisView() {
       label: 'Export Selected CSV',
       icon: <Download className="w-3.5 h-3.5" />,
       onClick: (selected) => {
-        const rows = [
-          ['ID', 'Title', 'Category', 'Period', 'Status'],
-          ...selected.map((s) => [s.id, s.title, s.category, s.period, s.status]),
-        ];
-        const csvContent =
-          'data:text/csv;charset=utf-8,' +
-          rows.map((e) => e.map((val) => `"${val}"`).join(',')).join('\n');
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement('a');
-        link.setAttribute('href', encodedUri);
-        link.setAttribute('download', `selected_reports_${selected.length}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const rows = selected.map((s) => [s.id, s.title, s.category, s.period, s.status]);
+        downloadCsv(`selected_reports_${selected.length}`, ['ID', 'Title', 'Category', 'Period', 'Status'], rows);
         showToast(`Exported ${selected.length} reports`);
       },
     },
@@ -332,7 +463,18 @@ export function ReportAndAnalysisView() {
     },
   ];
 
-  // Fullscreen Details Page early overlay
+  // SUBVIEW 1: Interactive Fullscreen Synced Report Viewer (for any of the 22 reports)
+  if (subView.type === 'synced-report') {
+    return (
+      <UniversalReportViewer
+        reportKey={subView.reportKey}
+        onBack={() => setSubView({ type: 'none' })}
+        showToast={showToast}
+      />
+    );
+  }
+
+  // SUBVIEW 2: Custom Document Report Details Page
   if (subView.type === 'details') {
     return (
       <ReportDetailsPage
@@ -354,28 +496,267 @@ export function ReportAndAnalysisView() {
         </div>
       )}
 
-      {/* Module Header (Hidden on details page via conditional above) */}
-      <ModuleHeader
-        title="Report And Analysis"
-        subtitle="Enterprise quality intelligence, defect Pareto analytics, buyer audit scorecards, and executive compliance reports."
-        activeView={viewMode}
-        onViewChange={setViewMode}
-        summaryCount={reports.length}
-        listCount={filteredReports.length}
-        actions={
+      {/* Main Module Header with Tab Switching */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-mono text-[10px] font-bold tracking-widest text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-md uppercase">
+                QMS & ERP INTELLIGENCE
+              </span>
+              <span className="text-xs text-slate-400">•</span>
+              <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Floor Sync Active
+              </span>
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+              Report And Analysis
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5 max-w-3xl">
+              Centralized intelligence hub for 22 specialized production, quality, compliance, and executive dashboards with order, line, date filters, comparison, and universal CSV/Excel/PDF export.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleExportAllReports}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-600" />
+              <span>Export Ledger</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsNewModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Custom Report</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Navigation Strip */}
+        <div className="flex items-center gap-1 border-t border-slate-100 pt-3">
           <button
             type="button"
-            onClick={() => setIsNewModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+            onClick={() => setActiveTab('hub')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'hub'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Generate Report</span>
+            <Layers className="w-4 h-4" />
+            <span>22 Reports & Dashboards Suite</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                activeTab === 'hub' ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              22
+            </span>
           </button>
-        }
-      />
 
-      {/* SUMMARY VIEW */}
-      {viewMode === 'summary' && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('summary')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'summary'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Executive Analytics & Trends</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('ledger')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'ledger'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Generated Reports Ledger</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                activeTab === 'ledger' ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {reports.length}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* TAB 1: 22 REPORTS & DASHBOARDS SUITE */}
+      {activeTab === 'hub' && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          {/* Category Filter Chips & Search Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              {[
+                { id: 'ALL', label: 'All 22 Reports', count: ALL_REPORT_DEFINITIONS.length },
+                {
+                  id: 'PRODUCTION',
+                  label: 'Production (9)',
+                  count: ALL_REPORT_DEFINITIONS.filter((r) => r.category === 'PRODUCTION').length,
+                },
+                {
+                  id: 'QUALITY',
+                  label: 'Quality QA (4)',
+                  count: ALL_REPORT_DEFINITIONS.filter((r) => r.category === 'QUALITY').length,
+                },
+                {
+                  id: 'COMPLIANCE',
+                  label: 'Compliance & Lab (7)',
+                  count: ALL_REPORT_DEFINITIONS.filter((r) => r.category === 'COMPLIANCE').length,
+                },
+                {
+                  id: 'EXECUTIVE',
+                  label: 'Executive Dashboards (2)',
+                  count: ALL_REPORT_DEFINITIONS.filter((r) => r.category === 'EXECUTIVE').length,
+                },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setHubCategory(tab.id as any)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-xl whitespace-nowrap transition-colors cursor-pointer ${
+                    hubCategory === tab.id
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative max-w-xs w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={hubSearchQuery}
+                onChange={(e) => setHubSearchQuery(e.target.value)}
+                placeholder="Search reports by title, code, topic..."
+                className="w-full pl-9 pr-4 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* 22 Report Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredReportCatalog.map((def) => {
+              const catBadge =
+                def.category === 'PRODUCTION'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : def.category === 'QUALITY'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : def.category === 'COMPLIANCE'
+                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200';
+
+              return (
+                <div
+                  key={def.key}
+                  className="bg-white rounded-2xl border border-slate-200/90 hover:border-indigo-300 hover:shadow-xs p-5 transition-all flex flex-col justify-between group"
+                >
+                  <div>
+                    {/* Header with Icon, Code, and Category */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 group-hover:bg-indigo-50 group-hover:border-indigo-100 transition-colors">
+                          {renderCatalogIcon(def.iconName)}
+                        </div>
+                        <div>
+                          <span className="font-mono text-xs font-bold text-indigo-700">
+                            {def.code}
+                          </span>
+                          <span
+                            className={`block text-[9.5px] font-bold px-1.5 py-0.2 rounded border w-fit mt-0.5 ${catBadge}`}
+                          >
+                            {def.category}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className="text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-200/60">
+                        {def.frequency}
+                      </span>
+                    </div>
+
+                    {/* Title & Description */}
+                    <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1 mb-1">
+                      {def.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                      {def.description}
+                    </p>
+
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                      <span className="line-clamp-1">Audience: {def.targetAudience}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div className="pt-4 mt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    {/* Open & Customize Button */}
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'synced-report', reportKey: def.key })}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-all cursor-pointer"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Open & Customize</span>
+                    </button>
+
+                    {/* Quick Direct Download Action Icons */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDownloadCatalogCsv(def)}
+                        className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                        title="Quick Download CSV"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleQuickDownloadCatalogExcel(def)}
+                        className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                        title="Quick Download Excel (.xls)"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleQuickPrintCatalogPdf(def)}
+                        className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                        title="Quick Print or Save PDF"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: SUMMARY VIEW */}
+      {activeTab === 'summary' && (
         <div className="space-y-6 animate-in fade-in duration-150">
           {/* Filter & Date Range Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs">
@@ -483,7 +864,6 @@ export function ReportAndAnalysisView() {
                         key={item.month}
                         className="flex-1 flex flex-col items-center gap-1 group relative h-full justify-end"
                       >
-                        {/* Tooltip */}
                         <div className="opacity-0 group-hover:opacity-100 absolute -top-8 bg-slate-900 text-white text-[10px] px-2 py-1 rounded shadow-md pointer-events-none transition-opacity whitespace-nowrap z-10">
                           {item.month}: {item.dhu} DHU ({item.passRate}% Pass)
                         </div>
@@ -668,76 +1048,11 @@ export function ReportAndAnalysisView() {
               </div>
             </div>
           </div>
-
-          {/* Quick Access to Recent Reports */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-indigo-600" />
-                  Recent Analytical Reports Ledger
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Click any report to view comprehensive fullscreen analysis
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
-              >
-                View All {reports.length} Reports →
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {reports.slice(0, 6).map((rpt) => {
-                const catCfg = REPORT_CATEGORY_CONFIG[rpt.category];
-                return (
-                  <div
-                    key={rpt.id}
-                    onClick={() => setSubView({ type: 'details', report: rpt })}
-                    className="p-4 rounded-xl border border-slate-200/80 hover:border-indigo-300 hover:shadow-xs bg-slate-50/40 hover:bg-white transition-all cursor-pointer flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                          {rpt.id}
-                        </span>
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${catCfg.bg} ${catCfg.color} ${catCfg.border}`}
-                        >
-                          {catCfg.label}
-                        </span>
-                      </div>
-                      <h4 className="text-xs sm:text-sm font-semibold text-slate-900 line-clamp-1 mb-1">
-                        {rpt.title}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 line-clamp-2">{rpt.summary}</p>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-[11px] text-slate-500">
-                      <span>{rpt.period}</span>
-                      <span className="font-medium text-indigo-600 hover:underline">
-                        Open Report →
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Switch to List Banner */}
-          <SwitchToListBanner
-            recordCount={reports.length}
-            onSwitchToList={() => setViewMode('list')}
-          />
         </div>
       )}
 
-      {/* LIST VIEW */}
-      {viewMode === 'list' && (
+      {/* TAB 3: LEDGER VIEW (DataTable) */}
+      {activeTab === 'ledger' && (
         <div className="space-y-4 animate-in fade-in duration-150">
           {/* Category Filter Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1">

@@ -34,6 +34,8 @@ export interface ColumnDef<T> {
   render?: (item: T, index: number) => React.ReactNode;
   cell?: (item: T, index: number) => React.ReactNode;
   width?: string;
+  minWidth?: string;
+  maxWidth?: string;
   align?: 'left' | 'center' | 'right';
   className?: string;
   wrap?: boolean;
@@ -63,6 +65,9 @@ interface DataTableProps<T extends { id: string }> {
   defaultSortKey?: string;
   defaultSortDirection?: SortDirection;
   dense?: boolean;
+  tableLayout?: 'auto' | 'fixed';
+  minTableWidth?: string;
+  onExport?: (items: T[]) => void;
 }
 
 export function DataTable<T extends { id: string }>({
@@ -81,6 +86,9 @@ export function DataTable<T extends { id: string }>({
   defaultSortKey,
   defaultSortDirection = null,
   dense = true,
+  tableLayout = 'auto',
+  minTableWidth,
+  onExport,
 }: DataTableProps<T>) {
   // State
   const [searchQuery, setSearchQuery] = useState('');
@@ -238,10 +246,15 @@ export function DataTable<T extends { id: string }>({
     return data.filter((item) => selectedIds.has(item.id));
   }, [data, selectedIds]);
 
-  // Export to CSV
+  // Export to CSV or Custom Export
   const handleExportCsv = () => {
     const exportItems = selectedItems.length > 0 ? selectedItems : sortedData;
     if (exportItems.length === 0) return;
+
+    if (onExport) {
+      onExport(exportItems);
+      return;
+    }
 
     const headers = columns.map((c) => c.header).join(',');
     const rows = exportItems.map((item) => {
@@ -393,7 +406,23 @@ export function DataTable<T extends { id: string }>({
 
       {/* Responsive Table Wrapper */}
       <div className="overflow-x-auto min-h-[300px] relative">
-        <table className="w-full min-w-max text-left border-collapse text-xs">
+        <table
+          className={`w-full text-left border-collapse text-xs ${
+            tableLayout === 'fixed' ? 'table-fixed' : ''
+          } ${minTableWidth ? '' : 'min-w-full'}`}
+          style={minTableWidth ? { minWidth: minTableWidth } : undefined}
+        >
+          {tableLayout === 'fixed' && (
+            <colgroup>
+              <col style={{ width: dense ? '36px' : '44px' }} />
+              {columns.map((col, idx) => (
+                <col
+                  key={col.key || col.accessorKey || `col-group-${idx}`}
+                  style={{ width: col.width }}
+                />
+              ))}
+            </colgroup>
+          )}
           {/* Table Header with integrated sorting, filtering, and multi-select */}
           <thead className="bg-slate-50/90 backdrop-blur-xs border-b border-slate-200 sticky top-0 z-10">
             <tr>
@@ -420,11 +449,13 @@ export function DataTable<T extends { id: string }>({
                 const colKey = col.key || col.accessorKey || `col-${colIdx}`;
                 const isSorted = sortKey === colKey;
                 const hasActiveFilter = Boolean(columnFilters[colKey]);
+                const isPercent = col.width?.includes('%');
+                const cellMinWidth = col.minWidth || (!isPercent ? col.width : undefined) || '50px';
 
                 return (
                   <th
                     key={colKey}
-                    style={{ width: col.width, minWidth: col.width || '60px' }}
+                    style={{ width: col.width, minWidth: cellMinWidth, maxWidth: col.maxWidth }}
                     className={`${dense ? 'px-2 py-2 text-[11px]' : 'px-3 py-3'} font-semibold text-slate-700 whitespace-nowrap ${
                       col.align === 'center'
                         ? 'text-center'
@@ -606,10 +637,12 @@ export function DataTable<T extends { id: string }>({
                     {/* Column Cells */}
                     {columns.map((col, colIdx) => {
                       const colKey = col.key || col.accessorKey || `col-${colIdx}`;
+                      const isPercent = col.width?.includes('%');
+                      const cellMinWidth = col.minWidth || (!isPercent ? col.width : undefined) || '50px';
                       return (
                         <td
                           key={colKey}
-                          style={{ width: col.width, minWidth: col.width || '60px' }}
+                          style={{ width: col.width, minWidth: cellMinWidth, maxWidth: col.maxWidth }}
                           className={`${dense ? 'px-2 py-1.5' : 'px-3 py-2.5'} text-slate-700 overflow-hidden ${
                             col.wrap || col.className?.includes('whitespace-normal')
                               ? 'whitespace-normal'

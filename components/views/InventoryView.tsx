@@ -32,6 +32,7 @@ import {
   FileText,
   Clock,
   Sparkles,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -58,6 +59,14 @@ import { InventoryDetailsPage } from '../modules/inventory/InventoryDetailsPage'
 import { ReceiveMaterialModal } from '../modules/inventory/ReceiveMaterialModal';
 import { IssueMaterialModal } from '../modules/inventory/IssueMaterialModal';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
+import {
+  InventoryExportModal,
+  InventoryRegisterTab,
+} from '../modules/inventory/InventoryExportModal';
+import {
+  InventorySingleExportModal,
+  InventorySingleExportTarget,
+} from '../modules/inventory/InventorySingleExportModal';
 
 interface InventoryViewProps {
   items?: InventoryItem[];
@@ -117,6 +126,15 @@ export function InventoryView({
     isOpen: boolean;
     items: InventoryItem[];
   } | null>(null);
+
+  // Global & Individual Export states
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedStockIds, setSelectedStockIds] = useState<string[]>([]);
+  const [selectedReceiveIds, setSelectedReceiveIds] = useState<string[]>([]);
+  const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
+
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [singleExportTarget, setSingleExportTarget] = useState<InventorySingleExportTarget | null>(null);
 
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | MaterialCategory>('ALL');
@@ -318,6 +336,14 @@ export function InventoryView({
       },
     },
     {
+      label: 'Export Selected (PDF/Excel)',
+      icon: <FileDown className="w-3.5 h-3.5" />,
+      onClick: (selected: InventoryItem[]) => {
+        setSelectedStockIds(selected.map((s) => s.id));
+        setIsGlobalExportModalOpen(true);
+      },
+    },
+    {
       label: 'Delete Selected',
       icon: <Trash2 className="w-3.5 h-3.5" />,
       variant: 'danger',
@@ -455,7 +481,7 @@ export function InventoryView({
     {
       key: 'actions',
       header: 'Actions',
-      width: '125px',
+      width: '155px',
       align: 'right',
       render: (i) => (
         <div className="flex items-center gap-1 justify-end">
@@ -480,6 +506,28 @@ export function InventoryView({
             title="View Specifications"
           >
             <Eye className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Individual Export Button (PDF or Excel) */}
+          <button
+            type="button"
+            onClick={() => {
+              const linkedGrns = receiveRecords.filter(
+                (r) => r.sku === i.sku || (r.batchLot && r.batchLot === i.batchLot)
+              );
+              const linkedIssues = issueRecords.filter((s) => s.sku === i.sku);
+              setSingleExportTarget({
+                type: 'stock',
+                item: i,
+                linkedGrns,
+                linkedIssues,
+              });
+              setIsSingleExportModalOpen(true);
+            }}
+            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+            title="Export Item Record (PDF or Excel)"
+          >
+            <FileDown className="w-3.5 h-3.5" />
           </button>
 
           {/* Edit Button */}
@@ -626,6 +674,28 @@ export function InventoryView({
         </div>
       ),
     },
+    {
+      key: 'actions',
+      header: 'Actions',
+      width: '80px',
+      align: 'right',
+      render: (r) => (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              const matched = items.find((i) => i.sku === r.sku);
+              setSingleExportTarget({ type: 'receive', record: r, matchedItem: matched });
+              setIsSingleExportModalOpen(true);
+            }}
+            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+            title="Export GRN (PDF or Excel)"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ),
+    },
   ];
 
   // Issue Register (SIV) Table Columns with compact widths
@@ -727,6 +797,28 @@ export function InventoryView({
         </div>
       ),
     },
+    {
+      key: 'actions',
+      header: 'Actions',
+      width: '80px',
+      align: 'right',
+      render: (s) => (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              const matched = items.find((i) => i.sku === s.sku);
+              setSingleExportTarget({ type: 'issue', record: s, matchedItem: matched });
+              setIsSingleExportModalOpen(true);
+            }}
+            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+            title="Export SIV (PDF or Excel)"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -754,6 +846,22 @@ export function InventoryView({
             { id: 'receive', label: 'Receive Register (GRN)', count: receiveRecords.length, icon: ArrowDownLeft },
             { id: 'issue', label: 'Issue Register (SIV)', count: issueRecords.length, icon: ArrowUpRight },
           ]}
+          actions={
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedStockIds([]);
+                setSelectedReceiveIds([]);
+                setSelectedIssueIds([]);
+                setIsGlobalExportModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
+              title="Global Export: Register Summary Sheet (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-blue-600" />
+              <span>Export Register</span>
+            </button>
+          }
         />
       )}
 
@@ -775,6 +883,19 @@ export function InventoryView({
           }}
           onDelete={(itm) => {
             setDeleteModal({ isOpen: true, items: [itm] });
+          }}
+          onExport={(itm) => {
+            const linkedGrns = receiveRecords.filter(
+              (r) => r.sku === itm.sku || (r.batchLot && r.batchLot === itm.batchLot)
+            );
+            const linkedIssues = issueRecords.filter((s) => s.sku === itm.sku);
+            setSingleExportTarget({
+              type: 'stock',
+              item: itm,
+              linkedGrns,
+              linkedIssues,
+            });
+            setIsSingleExportModalOpen(true);
           }}
           showToast={showToast}
         />
@@ -1091,6 +1212,10 @@ export function InventoryView({
                     </button>
                   </div>
                 }
+                onExport={(exportItems) => {
+                  setSelectedStockIds(exportItems.map((x) => x.id));
+                  setIsGlobalExportModalOpen(true);
+                }}
                 batchActions={batchActions}
               />
             </div>
@@ -1116,6 +1241,20 @@ export function InventoryView({
                     <span>Inward Shipment (GRN)</span>
                   </button>
                 }
+                onExport={(exportRecords) => {
+                  setSelectedReceiveIds(exportRecords.map((r) => r.id));
+                  setIsGlobalExportModalOpen(true);
+                }}
+                batchActions={[
+                  {
+                    label: 'Export Selected (PDF/Excel)',
+                    icon: <FileDown className="w-3.5 h-3.5" />,
+                    onClick: (selected) => {
+                      setSelectedReceiveIds(selected.map((r) => r.id));
+                      setIsGlobalExportModalOpen(true);
+                    },
+                  },
+                ]}
               />
             </div>
           )}
@@ -1143,6 +1282,20 @@ export function InventoryView({
                     <span>Issue to Floor (SIV)</span>
                   </button>
                 }
+                onExport={(exportRecords) => {
+                  setSelectedIssueIds(exportRecords.map((s) => s.id));
+                  setIsGlobalExportModalOpen(true);
+                }}
+                batchActions={[
+                  {
+                    label: 'Export Selected (PDF/Excel)',
+                    icon: <FileDown className="w-3.5 h-3.5" />,
+                    onClick: (selected) => {
+                      setSelectedIssueIds(selected.map((s) => s.id));
+                      setIsGlobalExportModalOpen(true);
+                    },
+                  },
+                ]}
               />
             </div>
           )}
@@ -1201,6 +1354,36 @@ export function InventoryView({
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* GLOBAL REGISTER EXPORT MODAL: PDF / EXCEL */}
+      <InventoryExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => {
+          setIsGlobalExportModalOpen(false);
+          setSelectedStockIds([]);
+          setSelectedReceiveIds([]);
+          setSelectedIssueIds([]);
+        }}
+        activeRegister={
+          viewMode === 'receive' ? 'receive' : viewMode === 'issue' ? 'issue' : 'stock'
+        }
+        stockItems={items}
+        receiveRecords={receiveRecords}
+        issueRecords={issueRecords}
+        selectedStockIds={selectedStockIds}
+        selectedReceiveIds={selectedReceiveIds}
+        selectedIssueIds={selectedIssueIds}
+      />
+
+      {/* INDIVIDUAL RECORD EXPORT MODAL: Stock Item, GRN, or SIV */}
+      <InventorySingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setSingleExportTarget(null);
+        }}
+        target={singleExportTarget}
+      />
     </div>
   );
 }

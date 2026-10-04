@@ -19,7 +19,18 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function ErpAuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserSession>(DEMO_USERS[0]);
+  const [user, setUser] = useState<UserSession>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('erp_user_profile');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return { ...DEMO_USERS[0], ...parsed };
+        } catch (e) {}
+      }
+    }
+    return DEMO_USERS[0];
+  });
   const [token, setToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -47,7 +58,15 @@ export function ErpAuthProvider({ children }: { children: React.ReactNode }) {
         if (res.ok) {
           const data = await res.json();
           if (isMounted && data.success && data.user) {
-            setUser(data.user);
+            let finalUser = data.user;
+            const savedProfile = localStorage.getItem('erp_user_profile');
+            if (savedProfile) {
+              try {
+                const parsed = JSON.parse(savedProfile);
+                finalUser = { ...finalUser, ...parsed };
+              } catch (e) {}
+            }
+            setUser(finalUser);
             setToken(storedToken);
             setIsAuthenticated(true);
           } else {
@@ -82,7 +101,15 @@ export function ErpAuthProvider({ children }: { children: React.ReactNode }) {
 
       const data = await res.json();
       if (res.ok && data.success && data.user && data.token) {
-        setUser(data.user);
+        let finalUser = data.user;
+        const savedProfile = localStorage.getItem('erp_user_profile');
+        if (savedProfile) {
+          try {
+            const parsed = JSON.parse(savedProfile);
+            finalUser = { ...finalUser, ...parsed };
+          } catch (e) {}
+        }
+        setUser(finalUser);
         setToken(data.token);
         setIsAuthenticated(true);
         localStorage.setItem('erp_token', data.token);
@@ -131,7 +158,13 @@ export function ErpAuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateUserProfile = useCallback((updates: Partial<UserSession>) => {
-    setUser((prev) => ({ ...prev, ...updates }));
+    setUser((prev) => {
+      const updated = { ...prev, ...updates };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('erp_user_profile', JSON.stringify(updated));
+      }
+      return updated;
+    });
   }, []);
 
   const permissions = user ? (ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.OPERATOR) : ROLE_PERMISSIONS.OPERATOR;

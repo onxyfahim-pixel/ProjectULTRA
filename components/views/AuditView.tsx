@@ -224,13 +224,12 @@ export function AuditView() {
 
         return (
           <span
-            className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-full border inline-block ${
-              isInternal
+            className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-full border inline-block ${isInternal
                 ? 'bg-blue-50 text-blue-800 border-blue-200'
                 : isSubSupplier
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                : 'bg-indigo-50 text-indigo-800 border-indigo-200'
-            }`}
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+              }`}
           >
             {isInternal ? 'INTERNAL ISO' : isSubSupplier ? 'SUB-SUPPLIER' : 'EXTERNAL'}
           </span>
@@ -282,23 +281,21 @@ export function AuditView() {
         return (
           <div className="text-center">
             <span
-              className={`font-mono font-black text-xs px-2 py-0.5 rounded-md inline-block ${
-                hasCritical
+              className={`font-mono font-black text-xs px-2 py-0.5 rounded-md inline-block ${hasCritical
                   ? 'bg-rose-100 text-rose-800 border border-rose-300 ring-1 ring-rose-400'
                   : pass
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                  : 'bg-rose-50 text-rose-800 border border-rose-200'
-              }`}
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                }`}
             >
               {scoreVal}%
             </span>
-            <div className={`text-[9px] font-bold font-mono mt-0.5 ${
-              hasCritical
+            <div className={`text-[9px] font-bold font-mono mt-0.5 ${hasCritical
                 ? 'text-rose-700 font-extrabold'
                 : pass
-                ? 'text-emerald-700'
-                : 'text-rose-600'
-            }`}>
+                  ? 'text-emerald-700'
+                  : 'text-rose-600'
+              }`}>
               {hasCritical ? 'CRITICAL FAIL' : pass ? 'PASS (≥80)' : 'FAIL (<80)'}
             </div>
           </div>
@@ -316,15 +313,14 @@ export function AuditView() {
         return (
           <div className="text-center">
             <span
-              className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-full inline-block ${
-                hasCritical
+              className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-full inline-block ${hasCritical
                   ? 'bg-rose-100 text-rose-900 border border-rose-300 ring-1 ring-rose-400'
                   : item.nonConformancesCount === 0
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : item.nonConformancesCount <= 2
-                  ? 'bg-amber-100 text-amber-800'
-                  : 'bg-rose-100 text-rose-800'
-              }`}
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : item.nonConformancesCount <= 2
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-rose-100 text-rose-800'
+                }`}
             >
               {item.nonConformancesCount}
             </span>
@@ -533,11 +529,10 @@ export function AuditView() {
               <button
                 type="button"
                 onClick={() => setActiveCategoryFilter('ALL')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${
-                  activeCategoryFilter === 'ALL'
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${activeCategoryFilter === 'ALL'
                     ? 'bg-slate-900 text-white shadow-xs'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <span>All Audits</span>
                 <span className="font-mono text-[11px] px-1.5 py-0.2 rounded-full bg-slate-200/50 text-slate-800">
@@ -548,11 +543,10 @@ export function AuditView() {
               <button
                 type="button"
                 onClick={() => setActiveCategoryFilter('INTERNAL')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${
-                  activeCategoryFilter === 'INTERNAL'
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${activeCategoryFilter === 'INTERNAL'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-blue-50/50'
-                }`}
+                  }`}
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Internal QMS (ISO 9001)</span>
@@ -564,11 +558,10 @@ export function AuditView() {
               <button
                 type="button"
                 onClick={() => setActiveCategoryFilter('EXTERNAL')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${
-                  activeCategoryFilter === 'EXTERNAL'
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${activeCategoryFilter === 'EXTERNAL'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-indigo-50/50'
-                }`}
+                  }`}
               >
                 <Award className="w-3.5 h-3.5" />
                 <span>External & Buyer</span>
@@ -580,11 +573,10 @@ export function AuditView() {
               <button
                 type="button"
                 onClick={() => setActiveCategoryFilter('SUB_SUPPLIER')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${
-                  activeCategoryFilter === 'SUB_SUPPLIER'
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${activeCategoryFilter === 'SUB_SUPPLIER'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'bg-white border border-slate-200 text-slate-600 hover:bg-emerald-50/50'
-                }`}
+                  }`}
               >
                 <Building2 className="w-3.5 h-3.5" />
                 <span>Sub-Supplier</span>

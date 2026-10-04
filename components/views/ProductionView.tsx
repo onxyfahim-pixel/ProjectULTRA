@@ -28,6 +28,7 @@ import {
   ArrowRight,
   Sparkles,
   Award,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -37,9 +38,12 @@ import { INITIAL_PRODUCTION_ORDERS } from '@/lib/db/mock-data';
 import { AddProductionOrderModal, NewProductionOrderData } from '@/components/modules/production/AddProductionOrderModal';
 import { AddProductionRecordPage } from '@/components/modules/production/AddProductionRecordPage';
 import { LogOutputModal, OutputLogEntry } from '@/components/modules/production/LogOutputModal';
+import { QuickDefectModal } from '@/components/modules/production/QuickDefectModal';
 import { ProductionRecordDetailsPage } from '@/components/modules/production/ProductionRecordDetailsPage';
 import { DeleteConfirmationModal } from '@/components/modules/buyer-order/DeleteConfirmationModal';
 import { ProductionManagementView } from '@/components/modules/production/ProductionManagementView';
+import { ProductionExportModal } from '@/components/modules/production/ProductionExportModal';
+import { ProductionSingleExportModal } from '@/components/modules/production/ProductionSingleExportModal';
 import { getProductionLines } from '@/lib/db/production-management-store';
 import {
   getProductionRecords,
@@ -110,11 +114,21 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
   const [logTargetOrderId, setLogTargetOrderId] = useState<string | null>(null);
   const [outputLogs, setOutputLogs] = useState<OutputLogEntry[]>([]);
 
+  // Separate Quick Defect Modal State
+  const [isQuickDefectOpen, setIsQuickDefectOpen] = useState(false);
+  const [quickDefectTargetOrderId, setQuickDefectTargetOrderId] = useState<string | null>(null);
+
   // Delete Confirmation Modal
   const [recordDeleteModal, setRecordDeleteModal] = useState<{
     isOpen: boolean;
     orders: ProductionOrder[];
   } | null>(null);
+
+  // Global & Individual Export States
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedOrdersForExport, setSelectedOrdersForExport] = useState<ProductionOrder[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [orderForSingleExport, setOrderForSingleExport] = useState<ProductionOrder | null>(null);
 
   // Filters & Dropdowns
   const [unitFilter, setUnitFilter] = useState('ALL');
@@ -191,6 +205,17 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
     setOrders(updated);
     saveProductionRecords(updated);
     onUpdateOrders?.(updated);
+  };
+
+  const handleSaveQuickDefectOrder = (updatedOrder: ProductionOrder) => {
+    const updated = orders.map((o) => (o.id === updatedOrder.id ? updatedOrder : o));
+    updateOrders(updated);
+    if (isSewingSectionRecord(updatedOrder)) {
+      syncSewingRecordToBuyerOrders(updatedOrder);
+    }
+    showToast(
+      `✓ Updated defect counts for ${updatedOrder.orderNumber} (DHU: ${updatedOrder.dhuRate}%, RFT: ${updatedOrder.rftRate}%)`
+    );
   };
 
   // Orders matching active Date Range (used for Summary and real metrics calculation)
@@ -701,6 +726,30 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
           <button
             type="button"
             onClick={() => {
+              setQuickDefectTargetOrderId(row.id);
+              setIsQuickDefectOpen(true);
+            }}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-semibold text-[11px] cursor-pointer"
+            title="Quick Defect Tap Tool for this Record"
+          >
+            <AlertTriangle className="w-3 h-3 text-amber-600" />
+            <span>+ Defect</span>
+          </button>
+          {/* Individual Export Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setOrderForSingleExport(row);
+              setIsSingleExportModalOpen(true);
+            }}
+            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 cursor-pointer"
+            title="Export Record (PDF or Excel)"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               setSubView({ type: 'edit_record', order: row });
             }}
             className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
@@ -731,6 +780,14 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
 
   // Batch actions matching Buyer & Order
   const batchActions: BatchAction<ProductionOrder>[] = [
+    {
+      label: 'Export Selected (PDF/Excel)',
+      icon: <FileDown className="w-3.5 h-3.5" />,
+      onClick: (selected) => {
+        setSelectedOrdersForExport(selected);
+        setIsGlobalExportModalOpen(true);
+      },
+    },
     {
       label: 'Delete Selected',
       variant: 'danger',
@@ -786,6 +843,42 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
             { id: 'list', label: 'Production Records', count: orders.length },
             { id: 'section', label: 'Management', count: managementLinesCount },
           ]}
+          actions={
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedOrdersForExport([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
+                title="Global Export: Production Floor Register (PDF or Excel)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Export Records</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickDefectTargetOrderId(null);
+                  setIsQuickDefectOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors shadow-xs cursor-pointer"
+                title="Rapid Defect Logger for Line Quality Controllers"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                <span>⚡ Quick Defect Log</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubView({ type: 'add_record' })}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Production Record</span>
+              </button>
+            </div>
+          }
         />
       )}
 
@@ -798,6 +891,10 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
           onEdit={(ord) => setSubView({ type: 'edit_record', order: ord })}
           onDelete={(ord) => {
             setRecordDeleteModal({ isOpen: true, orders: [ord] });
+          }}
+          onExport={(ord) => {
+            setOrderForSingleExport(ord);
+            setIsSingleExportModalOpen(true);
           }}
           showToast={showToast}
         />
@@ -1387,17 +1484,35 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSubView({ type: 'add_record' });
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Record</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickDefectTargetOrderId(null);
+                        setIsQuickDefectOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                      title="Quick Defect Tap Logging Tool"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                      <span>⚡ Quick Defect Log</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubView({ type: 'add_record' });
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Record</span>
+                    </button>
+                  </div>
                 }
+                onExport={(exportItems) => {
+                  setSelectedOrdersForExport(exportItems.length < orders.length ? exportItems : []);
+                  setIsGlobalExportModalOpen(true);
+                }}
                 batchActions={batchActions}
               />
             </div>
@@ -1429,6 +1544,19 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
         onSave={handleSaveOutputLog}
       />
 
+      {/* Quick Defect Tap Logger Modal */}
+      <QuickDefectModal
+        isOpen={isQuickDefectOpen}
+        orders={orders}
+        initialOrderId={quickDefectTargetOrderId}
+        onSaveOrder={handleSaveQuickDefectOrder}
+        onClose={() => {
+          setIsQuickDefectOpen(false);
+          setQuickDefectTargetOrderId(null);
+        }}
+        showToast={showToast}
+      />
+
       {/* Delete Confirmation Modal styled like Buyer & Order */}
       {recordDeleteModal && (
         <DeleteConfirmationModal
@@ -1445,6 +1573,27 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
           onCancel={() => setRecordDeleteModal(null)}
         />
       )}
+
+      {/* Global Export Modal: PDF or Excel */}
+      <ProductionExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => {
+          setIsGlobalExportModalOpen(false);
+          setSelectedOrdersForExport([]);
+        }}
+        allOrders={orders}
+        selectedOrders={selectedOrdersForExport}
+      />
+
+      {/* Individual Record Export Modal: PDF or Excel */}
+      <ProductionSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setOrderForSingleExport(null);
+        }}
+        order={orderForSingleExport}
+      />
     </div>
   );
 }

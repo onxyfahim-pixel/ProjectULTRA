@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useAppearance } from '@/hooks/use-appearance';
 import {
   ShieldCheck,
   ChevronDown,
@@ -22,10 +23,9 @@ import {
   Sun,
   Moon,
   ArrowRight,
+  Database,
 } from 'lucide-react';
 import { useErpAuth } from '@/hooks/use-erp-auth';
-import { RoleBadge } from '@/components/ui/Badge';
-import { DEMO_USERS } from '@/lib/auth/jwt';
 
 interface ErpNotification {
   id: string;
@@ -130,7 +130,7 @@ export function ErpHeader({
   onNavigateTab,
   activeTab,
 }: ErpHeaderProps) {
-  const { user, logout, switchRole, isLoading } = useErpAuth();
+  const { user, logout } = useErpAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -138,7 +138,6 @@ export function ErpHeader({
   const [globalSearch, setGlobalSearch] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [notifications, setNotifications] = useState<ErpNotification[]>(INITIAL_NOTIFICATIONS);
-  const [showRbacModal, setShowRbacModal] = useState(false);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -231,8 +230,21 @@ export function ErpHeader({
       )
     : [];
 
+  const { appearance, updateAppearance } = useAppearance();
+
+  let headerBg = 'bg-white text-slate-800 border-b border-slate-200/80 sticky top-0 z-30 shadow-2xs transition-colors shrink-0';
+  if (appearance.topbarStyle === 'glassmorphic') {
+    headerBg = 'bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl text-slate-800 dark:text-slate-100 border-b border-white/40 dark:border-slate-800/60 sticky top-0 z-30 shadow-xs transition-colors shrink-0';
+  } else if (appearance.topbarStyle === 'dark_contrast') {
+    headerBg = 'bg-slate-950 text-white border-b border-slate-800 sticky top-0 z-30 shadow-md transition-colors shrink-0';
+  } else if (appearance.topbarStyle === 'accent_tint') {
+    headerBg = 'bg-blue-50/90 dark:bg-blue-950/70 backdrop-blur-md text-slate-900 dark:text-white border-b border-blue-200/80 dark:border-blue-900/60 sticky top-0 z-30 shadow-2xs transition-colors shrink-0';
+  } else {
+    headerBg = 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-30 shadow-2xs transition-colors shrink-0';
+  }
+
   return (
-    <header className="bg-white text-slate-800 border-b border-slate-200/80 sticky top-0 z-30 shadow-2xs transition-colors shrink-0">
+    <header className={headerBg}>
       <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4">
         {/* Left Section: Mobile Drawer Toggle / Desktop Collapse & Universal Search Bar */}
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -300,6 +312,27 @@ export function ErpHeader({
 
         {/* Right Section: Notification, Calendar, Fullscreen, Theme, User Profile */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* Quick MySQL Database Status & Launcher Button */}
+          <button
+            type="button"
+            id="topbar-mysql-status-btn"
+            onClick={() => {
+              if (onNavigateTab) {
+                onNavigateTab('settings');
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('settings_active_tab', 'database_backup');
+                  window.dispatchEvent(new CustomEvent('navigate-settings-subtab', { detail: 'database_backup' }));
+                }
+              }
+            }}
+            title="MySQL Enterprise Database Manager & Setup Wizard"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all text-xs font-bold shadow-2xs cursor-pointer group"
+          >
+            <Database className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform" />
+            <span className="hidden md:inline font-mono text-[11px] text-slate-700">MySQL Setup</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Database Connected / Ready"></span>
+          </button>
+
           {/* Notifications Button & Dropdown */}
           <div className="relative">
             <button
@@ -425,17 +458,21 @@ export function ErpHeader({
             {isFullscreen ? <Minimize className="w-4 h-4 text-blue-600" /> : <Maximize className="w-4 h-4" />}
           </button>
 
-          {/* Theme Mode Toggle matching picture */}
+          {/* Theme Mode Toggle synchronized with Appearance */}
           <button
             type="button"
-            onClick={() => setIsDarkMode(!isDarkMode)}
+            onClick={() => {
+              const next = appearance.theme === 'dark' ? 'light' : 'dark';
+              updateAppearance({ theme: next });
+              setIsDarkMode(next === 'dark');
+            }}
             title="Toggle Light/Dark Theme"
             className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer shadow-2xs"
           >
-            {isDarkMode ? <Moon className="w-4 h-4 text-indigo-600" /> : <Sun className="w-4 h-4 text-amber-500" />}
+            {appearance.theme === 'dark' ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
           </button>
 
-          {/* User Profile matching the screenshot layout: Avatar + Fahim + QMS Executive */}
+          {/* User Profile matching the screenshot layout: Avatar + Name + Designation */}
           <div className="relative">
             <button
               id="user-profile-menu-btn"
@@ -443,108 +480,88 @@ export function ErpHeader({
                 setIsUserMenuOpen(!isUserMenuOpen);
                 setIsNotificationOpen(false);
               }}
-              className="flex items-center gap-2.5 pl-2 pr-3 py-1 rounded-xl hover:bg-slate-100 transition-all text-left text-xs cursor-pointer"
+              className="flex items-center gap-2.5 pl-2 pr-3 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left text-xs cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
             >
               {user.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
                   alt={user.name}
-                  className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
                 />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-2xs">
-                  {user.name.charAt(0) || 'F'}
+                  {user.name ? user.name.charAt(0) : 'F'}
                 </div>
               )}
               <div className="hidden sm:block text-left">
-                <div className="text-xs font-bold text-slate-900 leading-tight">
+                <div className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">
                   {user.name || 'Fahim'}
                 </div>
                 <div className="text-[10px] text-slate-400 font-medium leading-tight">
-                  {user.role === 'ADMIN' ? 'QMS Executive' : (user.role as string).replace('_', ' ')}
+                  {user.designation || (user.role === 'ADMIN' ? 'QMS Executive' : (user.role as string).replace('_', ' '))}
                 </div>
               </div>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180 text-blue-600' : ''}`} />
             </button>
 
-            {/* User Dropdown Menu */}
+            {/* User Dropdown Menu: Shows ONLY User Profile and Logout */}
             {isUserMenuOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white text-slate-900 rounded-2xl shadow-2xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-4 py-3 border-b border-slate-100">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Active ERP Session
-                  </div>
-                  <div className="font-bold text-sm text-slate-900 mt-0.5">{user.name}</div>
-                  <div className="text-xs text-slate-500 font-mono">@{user.username || user.email}</div>
-                  <div className="mt-2 flex items-center gap-1.5">
-                    <RoleBadge role={user.role} />
-                    {user.isSuperAdmin && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
-                        SUPER ADMIN
-                      </span>
-                    )}
+              <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                {/* User Summary Header */}
+                <div className="px-3 py-2.5 mb-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                  {user.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.name}
+                      className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0 shadow-xs"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-sm font-bold text-white shrink-0 shadow-xs">
+                      {user.name ? user.name.charAt(0) : 'F'}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                      {user.name}
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                      {user.designation || (user.role === 'ADMIN' ? 'QMS Executive' : (user.role as string).replace('_', ' '))}
+                    </div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono truncate mt-0.5">
+                      {user.email}
+                    </div>
                   </div>
                 </div>
 
-                <div className="px-2 py-1.5 space-y-1">
-                  {onNavigateTab && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onNavigateTab('settings');
-                        setIsUserMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                    >
-                      <Settings className="w-4 h-4 text-slate-500" />
-                      <span>System Settings</span>
-                    </button>
-                  )}
-
+                {/* ONLY 2 Actions: User Profile & Logout */}
+                <div className="space-y-1">
                   <button
                     type="button"
+                    id="header-user-profile-btn"
                     onClick={() => {
-                      setShowRbacModal(true);
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('settings_active_tab', 'user_profile');
+                        window.dispatchEvent(new CustomEvent('navigate-settings-subtab', { detail: 'user_profile' }));
+                      }
+                      if (onNavigateTab) {
+                        onNavigateTab('settings');
+                      }
                       setIsUserMenuOpen(false);
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-all cursor-pointer group"
                   >
-                    <ShieldCheck className="w-4 h-4 text-purple-500" />
-                    <span>View RBAC Privileges</span>
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-105 transition-transform border border-blue-200/60 dark:border-blue-900/60 shrink-0">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="font-bold text-xs leading-tight">User Profile</div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal leading-tight truncate">
+                        Personal info, plant &amp; credentials
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
                   </button>
-                </div>
 
-                {/* Quick Role Simulation for testing */}
-                <div className="border-t border-slate-100 px-3 pt-2 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Test Role Switcher
-                </div>
-
-                <div className="px-2 space-y-0.5">
-                  {DEMO_USERS.map((u) => {
-                    const isCurrent = u.role === user.role;
-                    return (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => {
-                          switchRole(u.role);
-                          setIsUserMenuOpen(false);
-                        }}
-                        disabled={isLoading}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                          isCurrent
-                            ? 'bg-blue-50 text-blue-700 font-bold'
-                            : 'hover:bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        <span className="truncate">@{u.username} ({u.role})</span>
-                        {isCurrent && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Sign Out Button */}
-                <div className="mt-2 pt-2 border-t border-slate-100 px-2">
                   <button
                     type="button"
                     id="header-logout-btn"
@@ -552,10 +569,18 @@ export function ErpHeader({
                       setIsUserMenuOpen(false);
                       logout();
                     }}
-                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer group"
                   >
-                    <LogOut className="w-4 h-4" />
-                    <span>Sign Out of ERP Host</span>
+                    <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/60 flex items-center justify-center text-rose-600 dark:text-rose-400 group-hover:scale-105 transition-transform border border-rose-200/60 dark:border-rose-900/60 shrink-0">
+                      <LogOut className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="font-bold text-xs leading-tight">Logout</div>
+                      <div className="text-[10px] text-rose-400/80 dark:text-rose-400/60 font-normal leading-tight">
+                        Sign out of active host session
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-rose-300 dark:text-rose-700 group-hover:text-rose-500 group-hover:translate-x-0.5 transition-all" />
                   </button>
                 </div>
               </div>
@@ -574,87 +599,6 @@ export function ErpHeader({
             setIsSearchFocused(false);
           }}
         />
-      )}
-
-      {/* RBAC Permissions Matrix Modal */}
-      {showRbacModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white text-slate-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Lock className="w-5 h-5 text-purple-600" />
-                <h3 className="font-bold text-base text-slate-900">
-                  Role-Based Access Control (RBAC) Matrix
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowRbacModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 mt-3">
-              Every API request is guarded by backend Express JWT verification and strict RBAC middleware:
-            </p>
-
-            <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden text-xs">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="p-2.5">Permission</th>
-                    <th className="p-2.5 text-center">Super Admin</th>
-                    <th className="p-2.5 text-center">QA Lead</th>
-                    <th className="p-2.5 text-center">Inspector</th>
-                    <th className="p-2.5 text-center">Operator</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  <tr>
-                    <td className="p-2.5 font-medium">Create &amp; Manage Users</td>
-                    <td className="p-2.5 text-center text-emerald-600 font-bold">✓ (Exclusive)</td>
-                    <td className="p-2.5 text-center text-rose-500">✕</td>
-                    <td className="p-2.5 text-center text-rose-500">✕</td>
-                    <td className="p-2.5 text-center text-rose-500">✕</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2.5 font-medium">Edit Warehouse Stock</td>
-                    <td className="p-2.5 text-center text-emerald-600 font-bold">✓</td>
-                    <td className="p-2.5 text-center text-emerald-600 font-bold">✓</td>
-                    <td className="p-2.5 text-center text-emerald-600 font-bold">✓</td>
-                    <td className="p-2.5 text-center text-rose-500">✕</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2.5 font-medium">Batch Approve Grade A</td>
-                    <td className="p-2.5 text-center text-emerald-600 font-bold">✓</td>
-                    <td className="p-2.5 text-center text-emerald-600 font-bold">✓</td>
-                    <td className="p-2.5 text-center text-rose-500">✕</td>
-                    <td className="p-2.5 text-center text-rose-500">✕</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2.5 font-medium">Conduct QMS Inspections</td>
-                    <td className="p-2.5 text-center text-emerald-600 font-bold">✓</td>
-                    <td className="p-2.5 text-center text-emerald-600 font-bold">✓</td>
-                    <td className="p-2.5 text-center text-emerald-600 font-bold">✓</td>
-                    <td className="p-2.5 text-center text-rose-500">✕</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowRbacModal(false)}
-                className="px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-xs cursor-pointer"
-              >
-                Close Matrix
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </header>
   );

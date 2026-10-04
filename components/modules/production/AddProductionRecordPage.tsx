@@ -52,7 +52,15 @@ import {
   ProductionUnit,
   ProductionSection,
   ProductionLine,
+  ProductionDefectItem,
+  ProductionDefectCategory,
+  ProductionDefectSeverity,
 } from '@/lib/types/production-management';
+import {
+  getProductionDefects,
+  getCommonProductionDefects,
+  addProductionDefect,
+} from '@/lib/db/production-defects-store';
 import { isSewingSectionRecord } from '@/lib/db/production-records-store';
 
 export interface AddProductionRecordPageProps {
@@ -405,6 +413,68 @@ export function AddProductionRecordPage({
 
   // Modal / Popover state for editing Defect Breakdown for a specific hour
   const [activeDefectModalHourIndex, setActiveDefectModalHourIndex] = useState<number | null>(null);
+
+  // Common defects store & quick tap-to-add palette
+  const [availableDefects, setAvailableDefects] = useState<ProductionDefectItem[]>([]);
+  const [activeHourForQuickTap, setActiveHourForQuickTap] = useState<number>(0);
+  const [quickTapCategoryFilter, setQuickTapCategoryFilter] = useState<string>('ALL');
+
+  // Modal defect filter & new defect form states
+  const [modalCategoryFilter, setModalCategoryFilter] = useState<string>('ALL');
+  const [modalSearchQuery, setModalSearchQuery] = useState<string>('');
+  const [isAddingNewDefectInline, setIsAddingNewDefectInline] = useState<boolean>(false);
+  const [newDefectName, setNewDefectName] = useState<string>('');
+  const [newDefectCategory, setNewDefectCategory] = useState<ProductionDefectCategory>('Sewing');
+  const [newDefectSeverity, setNewDefectSeverity] = useState<ProductionDefectSeverity>('MAJOR');
+
+  useEffect(() => {
+    const loadDefects = () => {
+      setAvailableDefects(getProductionDefects());
+    };
+    loadDefects();
+    window.addEventListener('erp_production_defects_updated', loadDefects);
+    return () => window.removeEventListener('erp_production_defects_updated', loadDefects);
+  }, []);
+
+  // Filtered defects for the Quick Tap bar above the table
+  const tapBarDefects = useMemo(() => {
+    return availableDefects.filter((d) => {
+      if (quickTapCategoryFilter === 'ALL') {
+        return d.isCommon;
+      }
+      return d.category === quickTapCategoryFilter;
+    });
+  }, [availableDefects, quickTapCategoryFilter]);
+
+  // Filtered defects for the Active Hour Defect Modal
+  const modalFilteredDefects = useMemo(() => {
+    return availableDefects.filter((d) => {
+      const q = modalSearchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q || d.name.toLowerCase().includes(q) || d.code.toLowerCase().includes(q);
+      const matchesCat = modalCategoryFilter === 'ALL' || d.category === modalCategoryFilter;
+      return matchesSearch && matchesCat;
+    });
+  }, [availableDefects, modalSearchQuery, modalCategoryFilter]);
+
+  // Handle inline adding new defect from entry modal
+  const handleCreateInlineDefect = () => {
+    if (!newDefectName.trim()) return;
+    const created = addProductionDefect({
+      name: newDefectName.trim(),
+      category: newDefectCategory,
+      severity: newDefectSeverity,
+      isCommon: true,
+      description: 'Quick added from production entry hourly sheet',
+    });
+    setAvailableDefects(getProductionDefects());
+    if (activeDefectModalHourIndex !== null) {
+      handleAddDefectToHour(activeDefectModalHourIndex, created.name, 1);
+    }
+    setNewDefectName('');
+    setIsAddingNewDefectInline(false);
+    showToast(`Added defect "${created.name}" to QC master and logged count 1`);
+  };
 
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -1313,6 +1383,136 @@ export function AddProductionRecordPage({
           </div>
         </div>
 
+        {/* RAPID COMMON DEFECT TAP-TO-ADD BAR */}
+        <div className="p-4 bg-gradient-to-r from-amber-50/90 via-orange-50/50 to-slate-50 rounded-2xl border border-amber-200/90 shadow-xs space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                <Zap className="w-4 h-4 fill-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-950">
+                    ⚡ Rapid Common Defect Tap Bar
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-900 border border-amber-300">
+                    Tap defect to log count
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-800">
+                  Active Hour Slot:{' '}
+                  <strong className="text-slate-900 font-mono font-bold bg-white px-2 py-0.5 rounded-md border border-amber-200">
+                    {hourlyReports[activeHourForQuickTap]?.hourSlot || 'Select Hour'}
+                  </strong>{' '}
+                  • Instant defect logger for inline QA
+                </p>
+              </div>
+            </div>
+
+            {/* Hour Slot Switcher */}
+            <div className="flex items-center gap-1 overflow-x-auto max-w-full pb-1 sm:pb-0">
+              <span className="text-[10px] font-bold text-slate-500 uppercase mr-1">Log to:</span>
+              {hourlyReports.map((hr, idx) => (
+                <button
+                  key={hr.id || idx}
+                  type="button"
+                  onClick={() => setActiveHourForQuickTap(idx)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                    activeHourForQuickTap === idx
+                      ? 'bg-amber-500 text-white shadow-xs scale-105'
+                      : 'bg-white text-slate-700 hover:bg-amber-100/60 border border-slate-200'
+                  }`}
+                  title={`Select hour ${hr.hourSlot} for 1-tap defect logging`}
+                >
+                  H{idx + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Category Tabs & Tap Chips */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto text-[11px]">
+              {(['ALL', 'Sewing', 'Fabric', 'Cutting', 'Finishing', 'Trims'] as const).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setQuickTapCategoryFilter(cat)}
+                  className={`px-2.5 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                    quickTapCategoryFilter === cat
+                      ? 'bg-amber-900 text-white font-bold'
+                      : 'bg-white/80 hover:bg-white text-slate-600 border border-amber-100'
+                  }`}
+                >
+                  {cat === 'ALL' ? '⭐ Common Tap Palette' : cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Tactile Defect Tap Chips */}
+            <div className="flex flex-wrap items-center gap-2">
+              {tapBarDefects.map((def) => {
+                const loggedCount =
+                  hourlyReports[activeHourForQuickTap]?.defectBreakdown?.find(
+                    (d) => d.defectType === def.name
+                  )?.count || 0;
+
+                return (
+                  <div
+                    key={def.id || def.name}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shadow-xs transition-all ${
+                      loggedCount > 0
+                        ? 'bg-amber-100/90 border-amber-300 text-amber-950 font-bold'
+                        : 'bg-white hover:bg-amber-50 hover:border-amber-300 text-slate-800 border-slate-200'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleAddDefectToHour(activeHourForQuickTap, def.name, 1);
+                        showToast(
+                          `+1 ${def.name} on ${hourlyReports[activeHourForQuickTap]?.hourSlot}`
+                        );
+                      }}
+                      className="flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-amber-700" />
+                      <span>{def.name}</span>
+                    </button>
+
+                    {loggedCount > 0 && (
+                      <div className="flex items-center gap-1 ml-1 pl-1.5 border-l border-amber-300">
+                        <span className="font-mono font-black text-amber-900 bg-white px-1.5 py-0.2 rounded-md text-[11px] border border-amber-200">
+                          {loggedCount}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleAddDefectToHour(activeHourForQuickTap, def.name, -1)
+                          }
+                          className="w-4 h-4 rounded text-amber-700 hover:bg-amber-200 flex items-center justify-center font-bold text-xs cursor-pointer"
+                          title="Reduce count by 1"
+                        >
+                          -
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => setActiveDefectModalHourIndex(activeHourForQuickTap)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/60 hover:bg-blue-100 text-blue-800 text-xs font-bold transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 text-blue-600" />
+                <span>+ More Defects / Breakdown</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Hourly Table with Granular Defect Breakdown and Scrap Rejects */}
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-left text-xs border-collapse min-w-[1050px]">
@@ -1718,72 +1918,203 @@ export function AddProductionRecordPage({
       {/* QUICK DEFECT LOGGER MODAL / POPOVER FOR ACTIVE HOUR */}
       {activeDefectModalHourIndex !== null && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden space-y-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden space-y-4">
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
                   Log Defects for Hour: {hourlyReports[activeDefectModalHourIndex]?.hourSlot}
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Select defect type and tap + to add count. DHU% and RFT% update automatically.
+                  Select defect, tap +1 / +5 to log counts, or add new custom defects to the QC master list.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setActiveDefectModalHourIndex(null)}
+                onClick={() => {
+                  setActiveDefectModalHourIndex(null);
+                  setIsAddingNewDefectInline(false);
+                }}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="p-4 space-y-4 max-h-[65vh] overflow-y-auto">
+              {/* Search & Category Filter Bar */}
               <div className="space-y-2">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Common Sewing Defects (Tap to Add):
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={modalSearchQuery}
+                      onChange={(e) => setModalSearchQuery(e.target.value)}
+                      placeholder="Search defects by name or code..."
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingNewDefectInline(!isAddingNewDefectInline)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-amber-700" />
+                    <span>{isAddingNewDefectInline ? 'Hide Form' : 'New Defect'}</span>
+                  </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {COMMON_DEFECTS.map((defect) => {
+
+                {/* Category Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto text-[11px]">
+                  {(['ALL', 'Sewing', 'Fabric', 'Cutting', 'Finishing', 'Trims'] as const).map(
+                    (cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setModalCategoryFilter(cat)}
+                        className={`px-2.5 py-0.5 rounded-md font-semibold transition-colors cursor-pointer ${
+                          modalCategoryFilter === cat
+                            ? 'bg-blue-600 text-white font-bold'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {cat === 'ALL' ? 'All Categories' : cat}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {/* Inline Add New Defect Form */}
+              {isAddingNewDefectInline && (
+                <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2 animate-in fade-in">
+                  <div className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Add New Defect to Garment Master:</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={newDefectName}
+                      onChange={(e) => setNewDefectName(e.target.value)}
+                      placeholder="Defect name (e.g. Broken Zipper)..."
+                      className="sm:col-span-1 px-2.5 py-1.5 text-xs bg-white border border-amber-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-amber-500"
+                    />
+                    <select
+                      value={newDefectCategory}
+                      onChange={(e) =>
+                        setNewDefectCategory(e.target.value as ProductionDefectCategory)
+                      }
+                      className="px-2 py-1.5 text-xs bg-white border border-amber-300 rounded-lg text-slate-800"
+                    >
+                      <option value="Sewing">Sewing</option>
+                      <option value="Fabric">Fabric</option>
+                      <option value="Cutting">Cutting</option>
+                      <option value="Finishing">Finishing</option>
+                      <option value="Trims">Trims</option>
+                      <option value="Packaging">Packaging</option>
+                    </select>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={newDefectSeverity}
+                        onChange={(e) =>
+                          setNewDefectSeverity(e.target.value as ProductionDefectSeverity)
+                        }
+                        className="flex-1 px-2 py-1.5 text-xs bg-white border border-amber-300 rounded-lg text-slate-800"
+                      >
+                        <option value="MINOR">Minor</option>
+                        <option value="MAJOR">Major</option>
+                        <option value="CRITICAL">Critical</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleCreateInlineDefect}
+                        className="px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Add & Log
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic Defect Cards Grid */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                  <span>Defects Catalog ({modalFilteredDefects.length})</span>
+                  <span className="text-[10px] text-slate-400">Tap +1 or +5 to increment count</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {modalFilteredDefects.map((def) => {
                     const existingCount =
                       hourlyReports[activeDefectModalHourIndex]?.defectBreakdown?.find(
-                        (d) => d.defectType === defect
+                        (d) => d.defectType === def.name
                       )?.count || 0;
 
                     return (
                       <div
-                        key={defect}
+                        key={def.id || def.name}
                         className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${
                           existingCount > 0
-                            ? 'bg-rose-50 border-rose-200 text-rose-900'
-                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
+                            ? 'bg-rose-50/80 border-rose-200 text-rose-950 font-medium'
+                            : 'bg-slate-50/80 hover:bg-slate-100 border-slate-200 text-slate-800'
                         }`}
                       >
-                        <span className="truncate max-w-[120px]" title={defect}>
-                          {defect}
-                        </span>
-                        <div className="flex items-center gap-1">
+                        <div className="min-w-0 pr-2">
+                          <div className="font-bold truncate" title={def.name}>
+                            {def.name}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[9px] font-mono font-bold text-slate-400">
+                              {def.code}
+                            </span>
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-white/80 border border-slate-200 text-slate-600">
+                              {def.category}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
                           {existingCount > 0 && (
                             <button
                               type="button"
                               onClick={() =>
-                                handleAddDefectToHour(activeDefectModalHourIndex, defect, -1)
+                                handleAddDefectToHour(activeDefectModalHourIndex, def.name, -1)
                               }
-                              className="w-5 h-5 rounded-md bg-rose-200 hover:bg-rose-300 text-rose-800 flex items-center justify-center font-bold text-xs"
+                              className="w-6 h-6 rounded-md bg-rose-200 hover:bg-rose-300 text-rose-800 flex items-center justify-center font-bold text-xs cursor-pointer"
+                              title="Decrease count by 1"
                             >
                               -
                             </button>
                           )}
-                          <span className="w-5 text-center font-mono font-bold text-xs">
+                          <span
+                            className={`w-7 text-center font-mono font-bold text-xs ${
+                              existingCount > 0 ? 'text-rose-900 font-black' : 'text-slate-400'
+                            }`}
+                          >
                             {existingCount}
                           </span>
                           <button
                             type="button"
                             onClick={() =>
-                              handleAddDefectToHour(activeDefectModalHourIndex, defect, 1)
+                              handleAddDefectToHour(activeDefectModalHourIndex, def.name, 1)
                             }
-                            className="w-5 h-5 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center font-bold text-xs"
+                            className="px-2 h-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center font-bold text-xs cursor-pointer"
+                            title="Add 1 defect"
                           >
-                            +
+                            +1
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleAddDefectToHour(activeDefectModalHourIndex, def.name, 5)
+                            }
+                            className="px-1.5 h-6 rounded-md bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center font-bold text-[10px] cursor-pointer"
+                            title="Add 5 defects in bulk"
+                          >
+                            +5
                           </button>
                         </div>
                       </div>
@@ -1793,15 +2124,15 @@ export function AddProductionRecordPage({
               </div>
 
               {/* Current Hour Summary Box */}
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1 font-mono">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1 font-mono">
                 <div className="flex justify-between text-slate-600">
-                  <span>Checked:</span>
+                  <span>Checked Pieces:</span>
                   <span className="font-bold text-slate-900">
                     {hourlyReports[activeDefectModalHourIndex]?.checkedQty || 0} pcs
                   </span>
                 </div>
                 <div className="flex justify-between text-rose-600">
-                  <span>Total Defects:</span>
+                  <span>Total Repairable Defects:</span>
                   <span className="font-bold">
                     {hourlyReports[activeDefectModalHourIndex]?.defectQty || 0} pcs
                   </span>
@@ -1815,7 +2146,8 @@ export function AddProductionRecordPage({
                 <div className="flex justify-between text-blue-700 font-bold pt-1 border-t border-slate-200">
                   <span>Auto-DHU% / Auto-RFT%:</span>
                   <span>
-                    {hourlyReports[activeDefectModalHourIndex]?.defectRate || 0}% DHU / {hourlyReports[activeDefectModalHourIndex]?.rftRate || 100}% RFT
+                    {hourlyReports[activeDefectModalHourIndex]?.defectRate || 0}% DHU /{' '}
+                    {hourlyReports[activeDefectModalHourIndex]?.rftRate || 100}% RFT
                   </span>
                 </div>
               </div>
@@ -1824,7 +2156,10 @@ export function AddProductionRecordPage({
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
               <button
                 type="button"
-                onClick={() => setActiveDefectModalHourIndex(null)}
+                onClick={() => {
+                  setActiveDefectModalHourIndex(null);
+                  setIsAddingNewDefectInline(false);
+                }}
                 className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-sm"
               >
                 Done / Apply

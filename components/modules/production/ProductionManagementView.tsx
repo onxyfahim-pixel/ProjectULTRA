@@ -25,6 +25,9 @@ import {
   ProductionUnit,
   ProductionSection,
   ProductionLine,
+  ProductionDefectItem,
+  ProductionDefectCategory,
+  ProductionDefectSeverity,
 } from '@/lib/types/production-management';
 import {
   getProductionUnits,
@@ -34,6 +37,15 @@ import {
   getProductionLines,
   saveProductionLines,
 } from '@/lib/db/production-management-store';
+import {
+  getProductionDefects,
+  saveProductionDefects,
+  addProductionDefect,
+  updateProductionDefect,
+  deleteProductionDefect,
+  toggleCommonProductionDefect,
+  resetProductionDefectsToDefault,
+} from '@/lib/db/production-defects-store';
 
 interface ProductionManagementViewProps {
   showToast: (msg: string) => void;
@@ -43,15 +55,22 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
   const [units, setUnits] = useState<ProductionUnit[]>([]);
   const [sections, setSections] = useState<ProductionSection[]>([]);
   const [lines, setLines] = useState<ProductionLine[]>([]);
+  const [defects, setDefects] = useState<ProductionDefectItem[]>([]);
 
-  // Sub-tab view: 'lines' | 'units' | 'sections'
-  const [activeSubTab, setActiveSubTab] = useState<'lines' | 'units' | 'sections'>('lines');
+  // Sub-tab view: 'lines' | 'units' | 'sections' | 'defects'
+  const [activeSubTab, setActiveSubTab] = useState<'lines' | 'units' | 'sections' | 'defects'>('lines');
 
   // Filters for Lines tab
   const [searchQuery, setSearchQuery] = useState('');
   const [unitFilter, setUnitFilter] = useState('ALL');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  // Filters for Defects tab
+  const [defectSearch, setDefectSearch] = useState('');
+  const [defectCategoryFilter, setDefectCategoryFilter] = useState<string>('ALL');
+  const [defectSeverityFilter, setDefectSeverityFilter] = useState<string>('ALL');
+  const [defectCommonFilter, setDefectCommonFilter] = useState<'ALL' | 'COMMON' | 'REGULAR'>('ALL');
 
   // Modals state
   const [isLineModalOpen, setIsLineModalOpen] = useState(false);
@@ -63,9 +82,12 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
   const [editingSection, setEditingSection] = useState<ProductionSection | null>(null);
 
+  const [isDefectModalOpen, setIsDefectModalOpen] = useState(false);
+  const [editingDefect, setEditingDefect] = useState<ProductionDefectItem | null>(null);
+
   // Delete modal state
   const [itemToDelete, setItemToDelete] = useState<{
-    type: 'line' | 'unit' | 'section';
+    type: 'line' | 'unit' | 'section' | 'defect';
     id: string;
     title: string;
   } | null>(null);
@@ -75,6 +97,7 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
     setUnits(getProductionUnits());
     setSections(getProductionSections());
     setLines(getProductionLines());
+    setDefects(getProductionDefects());
   };
 
   useEffect(() => {
@@ -82,7 +105,11 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
 
     const handleUpdate = () => refreshData();
     window.addEventListener('erp_production_management_updated', handleUpdate);
-    return () => window.removeEventListener('erp_production_management_updated', handleUpdate);
+    window.addEventListener('erp_production_defects_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('erp_production_management_updated', handleUpdate);
+      window.removeEventListener('erp_production_defects_updated', handleUpdate);
+    };
   }, []);
 
   // Filtered Lines
@@ -206,6 +233,53 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
     setEditingSection(null);
   };
 
+  // Handle Save Defect
+  const handleSaveDefect = (defectData: Partial<ProductionDefectItem>) => {
+    if (editingDefect) {
+      const updated = updateProductionDefect(editingDefect.id, defectData);
+      setDefects(updated);
+      showToast(`Updated defect: ${defectData.name || editingDefect.name}`);
+    } else {
+      const newDef = addProductionDefect({
+        name: defectData.name || 'New Defect',
+        code: defectData.code,
+        category: (defectData.category as ProductionDefectCategory) || 'Sewing',
+        severity: defectData.severity || 'MAJOR',
+        isCommon: defectData.isCommon ?? true,
+        description: defectData.description || '',
+      });
+      setDefects(getProductionDefects());
+      showToast(`Added defect: ${newDef.name} (${newDef.category})`);
+    }
+    setIsDefectModalOpen(false);
+    setEditingDefect(null);
+  };
+
+  // Quick toggle common tap-palette state
+  const handleToggleCommon = (id: string, name: string) => {
+    const updated = toggleCommonProductionDefect(id);
+    setDefects(updated);
+    const item = updated.find((d) => d.id === id);
+    showToast(
+      item?.isCommon
+        ? `Added "${name}" to Quick Tap Palette`
+        : `Removed "${name}" from Quick Tap Palette`
+    );
+  };
+
+  // Reset to default standard defects
+  const handleResetDefects = () => {
+    if (
+      window.confirm(
+        'Reset common QC defect list to factory garment defaults? Custom entries will be restored to the 19 standard defects.'
+      )
+    ) {
+      const reset = resetProductionDefectsToDefault();
+      setDefects(reset);
+      showToast('Reset defect list to factory defaults (19 standard defects)');
+    }
+  };
+
   // Confirm Delete
   const handleConfirmDelete = () => {
     if (!itemToDelete) return;
@@ -224,6 +298,10 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
       saveProductionSections(updated);
       setSections(updated);
       showToast(`Deleted section ${itemToDelete.title}`);
+    } else if (itemToDelete.type === 'defect') {
+      const updated = deleteProductionDefect(itemToDelete.id);
+      setDefects(updated);
+      showToast(`Deleted defect ${itemToDelete.title}`);
     }
     setItemToDelete(null);
   };
@@ -309,10 +387,33 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
             <Building2 className="w-3.5 h-3.5" />
             <span>Units / Plants ({units.length})</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('defects')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeSubTab === 'defects'
+                ? 'bg-white text-blue-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Common Defects & QC Palette ({defects.length})</span>
+          </button>
         </div>
 
         {/* Global Add Actions */}
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setEditingDefect(null);
+              setIsDefectModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5 text-amber-700" />
+            <span>Add Defect</span>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -738,6 +839,246 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
       )}
 
       {/* ------------------------------------------------------------- */}
+      {/* VIEW 4: COMMON DEFECTS & QC PALETTE MANAGEMENT               */}
+      {/* ------------------------------------------------------------- */}
+      {activeSubTab === 'defects' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs space-y-4 p-5">
+          {/* Defect Quick Stat Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+            <div>
+              <div className="text-[10px] uppercase font-bold text-slate-400">Total Defect Master</div>
+              <div className="text-base font-black font-mono text-slate-800 mt-0.5">{defects.length} cataloged</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase font-bold text-amber-700">Quick Tap-to-Add Active</div>
+              <div className="text-base font-black font-mono text-amber-900 mt-0.5">
+                {defects.filter((d) => d.isCommon).length} in tap palette
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase font-bold text-indigo-700">Sewing Section Defects</div>
+              <div className="text-base font-black font-mono text-indigo-900 mt-0.5">
+                {defects.filter((d) => d.category === 'Sewing').length} standard
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase font-bold text-rose-700">Critical / Major Severity</div>
+              <div className="text-base font-black font-mono text-rose-900 mt-0.5">
+                {defects.filter((d) => d.severity === 'CRITICAL' || d.severity === 'MAJOR').length} high risk
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex flex-wrap items-center gap-2.5 flex-1 max-w-2xl">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={defectSearch}
+                  onChange={(e) => setDefectSearch(e.target.value)}
+                  placeholder="Search defect by name, code (e.g. DEF-SEW-01), description..."
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Category Filter */}
+              <select
+                value={defectCategoryFilter}
+                onChange={(e) => setDefectCategoryFilter(e.target.value)}
+                className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="ALL">All Categories</option>
+                <option value="Sewing">Sewing</option>
+                <option value="Fabric">Fabric</option>
+                <option value="Cutting">Cutting</option>
+                <option value="Finishing">Finishing</option>
+                <option value="Trims">Trims</option>
+                <option value="Packaging">Packaging</option>
+              </select>
+
+              {/* Severity Filter */}
+              <select
+                value={defectSeverityFilter}
+                onChange={(e) => setDefectSeverityFilter(e.target.value)}
+                className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="ALL">All Severities</option>
+                <option value="MINOR">Minor</option>
+                <option value="MAJOR">Major</option>
+                <option value="CRITICAL">Critical</option>
+              </select>
+
+              {/* Common Quick-Tap Filter */}
+              <select
+                value={defectCommonFilter}
+                onChange={(e) => setDefectCommonFilter(e.target.value as any)}
+                className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="ALL">All Defects</option>
+                <option value="COMMON">Only Quick-Tap Palette</option>
+                <option value="REGULAR">Regular Catalog Only</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleResetDefects}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                title="Restore default factory defects (19 standard garment defects)"
+              >
+                <span>Reset Defaults</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingDefect(null);
+                  setIsDefectModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Defect</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Defects Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">
+                  <th className="py-3 px-3">Defect Name & Code</th>
+                  <th className="py-3 px-3">Category</th>
+                  <th className="py-3 px-3">Severity</th>
+                  <th className="py-3 px-3">Quick-Tap Status (Entry Form)</th>
+                  <th className="py-3 px-3">Description / Quality Standard</th>
+                  <th className="py-3 px-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {defects
+                  .filter((d) => {
+                    const q = defectSearch.toLowerCase().trim();
+                    const matchesSearch =
+                      !q ||
+                      d.name.toLowerCase().includes(q) ||
+                      d.code.toLowerCase().includes(q) ||
+                      (d.description || '').toLowerCase().includes(q);
+                    const matchesCat =
+                      defectCategoryFilter === 'ALL' || d.category === defectCategoryFilter;
+                    const matchesSev =
+                      defectSeverityFilter === 'ALL' || d.severity === defectSeverityFilter;
+                    const matchesCom =
+                      defectCommonFilter === 'ALL' ||
+                      (defectCommonFilter === 'COMMON' ? d.isCommon : !d.isCommon);
+                    return matchesSearch && matchesCat && matchesSev && matchesCom;
+                  })
+                  .map((def) => {
+                    const categoryColors: Record<string, string> = {
+                      Sewing: 'bg-purple-50 text-purple-700 border-purple-200',
+                      Fabric: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+                      Cutting: 'bg-amber-50 text-amber-700 border-amber-200',
+                      Finishing: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                      Trims: 'bg-pink-50 text-pink-700 border-pink-200',
+                      Packaging: 'bg-slate-100 text-slate-700 border-slate-200',
+                    };
+
+                    const severityColors: Record<string, string> = {
+                      MINOR: 'bg-blue-50 text-blue-700 border-blue-200',
+                      MAJOR: 'bg-amber-50 text-amber-800 border-amber-300',
+                      CRITICAL: 'bg-rose-50 text-rose-800 border-rose-300',
+                    };
+
+                    return (
+                      <tr key={def.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-slate-900">{def.name}</div>
+                          <div className="font-mono text-[10px] text-slate-400">{def.code}</div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-md font-bold text-[10px] border ${
+                              categoryColors[def.category] || 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {def.category}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-md font-bold text-[10px] border ${
+                              severityColors[def.severity] || 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {def.severity}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCommon(def.id, def.name)}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer border ${
+                              def.isCommon
+                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-200'
+                            }`}
+                            title="Click to toggle whether this defect appears in the Quick Tap Palette in Production Entry"
+                          >
+                            <Sparkles
+                              className={`w-3.5 h-3.5 ${
+                                def.isCommon ? 'text-amber-600 fill-amber-500' : 'text-slate-400'
+                              }`}
+                            />
+                            <span>{def.isCommon ? '⚡ In Quick Tap Bar' : 'Off (Click to Enable)'}</span>
+                          </button>
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="text-slate-600 text-[11px] max-w-xs truncate" title={def.description}>
+                            {def.description || 'Standard industry inspection defect.'}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingDefect(def);
+                                setIsDefectModalOpen(true);
+                              }}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors"
+                              title="Edit Defect"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setItemToDelete({
+                                  type: 'defect',
+                                  id: def.id,
+                                  title: def.name,
+                                })
+                              }
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                              title="Delete Defect"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* MODAL 1: ADD / EDIT LINE (ASSIGN LINE CHIEF & QUALITY CONTROLLER) */}
       {/* ------------------------------------------------------------- */}
       {isLineModalOpen && (
@@ -778,6 +1119,20 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
           onClose={() => {
             setIsSectionModalOpen(false);
             setEditingSection(null);
+          }}
+        />
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* MODAL 4: ADD / EDIT DEFECT                                    */}
+      {/* ------------------------------------------------------------- */}
+      {isDefectModalOpen && (
+        <DefectModal
+          defect={editingDefect}
+          onSave={handleSaveDefect}
+          onClose={() => {
+            setIsDefectModalOpen(false);
+            setEditingDefect(null);
           }}
         />
       )}
@@ -1361,6 +1716,157 @@ function SectionModal({ section, units, onSave, onClose }: SectionModalProps) {
               className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl"
             >
               Save Section
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------------
+// SUB-MODAL: DEFECT MASTER & QC PALETTE
+// -------------------------------------------------------------------
+interface DefectModalProps {
+  defect: ProductionDefectItem | null;
+  onSave: (data: Partial<ProductionDefectItem>) => void;
+  onClose: () => void;
+}
+
+function DefectModal({ defect, onSave, onClose }: DefectModalProps) {
+  const [name, setName] = useState(defect?.name || '');
+  const [code, setCode] = useState(defect?.code || '');
+  const [category, setCategory] = useState<ProductionDefectCategory>(defect?.category || 'Sewing');
+  const [severity, setSeverity] = useState<ProductionDefectSeverity>(defect?.severity || 'MAJOR');
+  const [isCommon, setIsCommon] = useState<boolean>(defect ? defect.isCommon : true);
+  const [description, setDescription] = useState(defect?.description || '');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSave({
+      name: name.trim(),
+      code: code.trim() || `DEF-${category.substring(0, 3)}-${Math.floor(Math.random() * 900 + 100)}`,
+      category,
+      severity,
+      isCommon,
+      description: description.trim(),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-100">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                {defect ? 'Edit Common Defect' : 'Add New Common Defect'}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Configure defect for line QC inspectors and quick tap bar
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-800">Defect Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Broken Stitch, Oil Stain, Needle Mark..."
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-800">Defect Code</label>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="e.g. DEF-SEW-01"
+                className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-800">Defect Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as ProductionDefectCategory)}
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium"
+              >
+                <option value="Sewing">Sewing</option>
+                <option value="Fabric">Fabric</option>
+                <option value="Cutting">Cutting</option>
+                <option value="Finishing">Finishing</option>
+                <option value="Trims">Trims</option>
+                <option value="Packaging">Packaging</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-800">Severity Level</label>
+              <select
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value as ProductionDefectSeverity)}
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium"
+              >
+                <option value="MINOR">Minor (Minor cosmetic alteration)</option>
+                <option value="MAJOR">Major (Standard rework / stitch defect)</option>
+                <option value="CRITICAL">Critical (AQL rejection / structural flaw)</option>
+              </select>
+            </div>
+            <div className="space-y-1 flex flex-col justify-end">
+              <label className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50/70 border border-amber-200 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isCommon}
+                  onChange={(e) => setIsCommon(e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                />
+                <span className="font-bold text-amber-950">Show in Quick Tap Bar</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-800">Inspection Standard & Description</label>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Broken or severed stitch loop along seam line exceeding 1 stitch length..."
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer"
+            >
+              Save Defect
             </button>
           </div>
         </form>

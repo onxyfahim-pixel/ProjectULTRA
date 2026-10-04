@@ -51,6 +51,59 @@ export interface LogisticsDetail {
   shippingTerms: 'FOB' | 'CIF' | 'DDP' | 'CFR' | 'EXW';
 }
 
+export interface BuyerOrderWIPRecord {
+  // 1. Cutting Planned
+  cuttingPlanned: number;
+  // 2. Cutting Actual (Auto-synced from cutting floor records)
+  cuttingActual: number;
+  // 3. Sewing Input (Sewing line input)
+  sewingInput: number;
+  // 4. Sewing Complete Quantity (Auto-synced from production sewing records)
+  sewingComplete: number;
+  // 5. Wash Sent & Wash Received (Toggle if style requires garment wash)
+  washApplicable: boolean;
+  washSent: number;
+  washReceived: number;
+  // 6. Finishing Quantity (Auto-synced from finishing floor records)
+  finishingQuantity: number;
+  // 7. Packed Quantity
+  packedQuantity: number;
+  // 8. Inspection Completed Quantity (Auto-synced from Final Inspection records)
+  inspectionCompletedQuantity: number;
+  // 9. Shipped Quantity
+  shippedQuantity: number;
+
+  // Metadata & Auto Sync Indicators
+  autoSyncFlags?: {
+    cutting: boolean;
+    sewing: boolean;
+    finishing: boolean;
+    inspection: boolean;
+  };
+  manualOverrides?: {
+    cutting?: boolean;
+    sewing?: boolean;
+    finishing?: boolean;
+    inspection?: boolean;
+  };
+  syncSources?: {
+    cutting?: string;
+    sewing?: string;
+    finishing?: string;
+    inspection?: string;
+  };
+  stageNotes?: {
+    cutting?: string;
+    sewing?: string;
+    wash?: string;
+    finishing?: string;
+    packing?: string;
+    inspection?: string;
+    shipping?: string;
+  };
+  lastSyncedAt?: string;
+}
+
 export interface BuyerOrder {
   id: string;
   orderNumber: string;
@@ -78,6 +131,7 @@ export interface BuyerOrder {
     stages: ProductionStageDetail[];
     overallProgressPercent: number;
   };
+  wipRecord?: BuyerOrderWIPRecord;
   bomItems?: BOMItem[];
   logistics?: LogisticsDetail;
 }

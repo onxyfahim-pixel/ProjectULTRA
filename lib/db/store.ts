@@ -7,11 +7,15 @@ import {
   RealTimeEvent,
   UserSession,
 } from '../types/erp';
+import { BuyerOrder } from '../types/modules';
 import { CentralStorageManager, CentralErpData } from './central-storage';
 import { mysqlManager } from './mysql-client';
+import { MOCK_BUYER_ORDERS } from './modules-mock-data';
 
 // Persistent repository backed by Host MySQL Database with Local JSON Fallback & Dual-Sync
 class ErpDataStore {
+  private buyerOrders: BuyerOrder[] = [];
+  private productionRecords: ProductionOrder[] = [];
   private inventory: InventoryItem[] = [];
   private inspections: InspectionRecord[] = [];
   private productionOrders: ProductionOrder[] = [];
@@ -35,8 +39,34 @@ class ErpDataStore {
     this.productionOrders = central.productionOrders || [];
     this.auditLogs = central.auditLogs || [];
     this.modulesData = central.modulesData || {};
+
+    // Buyer orders from modulesData or mock fallback (with productionTracking and WIP record backfill)
+    if (this.modulesData.buyer_orders && Array.isArray(this.modulesData.buyer_orders) && this.modulesData.buyer_orders.length > 0) {
+      this.buyerOrders = this.modulesData.buyer_orders.map((bo: BuyerOrder) => {
+        const mockMatch = MOCK_BUYER_ORDERS.find((m) => m.orderNumber === bo.orderNumber || m.id === bo.id);
+        if (mockMatch) {
+          return {
+            ...bo,
+            productionTracking: bo.productionTracking || mockMatch.productionTracking,
+            wipRecord:
+              bo.wipRecord && Object.keys(bo.wipRecord).length > 2 && (bo.wipRecord.cuttingActual || bo.wipRecord.sewingComplete)
+                ? bo.wipRecord
+                : mockMatch.wipRecord,
+          };
+        }
+        return bo;
+      });
+    } else {
+      this.buyerOrders = [...MOCK_BUYER_ORDERS];
+    }
+
+    // Production floor records
+    if (this.modulesData.production_records && Array.isArray(this.modulesData.production_records)) {
+      this.productionRecords = this.modulesData.production_records;
+    }
+
     console.log(
-      `[ERP Host Central] Loaded ${this.inventory.length} inventory items, ${this.inspections.length} inspections from disk cache.`
+      `[ERP Host Central] Loaded ${this.buyerOrders.length} buyer orders, ${this.inventory.length} inventory items, ${this.inspections.length} inspections from disk cache.`
     );
   }
 
@@ -51,6 +81,8 @@ class ErpDataStore {
       if (connected) {
         // Seed MySQL if it's a fresh database
         await mysqlManager.seedIfEmpty({
+          buyerOrders: this.buyerOrders,
+          productionRecords: this.productionRecords,
           inventory: this.inventory,
           inspections: this.inspections,
           productionOrders: this.productionOrders,
@@ -58,15 +90,26 @@ class ErpDataStore {
           modulesData: this.modulesData,
         });
 
-        // Load latest state from MySQL
-        const [mysqlInv, mysqlInsp, mysqlPo, mysqlAudit, mysqlModules] = await Promise.all([
-          mysqlManager.loadInventory(),
-          mysqlManager.loadInspections(),
-          mysqlManager.loadProductionOrders(),
-          mysqlManager.loadAuditLogs(),
-          mysqlManager.loadAllModulesData(),
-        ]);
+        // Load latest state from MySQL relational tables
+        const [mysqlOrders, mysqlRecords, mysqlInv, mysqlInsp, mysqlPo, mysqlAudit, mysqlModules] =
+          await Promise.all([
+            mysqlManager.loadBuyerOrders(),
+            mysqlManager.loadProductionRecords(),
+            mysqlManager.loadInventory(),
+            mysqlManager.loadInspections(),
+            mysqlManager.loadProductionOrders(),
+            mysqlManager.loadAuditLogs(),
+            mysqlManager.loadAllModulesData(),
+          ]);
 
+        if (mysqlOrders.length > 0) {
+          this.buyerOrders = mysqlOrders;
+          this.modulesData.buyer_orders = mysqlOrders;
+        }
+        if (mysqlRecords.length > 0) {
+          this.productionRecords = mysqlRecords;
+          this.modulesData.production_records = mysqlRecords;
+        }
         if (mysqlInv.length > 0) this.inventory = mysqlInv;
         if (mysqlInsp.length > 0) this.inspections = mysqlInsp;
         if (mysqlPo.length > 0) this.productionOrders = mysqlPo;
@@ -88,6 +131,9 @@ class ErpDataStore {
   }
 
   private persistToDisk(): void {
+    this.modulesData.buyer_orders = this.buyerOrders;
+    this.modulesData.production_records = this.productionRecords;
+
     CentralStorageManager.saveCentralData({
       version: 2,
       lastSavedAt: new Date().toISOString(),
@@ -123,6 +169,134 @@ class ErpDataStore {
         console.error('Error in event listener:', err);
       }
     });
+  }
+
+  // --- Buyer Orders (With WIP Record) ---
+  public getBuyerOrders(): BuyerOrder[] {
+    return this.buyerOrders.map((bo) => {
+      if (
+        !bo.wipRecord ||
+        Object.keys(bo.wipRecord).length <= 2 ||
+        (!bo.wipRecord.cuttingActual && !bo.wipRecord.sewingComplete && !bo.wipRecord.packedQuantity)
+      ) {
+        const mockMatch = MOCK_BUYER_ORDERS.find((m) => m.orderNumber === bo.orderNumber || m.id === bo.id);
+        if (mockMatch && mockMatch.wipRecord) {
+          return {
+            ...bo,
+            productionTracking: bo.productionTracking || mockMatch.productionTracking,
+            wipRecord: mockMatch.wipRecord,
+          };
+        }
+      }
+      return bo;
+    });
+  }
+
+  public getBuyerOrder(idOrPo: string): BuyerOrder | undefined {
+    const clean = (idOrPo || '').trim().toLowerCase();
+    return this.buyerOrders.find(
+      (o) => o.id === idOrPo || o.orderNumber.toLowerCase() === clean
+    );
+  }
+
+  public upsertBuyerOrder(order: BuyerOrder, user?: UserSession): BuyerOrder {
+    const index = this.buyerOrders.findIndex(
+      (o) => o.id === order.id || o.orderNumber.toLowerCase() === (order.orderNumber || '').trim().toLowerCase()
+    );
+
+    let savedOrder: BuyerOrder;
+    if (index >= 0) {
+      savedOrder = {
+        ...this.buyerOrders[index],
+        ...order,
+      };
+      this.buyerOrders[index] = savedOrder;
+    } else {
+      savedOrder = {
+        ...order,
+        id: order.id || `bo-${Date.now().toString().slice(-5)}`,
+      };
+      this.buyerOrders.unshift(savedOrder);
+    }
+
+    this.persistToDisk();
+
+    // Commit to MySQL asynchronously
+    mysqlManager.upsertBuyerOrder(savedOrder).catch((err) => {
+      console.error('[MySQL Error] Failed upserting buyer order to MySQL:', err);
+    });
+
+    if (user) {
+      this.addAuditLog({
+        action: index >= 0 ? 'UPDATE_BUYER_ORDER' : 'CREATE_BUYER_ORDER',
+        entity: 'BuyerOrder',
+        entityId: savedOrder.id,
+        performedBy: user.name,
+        userRole: user.role,
+        details: `${index >= 0 ? 'Updated' : 'Created'} PO ${savedOrder.orderNumber} (${savedOrder.buyerName} - ${savedOrder.styleNumber}) with WIP Tracking`,
+      });
+    }
+
+    this.broadcast({
+      type: 'WAREHOUSE_ACTIVITY',
+      message: `Buyer Order ${savedOrder.orderNumber} updated with WIP record`,
+      user: user?.name || 'System',
+      location: 'Buyer & Order',
+      timestamp: new Date().toISOString(),
+    });
+
+    return savedOrder;
+  }
+
+  public deleteBuyerOrder(id: string, user?: UserSession): boolean {
+    const index = this.buyerOrders.findIndex((o) => o.id === id || o.orderNumber === id);
+    if (index === -1) return false;
+
+    const removed = this.buyerOrders[index];
+    this.buyerOrders.splice(index, 1);
+    this.persistToDisk();
+
+    mysqlManager.deleteBuyerOrder(removed.id).catch((err) => {
+      console.error('[MySQL Error] Failed deleting buyer order from MySQL:', err);
+    });
+
+    if (user) {
+      this.addAuditLog({
+        action: 'DELETE_BUYER_ORDER',
+        entity: 'BuyerOrder',
+        entityId: removed.id,
+        performedBy: user.name,
+        userRole: user.role,
+        details: `Deleted PO ${removed.orderNumber} (${removed.buyerName})`,
+      });
+    }
+
+    return true;
+  }
+
+  // --- Production Records (Floor Output) ---
+  public getProductionRecords(): ProductionOrder[] {
+    return [...this.productionRecords];
+  }
+
+  public upsertProductionRecord(record: ProductionOrder, user?: UserSession): ProductionOrder {
+    const index = this.productionRecords.findIndex((r) => r.id === record.id);
+    let saved: ProductionOrder;
+    if (index >= 0) {
+      saved = { ...this.productionRecords[index], ...record };
+      this.productionRecords[index] = saved;
+    } else {
+      saved = { ...record, id: record.id || `pr-${Date.now().toString().slice(-5)}` };
+      this.productionRecords.unshift(saved);
+    }
+
+    this.persistToDisk();
+
+    mysqlManager.upsertProductionRecord(saved).catch((err) => {
+      console.error('[MySQL Error] Failed upserting production record:', err);
+    });
+
+    return saved;
   }
 
   // --- Inventory Operations ---
@@ -333,6 +507,10 @@ class ErpDataStore {
     this.inspections[index] = updated;
     this.persistToDisk();
 
+    mysqlManager.insertInspection(updated).catch((err) => {
+      console.error('[MySQL Error] Failed updating inspection in MySQL:', err);
+    });
+
     this.addAuditLog({
       action: 'UPDATE_INSPECTION',
       entity: 'InspectionRecord',
@@ -394,6 +572,13 @@ class ErpDataStore {
 
   public saveModuleData<T>(moduleKey: string, data: T, user?: UserSession): T {
     this.modulesData[moduleKey] = data;
+
+    if (moduleKey === 'buyer_orders' && Array.isArray(data)) {
+      this.buyerOrders = data as BuyerOrder[];
+    } else if (moduleKey === 'production_records' && Array.isArray(data)) {
+      this.productionRecords = data as ProductionOrder[];
+    }
+
     this.persistToDisk();
 
     // Async commit to MySQL module_store
@@ -472,6 +657,7 @@ class ErpDataStore {
       avgDefectRate,
       inspectionCount: this.inspections.length,
       itemCount: this.inventory.length,
+      buyerOrdersCount: this.buyerOrders.length,
       databaseEngine: this.isMysqlActive() ? 'MySQL Server 8.0+ (Host PC Database)' : 'Local JSON Store (Offline Fallback)',
       isMysqlConnected: this.isMysqlActive(),
       storageFile: this.getStorageFilePath(),
@@ -482,7 +668,8 @@ class ErpDataStore {
 
 // Global persistent instance in Node runtime
 const globalForErp = globalThis as unknown as { erpStore?: ErpDataStore };
-export const erpStore = globalForErp.erpStore ?? new ErpDataStore();
-if (process.env.NODE_ENV !== 'production') {
-  globalForErp.erpStore = erpStore;
+if (!globalForErp.erpStore || !(globalForErp.erpStore as any).getBuyerOrders) {
+  globalForErp.erpStore = new ErpDataStore();
 }
+export const erpStore = globalForErp.erpStore;
+

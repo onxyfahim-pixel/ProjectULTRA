@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:server": "tsx server.ts",
+    "dev:server": "tsx --no-deprecation server.ts",
     "db:migrate-mysql": "tsx scripts/migrate-store-to-mysql.ts",
     "build": "next build",
     "start": "next start",
@@ -22,6 +22,7 @@
     "clsx": "^2.1.1",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
+    "html2pdf.js": "^0.14.0",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.553.0",
     "motion": "^12.23.24",

@@ -57,5 +57,6 @@ echo.
 echo Starting Garments QMS ERP Central Server on 0.0.0.0:3000...
 echo.
 
+set NODE_OPTIONS=--no-deprecation
 npm.cmd run dev:server
 pause

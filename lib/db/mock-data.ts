@@ -1108,6 +1108,16 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     qualityInspector: 'Nasrin Akter (Inline Quality Inspector)',
     remarks: 'Kangaroo pocket alignment jig in use. Critical metal detection 100% passed.',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
+    hourlyReports: [
+      { id: 'hr-301', hourSlot: '08:00 - 09:00', targetQty: 180, checkedQty: 175, passedQty: 175, defectQty: 3, rejectQty: 0, defectRate: 1.71, topDefect: 'Puckering', operatorId: 'Station 02', remarks: 'Seam tension calibrated' },
+      { id: 'hr-302', hourSlot: '09:00 - 10:00', targetQty: 200, checkedQty: 198, passedQty: 198, defectQty: 2, rejectQty: 0, defectRate: 1.01, topDefect: 'Skip Stitch', operatorId: 'Station 09', remarks: 'Good pacing maintained' },
+      { id: 'hr-303', hourSlot: '10:00 - 11:00', targetQty: 200, checkedQty: 202, passedQty: 201, defectQty: 3, rejectQty: 1, defectRate: 1.49, topDefect: 'Needle Mark', operatorId: 'Station 04', remarks: '1 needle puncture scrap reject' },
+      { id: 'hr-304', hourSlot: '11:00 - 12:00', targetQty: 200, checkedQty: 195, passedQty: 195, defectQty: 2, rejectQty: 0, defectRate: 1.03, topDefect: 'Open Seam', operatorId: 'Station 14', remarks: 'Rework cleared immediately' },
+      { id: 'hr-305', hourSlot: '12:00 - 13:00', targetQty: 200, checkedQty: 200, passedQty: 200, defectQty: 3, rejectQty: 0, defectRate: 1.50, topDefect: 'Oil Stain', operatorId: 'Station 21', remarks: 'Cleaned with solvent' },
+      { id: 'hr-306', hourSlot: '14:00 - 15:00', targetQty: 200, checkedQty: 196, passedQty: 196, defectQty: 4, rejectQty: 0, defectRate: 2.04, topDefect: 'Uneven Hem', operatorId: 'Station 17', remarks: 'Hem gauge adjusted' },
+      { id: 'hr-307', hourSlot: '15:00 - 16:00', targetQty: 200, checkedQty: 204, passedQty: 204, defectQty: 2, rejectQty: 0, defectRate: 0.98, topDefect: 'Broken Stitch', operatorId: 'Station 08', remarks: 'Thread spool replaced' },
+      { id: 'hr-308', hourSlot: '16:00 - 17:00', targetQty: 180, checkedQty: 182, passedQty: 182, defectQty: 2, rejectQty: 0, defectRate: 1.10, topDefect: 'Skip Stitch', operatorId: 'Station 11', remarks: 'Full shift output targets met' },
+    ],
   },
   {
     id: 'po-204',
@@ -1136,6 +1146,16 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     qualityInspector: 'Tariqul Anam (QA In-Charge)',
     remarks: 'All 12,000 pcs inspected and transferred to final finishing carton warehouse.',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
+    hourlyReports: [
+      { id: 'hr-401', hourSlot: '08:00 - 09:00', targetQty: 150, checkedQty: 150, passedQty: 150, defectQty: 1, rejectQty: 0, defectRate: 0.67, topDefect: 'Skip Stitch', operatorId: 'Line 03-A', remarks: 'Balanced start' },
+      { id: 'hr-402', hourSlot: '09:00 - 10:00', targetQty: 160, checkedQty: 162, passedQty: 162, defectQty: 1, rejectQty: 0, defectRate: 0.62, topDefect: 'Open Seam', operatorId: 'Line 03-B', remarks: 'Excellent output' },
+      { id: 'hr-403', hourSlot: '10:00 - 11:00', targetQty: 160, checkedQty: 158, passedQty: 158, defectQty: 2, rejectQty: 0, defectRate: 1.27, topDefect: 'Puckering', operatorId: 'Line 03-C', remarks: 'Ironing guide aligned' },
+      { id: 'hr-404', hourSlot: '11:00 - 12:00', targetQty: 160, checkedQty: 165, passedQty: 165, defectQty: 1, rejectQty: 0, defectRate: 0.61, topDefect: 'Loose Thread', operatorId: 'Line 03-D', remarks: 'High speed maintained' },
+      { id: 'hr-405', hourSlot: '12:00 - 13:00', targetQty: 160, checkedQty: 160, passedQty: 160, defectQty: 1, rejectQty: 0, defectRate: 0.63, topDefect: 'Uneven Hem', operatorId: 'Line 03-E', remarks: 'Trimming station checked' },
+      { id: 'hr-406', hourSlot: '14:00 - 15:00', targetQty: 160, checkedQty: 159, passedQty: 159, defectQty: 2, rejectQty: 0, defectRate: 1.26, topDefect: 'Broken Stitch', operatorId: 'Line 03-F', remarks: 'Needle replaced' },
+      { id: 'hr-407', hourSlot: '15:00 - 16:00', targetQty: 160, checkedQty: 161, passedQty: 161, defectQty: 1, rejectQty: 0, defectRate: 0.62, topDefect: 'Needle Mark', operatorId: 'Line 03-G', remarks: 'Clean pass' },
+      { id: 'hr-408', hourSlot: '16:00 - 17:00', targetQty: 150, checkedQty: 152, passedQty: 152, defectQty: 1, rejectQty: 0, defectRate: 0.66, topDefect: 'Skip Stitch', operatorId: 'Line 03-H', remarks: 'Final batch complete' },
+    ],
   },
   {
     id: 'po-205',
@@ -1161,6 +1181,16 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     supervisorName: 'Mahmudur Rahman (QA Supervisor)',
     remarks: 'Micro-stitch tolerance within +/- 0.5mm. Zero shade deviation observed.',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+    hourlyReports: [
+      { id: 'hr-501', hourSlot: '08:00 - 09:00', targetQty: 240, checkedQty: 238, passedQty: 238, defectQty: 2, rejectQty: 0, defectRate: 0.84, topDefect: 'Raw Edge', operatorId: 'Line 05-A', remarks: 'Feed dog synchronized' },
+      { id: 'hr-502', hourSlot: '09:00 - 10:00', targetQty: 250, checkedQty: 252, passedQty: 252, defectQty: 1, rejectQty: 0, defectRate: 0.40, topDefect: 'Skip Stitch', operatorId: 'Line 05-B', remarks: 'Optimal rhythm' },
+      { id: 'hr-503', hourSlot: '10:00 - 11:00', targetQty: 250, checkedQty: 248, passedQty: 248, defectQty: 2, rejectQty: 0, defectRate: 0.81, topDefect: 'Open Seam', operatorId: 'Line 05-C', remarks: 'Clean seam inspection' },
+      { id: 'hr-504', hourSlot: '11:00 - 12:00', targetQty: 250, checkedQty: 250, passedQty: 250, defectQty: 1, rejectQty: 0, defectRate: 0.40, topDefect: 'Puckering', operatorId: 'Line 05-D', remarks: 'Differential feed verified' },
+      { id: 'hr-505', hourSlot: '12:00 - 13:00', targetQty: 250, checkedQty: 247, passedQty: 247, defectQty: 2, rejectQty: 0, defectRate: 0.81, topDefect: 'Oil Stain', operatorId: 'Line 05-E', remarks: 'Degreased & passed' },
+      { id: 'hr-506', hourSlot: '14:00 - 15:00', targetQty: 250, checkedQty: 254, passedQty: 254, defectQty: 2, rejectQty: 0, defectRate: 0.79, topDefect: 'Broken Stitch', operatorId: 'Line 05-F', remarks: 'High speed run' },
+      { id: 'hr-507', hourSlot: '15:00 - 16:00', targetQty: 250, checkedQty: 249, passedQty: 249, defectQty: 1, rejectQty: 0, defectRate: 0.40, topDefect: 'Uneven Hem', operatorId: 'Line 05-G', remarks: 'Folder attachment checked' },
+      { id: 'hr-508', hourSlot: '16:00 - 17:00', targetQty: 240, checkedQty: 242, passedQty: 242, defectQty: 2, rejectQty: 0, defectRate: 0.83, topDefect: 'Skip Stitch', operatorId: 'Line 05-H', remarks: 'End of shift handover' },
+    ],
   },
   {
     id: 'po-206',
@@ -1186,6 +1216,16 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     supervisorName: 'Jashim Uddin (Finishing Head)',
     remarks: 'Enzyme wash recipe approved by Gap country quality office.',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+    hourlyReports: [
+      { id: 'hr-601', hourSlot: '08:00 - 09:00', targetQty: 120, checkedQty: 118, passedQty: 118, defectQty: 2, rejectQty: 0, defectRate: 1.69, topDefect: 'Pocket Flap Misaligned', operatorId: 'Station 01', remarks: 'Pattern template checked' },
+      { id: 'hr-602', hourSlot: '09:00 - 10:00', targetQty: 130, checkedQty: 129, passedQty: 129, defectQty: 1, rejectQty: 0, defectRate: 0.78, topDefect: 'Skip Stitch', operatorId: 'Station 03', remarks: 'Tension fine' },
+      { id: 'hr-603', hourSlot: '10:00 - 11:00', targetQty: 130, checkedQty: 132, passedQty: 132, defectQty: 2, rejectQty: 0, defectRate: 1.52, topDefect: 'Broken Stitch', operatorId: 'Station 06', remarks: 'Fast run' },
+      { id: 'hr-604', hourSlot: '11:00 - 12:00', targetQty: 130, checkedQty: 127, passedQty: 127, defectQty: 1, rejectQty: 0, defectRate: 0.79, topDefect: 'Raw Edge', operatorId: 'Station 10', remarks: 'Overlock check' },
+      { id: 'hr-605', hourSlot: '12:00 - 13:00', targetQty: 130, checkedQty: 130, passedQty: 130, defectQty: 2, rejectQty: 0, defectRate: 1.54, topDefect: 'Puckering', operatorId: 'Station 12', remarks: 'Steam press tuned' },
+      { id: 'hr-606', hourSlot: '14:00 - 15:00', targetQty: 130, checkedQty: 128, passedQty: 128, defectQty: 2, rejectQty: 0, defectRate: 1.56, topDefect: 'Uneven Hem', operatorId: 'Station 15', remarks: 'Aligned hem guide' },
+      { id: 'hr-607', hourSlot: '15:00 - 16:00', targetQty: 130, checkedQty: 131, passedQty: 131, defectQty: 1, rejectQty: 0, defectRate: 0.76, topDefect: 'Oil Spot', operatorId: 'Station 18', remarks: 'Spot cleaner used' },
+      { id: 'hr-608', hourSlot: '16:00 - 17:00', targetQty: 120, checkedQty: 122, passedQty: 122, defectQty: 1, rejectQty: 0, defectRate: 0.82, topDefect: 'Skip Stitch', operatorId: 'Station 20', remarks: 'Shift target achieved' },
+    ],
   }
 ];
 

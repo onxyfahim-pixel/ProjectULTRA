@@ -38,3 +38,18 @@ export interface ProductionLine {
   remarks?: string;
   createdAt?: string;
 }
+
+export type ProductionDefectCategory = 'Sewing' | 'Fabric' | 'Cutting' | 'Finishing' | 'Trims' | 'Packaging';
+export type ProductionDefectSeverity = 'CRITICAL' | 'MAJOR' | 'MINOR';
+
+export interface ProductionDefectItem {
+  id: string;
+  code: string;
+  name: string;
+  category: ProductionDefectCategory;
+  severity: ProductionDefectSeverity;
+  isCommon: boolean; // Show in quick tap-to-add
+  description?: string;
+  standardReworkTimeSec?: number;
+  department?: string;
+}

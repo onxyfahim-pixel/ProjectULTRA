@@ -44,7 +44,22 @@ export function getProductionRecords(): ProductionOrder[] {
       return INITIAL_PRODUCTION_ORDERS;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_PRODUCTION_ORDERS;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Ensure any legacy records missing hourlyReports get synced from INITIAL_PRODUCTION_ORDERS
+      const hydrated = parsed.map((item: ProductionOrder) => {
+        if (!item.hourlyReports || item.hourlyReports.length === 0) {
+          const mockMatch = INITIAL_PRODUCTION_ORDERS.find(
+            (m) => m.id === item.id || m.orderNumber === item.orderNumber
+          );
+          if (mockMatch?.hourlyReports && mockMatch.hourlyReports.length > 0) {
+            return { ...item, hourlyReports: mockMatch.hourlyReports };
+          }
+        }
+        return item;
+      });
+      return hydrated;
+    }
+    return INITIAL_PRODUCTION_ORDERS;
   } catch {
     return INITIAL_PRODUCTION_ORDERS;
   }
@@ -77,8 +92,11 @@ export interface SewingProductionTrackSummary {
  * Aggregates all uploaded sewing section records for a specific PO
  * Returns the exact Sewing Total Checked Quantity along with QA summary
  */
-export function getSewingProductionTrackForPO(poNumber: string): SewingProductionTrackSummary {
-  if (!poNumber) {
+export function getSewingProductionTrackForPO(
+  poNumber: string,
+  styleNumber?: string
+): SewingProductionTrackSummary {
+  if (!poNumber && !styleNumber) {
     return {
       totalCheckedQty: 0,
       records: [],
@@ -94,16 +112,26 @@ export function getSewingProductionTrackForPO(poNumber: string): SewingProductio
   }
 
   const allRecords = getProductionRecords();
-  const cleanTargetPO = poNumber.trim().toLowerCase();
+  const cleanTargetPO = (poNumber || '').trim().toLowerCase();
+  const cleanTargetStyle = (styleNumber || '').trim().toLowerCase();
 
   const matchingSewingRecords = allRecords.filter((rec) => {
     const recPO = (rec.orderNumber || '').trim().toLowerCase();
-    const isMatchingPO =
-      recPO === cleanTargetPO ||
-      cleanTargetPO.includes(recPO) ||
-      recPO.includes(cleanTargetPO);
+    const recStyle = (rec.styleNumber || rec.styleName || '').trim().toLowerCase();
 
-    return isMatchingPO && isSewingSectionRecord(rec);
+    const isMatchingPO =
+      cleanTargetPO &&
+      (recPO === cleanTargetPO ||
+        cleanTargetPO.includes(recPO) ||
+        recPO.includes(cleanTargetPO));
+
+    const isMatchingStyle =
+      cleanTargetStyle &&
+      (recStyle === cleanTargetStyle ||
+        cleanTargetStyle.includes(recStyle) ||
+        recStyle.includes(cleanTargetStyle));
+
+    return (isMatchingPO || isMatchingStyle) && isSewingSectionRecord(rec);
   });
 
   const totalCheckedQty = matchingSewingRecords.reduce((sum, rec) => {
