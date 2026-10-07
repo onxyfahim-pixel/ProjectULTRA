@@ -275,7 +275,13 @@ export function saveProductionUnits(units: ProductionUnit[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEYS.UNITS, JSON.stringify(units));
+    localStorage.setItem('erp_module_production_units', JSON.stringify(units));
     notifyManagementUpdate();
+    fetch('/api/modules/production_units', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: units }),
+    }).catch(() => {});
   } catch (err) {
     console.error('Failed to save production units to localStorage', err);
   }
@@ -287,7 +293,7 @@ export function saveProductionUnits(units: ProductionUnit[]): void {
 export function getProductionSections(): ProductionSection[] {
   if (typeof window === 'undefined') return INITIAL_PRODUCTION_SECTIONS;
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SECTIONS);
+    const raw = localStorage.getItem('erp_module_production_sections') || localStorage.getItem(STORAGE_KEYS.SECTIONS);
     if (!raw) {
       localStorage.setItem(STORAGE_KEYS.SECTIONS, JSON.stringify(INITIAL_PRODUCTION_SECTIONS));
       return INITIAL_PRODUCTION_SECTIONS;
@@ -303,7 +309,13 @@ export function saveProductionSections(sections: ProductionSection[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEYS.SECTIONS, JSON.stringify(sections));
+    localStorage.setItem('erp_module_production_sections', JSON.stringify(sections));
     notifyManagementUpdate();
+    fetch('/api/modules/production_sections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: sections }),
+    }).catch(() => {});
   } catch (err) {
     console.error('Failed to save production sections to localStorage', err);
   }
@@ -315,7 +327,7 @@ export function saveProductionSections(sections: ProductionSection[]): void {
 export function getProductionLines(): ProductionLine[] {
   if (typeof window === 'undefined') return INITIAL_PRODUCTION_LINES;
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.LINES);
+    const raw = localStorage.getItem('erp_module_production_lines') || localStorage.getItem(STORAGE_KEYS.LINES);
     if (!raw) {
       localStorage.setItem(STORAGE_KEYS.LINES, JSON.stringify(INITIAL_PRODUCTION_LINES));
       return INITIAL_PRODUCTION_LINES;
@@ -331,7 +343,13 @@ export function saveProductionLines(lines: ProductionLine[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEYS.LINES, JSON.stringify(lines));
+    localStorage.setItem('erp_module_production_lines', JSON.stringify(lines));
     notifyManagementUpdate();
+    fetch('/api/modules/production_lines', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: lines }),
+    }).catch(() => {});
   } catch (err) {
     console.error('Failed to save production lines to localStorage', err);
   }

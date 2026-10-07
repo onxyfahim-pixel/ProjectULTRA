@@ -35,6 +35,7 @@ interface OperationBulletinTabProps {
   onSelectBulletin: (id: string) => void;
   onUpdateBulletin: (updated: StyleOperationBulletin) => void;
   onDuplicateBulletin: (b: StyleOperationBulletin) => void;
+  onAddNewBulletin?: (newBulletin: StyleOperationBulletin) => void;
   onAddOperationToBulletin: (bulletinId: string, op: OperationBulletinItem) => void;
   onDeleteOperationFromBulletin: (bulletinId: string, opId: string) => void;
   onExportCsv: (filename: string, rows: any[]) => void;
@@ -47,16 +48,170 @@ export function OperationBulletinTab({
   onSelectBulletin,
   onUpdateBulletin,
   onDuplicateBulletin,
+  onAddNewBulletin,
   onAddOperationToBulletin,
   onDeleteOperationFromBulletin,
   onExportCsv,
   onPrintOb,
 }: OperationBulletinTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'grid' | 'yamazumi' | 'balancing'>('grid');
+  const [isCreateObOpen, setIsCreateObOpen] = useState(false);
 
   const currentBulletin = useMemo(() => {
     return bulletins.find((b) => b.id === selectedBulletinId) || bulletins[0];
   }, [bulletins, selectedBulletinId]);
+
+  // Form state for creating a new bulletin
+  const [newStyleNumber, setNewStyleNumber] = useState('');
+  const [newStyleDesc, setNewStyleDesc] = useState('');
+  const [newBuyerName, setNewBuyerName] = useState('H&M Hennes & Mauritz');
+  const [newGarmentType, setNewGarmentType] = useState<any>('T-Shirt');
+  const [newTargetOps, setNewTargetOps] = useState<number>(28);
+  const [newTargetEff, setNewTargetEff] = useState<number>(82);
+
+  // Commercial Style Templates Library
+  const STYLE_TEMPLATES = [
+    {
+      styleNumber: 'STY-TS-2026',
+      styleDescription: 'Men Heavyweight Cotton Crewneck Tee 180 GSM',
+      buyerName: 'H&M Hennes & Mauritz',
+      garmentType: 'T-Shirt',
+      totalSmv: 11.2,
+      targetOps: 28,
+      pitchSec: 24.0,
+      eff: 82,
+      dailyTarget: 1800,
+    },
+    {
+      styleNumber: 'STY-DN-502',
+      styleDescription: 'Slim Fit Washed Indigo Denim Jeans 12oz',
+      buyerName: 'Inditex / Zara',
+      garmentType: 'Denim Jeans',
+      totalSmv: 22.4,
+      targetOps: 48,
+      pitchSec: 28.0,
+      eff: 78,
+      dailyTarget: 950,
+    },
+    {
+      styleNumber: 'STY-PL-889',
+      styleDescription: 'Pique Cotton Polo with Flat-Knit Collar & Placket',
+      buyerName: 'PVH Tommy Hilfiger',
+      garmentType: 'Polo Shirt',
+      totalSmv: 15.0,
+      targetOps: 34,
+      pitchSec: 26.5,
+      eff: 80,
+      dailyTarget: 1400,
+    },
+    {
+      styleNumber: 'STY-HD-770',
+      styleDescription: 'French Terry Heavyweight Kangaroo Hoodie 320 GSM',
+      buyerName: 'Uniqlo Fast Retailing',
+      garmentType: 'Hoodie',
+      totalSmv: 19.5,
+      targetOps: 42,
+      pitchSec: 27.8,
+      eff: 84,
+      dailyTarget: 1100,
+    },
+    {
+      styleNumber: 'STY-SH-410',
+      styleDescription: 'Formal Long Sleeve Poplin Cotton Shirt with Collar Band',
+      buyerName: 'Marks & Spencer (M&S)',
+      garmentType: 'Woven Shirt',
+      totalSmv: 18.2,
+      targetOps: 42,
+      pitchSec: 26.0,
+      eff: 82,
+      dailyTarget: 1250,
+    },
+    {
+      styleNumber: 'STY-LG-920',
+      styleDescription: 'Women High-Rise Seamless Active Leggings with Gusset',
+      buyerName: 'Target / JoyLab Athletic',
+      garmentType: 'Activewear',
+      totalSmv: 10.8,
+      targetOps: 28,
+      pitchSec: 23.1,
+      eff: 86,
+      dailyTarget: 1950,
+    },
+  ];
+
+  const handleLoadTemplate = (tpl: (typeof STYLE_TEMPLATES)[0]) => {
+    const newId = `ob-${Date.now()}`;
+    const newBulletin: StyleOperationBulletin = {
+      id: newId,
+      styleNumber: tpl.styleNumber,
+      styleDescription: tpl.styleDescription,
+      buyerName: tpl.buyerName,
+      garmentType: tpl.garmentType as any,
+      totalSmv: tpl.totalSmv,
+      targetLineOperators: tpl.targetOps,
+      linePitchTimeSec: tpl.pitchSec,
+      targetEfficiency: tpl.eff,
+      plannedDailyOutput: tpl.dailyTarget,
+      balancingEfficiency: 88.5,
+      version: 'v1.0',
+      approvalStatus: 'IE_REVIEW',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      operations: [
+        {
+          id: `op-${Date.now()}-1`,
+          seqNumber: 1,
+          operationName: 'Parts Preparation & Edge Stabilization',
+          section: 'PREPARATION',
+          machineType: '4-Thread Overlock',
+          machineCode: '4T-OVL-01',
+          smv: Math.round((tpl.totalSmv * 0.15) * 100) / 100,
+          theoreticalOperators: 3,
+          allocatedOperators: 3,
+          cycleTimeSec: tpl.pitchSec,
+          pitchTimeSec: tpl.pitchSec,
+          targetPerHour: Math.round(3600 / tpl.pitchSec),
+          isBottleneck: false,
+        },
+        {
+          id: `op-${Date.now()}-2`,
+          seqNumber: 2,
+          operationName: 'Main Panel In-Line Assembly & Contour Joining',
+          section: 'ASSEMBLY',
+          machineType: 'Single Needle Lockstitch (SNLS)',
+          machineCode: 'SNLS-01',
+          smv: Math.round((tpl.totalSmv * 0.55) * 100) / 100,
+          theoreticalOperators: Math.round(tpl.targetOps * 0.55),
+          allocatedOperators: Math.round(tpl.targetOps * 0.55),
+          cycleTimeSec: tpl.pitchSec,
+          pitchTimeSec: tpl.pitchSec,
+          targetPerHour: Math.round(3600 / tpl.pitchSec),
+          isBottleneck: false,
+        },
+        {
+          id: `op-${Date.now()}-3`,
+          seqNumber: 3,
+          operationName: 'Bottom Hemming & Clean Trimming Finish',
+          section: 'FINISHING',
+          machineType: 'Flatlock 3-Needle Cylinder Bed',
+          machineCode: 'FL-01',
+          smv: Math.round((tpl.totalSmv * 0.3) * 100) / 100,
+          theoreticalOperators: Math.round(tpl.targetOps * 0.3),
+          allocatedOperators: Math.round(tpl.targetOps * 0.3),
+          cycleTimeSec: tpl.pitchSec,
+          pitchTimeSec: tpl.pitchSec,
+          targetPerHour: Math.round(3600 / tpl.pitchSec),
+          isBottleneck: false,
+        },
+      ],
+    };
+
+    if (onAddNewBulletin) {
+      onAddNewBulletin(newBulletin);
+    }
+    onSelectBulletin(newId);
+    setIsCreateObOpen(false);
+  };
 
   // Modals / Add op form
   const [isAddOpOpen, setIsAddOpOpen] = useState(false);
@@ -166,6 +321,13 @@ export function OperationBulletinTab({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setIsCreateObOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New OB</span>
+            </button>
+            <button
               onClick={() => onDuplicateBulletin(currentBulletin)}
               className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
@@ -189,27 +351,27 @@ export function OperationBulletinTab({
           </div>
         </div>
 
-        {/* Style Selection Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Style Selection Cards - Responsive 6 Columns */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           {bulletins.map((b) => (
             <div
               key={b.id}
               onClick={() => onSelectBulletin(b.id)}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+              className={`p-3 rounded-xl border transition-all cursor-pointer ${
                 selectedBulletinId === b.id
-                  ? 'border-blue-500 bg-blue-50/60 shadow-xs ring-1 ring-blue-500/20'
+                  ? 'border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500/20'
                   : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/70'
               }`}
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="font-mono text-xs font-bold text-blue-700">{b.styleNumber}</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">
                   {b.garmentType}
                 </span>
               </div>
-              <div className="text-xs font-semibold text-slate-800 line-clamp-1">{b.styleDescription}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">{b.buyerName}</div>
-              <div className="flex items-center justify-between text-[11px] font-mono mt-2 pt-2 border-t border-slate-200/60">
+              <div className="text-[11px] font-semibold text-slate-800 line-clamp-1">{b.styleDescription}</div>
+              <div className="text-[10px] text-slate-500 truncate">{b.buyerName}</div>
+              <div className="flex items-center justify-between text-[10px] font-mono mt-2 pt-1.5 border-t border-slate-200/60">
                 <span className="text-slate-500">
                   SMV: <strong className="text-slate-900">{b.totalSmv}m</strong>
                 </span>
@@ -660,6 +822,77 @@ export function OperationBulletinTab({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE NEW OPERATION BULLETIN MODAL */}
+      {isCreateObOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 my-8 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-blue-600" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Create Style Operation Bulletin (OB)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Load a pre-engineered commercial garment template or start a new style line balancing sequence.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCreateObOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>1-Click Load Commercial Style Template:</span>
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {STYLE_TEMPLATES.map((tpl) => (
+                  <div
+                    key={tpl.styleNumber}
+                    onClick={() => handleLoadTemplate(tpl)}
+                    className="p-3 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-blue-50/60 hover:border-blue-300 transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-mono text-xs font-bold text-blue-700 group-hover:text-blue-800">
+                        {tpl.styleNumber}
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200/80 text-slate-700">
+                        {tpl.garmentType}
+                      </span>
+                    </div>
+                    <div className="text-xs font-semibold text-slate-800 line-clamp-1">{tpl.styleDescription}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">{tpl.buyerName}</div>
+                    <div className="flex items-center justify-between text-[11px] font-mono mt-2 pt-1.5 border-t border-slate-200/60">
+                      <span className="text-slate-500">
+                        SMV: <strong>{tpl.totalSmv}m</strong>
+                      </span>
+                      <span className="text-emerald-700 font-bold">{tpl.dailyTarget} pcs/day</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsCreateObOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer text-xs"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

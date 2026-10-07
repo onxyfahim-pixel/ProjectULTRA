@@ -31,6 +31,7 @@ import { DataTable, ColumnDef } from '@/components/ui/DataTable';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { OrganogramNode, OrganogramStatus } from '@/lib/types/modules';
 import { INITIAL_ORGANOGRAM_NODES } from '../modules/organogram/organogram-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { OrganogramDetailsPage } from '../modules/organogram/OrganogramDetailsPage';
 import { OrganogramEntryPage } from '../modules/organogram/OrganogramEntryPage';
 import { DeleteOrganogramModal } from '../modules/organogram/DeleteOrganogramModal';
@@ -44,34 +45,11 @@ type OrganogramSubView =
 export function OrganogramView() {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Load nodes from localStorage or fallback to INITIAL_ORGANOGRAM_NODES
-  const [nodes, setNodes] = useState<OrganogramNode[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_organogram_nodes_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to parse stored organogram nodes:', err);
-      }
-    }
-    return INITIAL_ORGANOGRAM_NODES;
-  });
-
-  // Sync to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_organogram_nodes_v1', JSON.stringify(nodes));
-      } catch (err) {
-        console.warn('Failed saving organogram nodes to localStorage:', err);
-      }
-    }
-  }, [nodes]);
+  const [nodes, setNodes] = useLiveModuleData<OrganogramNode[]>(
+    'organogram_nodes',
+    INITIAL_ORGANOGRAM_NODES,
+    'erp_organogram_nodes_v1'
+  );
 
   // Subview State (Details, Add, Edit)
   const [subView, setSubView] = useState<OrganogramSubView>({ type: 'none' });

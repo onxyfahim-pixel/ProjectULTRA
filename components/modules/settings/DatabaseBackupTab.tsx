@@ -28,6 +28,8 @@ import {
   Clock,
   Activity,
   CheckSquare,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 interface BackupFile {
@@ -74,8 +76,50 @@ export function DatabaseBackupTab() {
   } | null>(null);
 
   const [activeGuideTab, setActiveGuideTab] = useState<'xampp' | 'installer' | 'docker' | 'bat'>('xampp');
+  const [resetModal, setResetModal] = useState<{ isOpen: boolean; mode: 'blank' | 'defaults' } | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleConfirmReset = async () => {
+    if (!resetModal) return;
+    setResetting(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/database/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: resetModal.mode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (resetModal.mode === 'blank') {
+          try {
+            localStorage.setItem('erp_production_orders_v1', JSON.stringify([]));
+            localStorage.setItem('erp_buyer_orders_v1', JSON.stringify([]));
+            localStorage.setItem('erp_buyer_orders', JSON.stringify([]));
+          } catch {}
+        }
+        window.dispatchEvent(new CustomEvent('erp_production_records_updated'));
+        window.dispatchEvent(new CustomEvent('erp_buyer_orders_updated'));
+        setMessage({
+          type: 'success',
+          text: data.message || 'ERP database reset executed successfully!',
+        });
+        fetchDatabaseStatus();
+      } else {
+        setMessage({
+          type: 'error',
+          text: data.error || 'Failed to reset database.',
+        });
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `Reset error: ${err.message}` });
+    } finally {
+      setResetting(false);
+      setResetModal(null);
+    }
+  };
 
   const fetchDatabaseStatus = async () => {
     setLoading(true);
@@ -846,6 +890,147 @@ export function DatabaseBackupTab() {
           </div>
         </div>
       </div>
+
+      {/* SYSTEM RESET & CLEAN DATABASE ENGINE CARD */}
+      <div className="p-6 rounded-2xl bg-gradient-to-br from-rose-50/70 via-white to-amber-50/40 dark:from-rose-950/20 dark:via-slate-900 dark:to-amber-950/20 border border-rose-200 dark:border-rose-900/50 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-rose-600 text-white shadow-md shadow-rose-600/20">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                System Reset &amp; Clean Database Engine
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300">
+                  Live Action
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Purge mock or preloaded records to run a genuine live factory ERP, or restore factory baseline demo samples.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          {/* Option A: Clean Slate (Blank ERP) */}
+          <div className="p-4 rounded-xl bg-white dark:bg-slate-800/80 border border-rose-200 dark:border-rose-800/60 space-y-3 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-bold text-xs">
+                <Trash2 className="w-4 h-4 shrink-0" />
+                <span>Clean Slate (Blank ERP - 0 Records)</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                Permanently wipes all preloaded mock data and demo orders across MySQL and local disk. Leaves your ERP 100% clean and ready for real floor entries.
+              </p>
+            </div>
+            <button
+              onClick={() => setResetModal({ isOpen: true, mode: 'blank' })}
+              disabled={resetting}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold transition-all shadow-md shadow-rose-600/20 disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Purge All Records to Clean Slate</span>
+            </button>
+          </div>
+
+          {/* Option B: Reset to Factory Baseline Defaults */}
+          <div className="p-4 rounded-xl bg-white dark:bg-slate-800/80 border border-amber-200 dark:border-amber-800/60 space-y-3 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs">
+                <RotateCcw className="w-4 h-4 shrink-0" />
+                <span>Reset to Factory Baseline Sample</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                Re-seeds a fresh, consistent baseline of demo orders, fabric rolls, and sewing lines into MySQL and disk storage.
+              </p>
+            </div>
+            <button
+              onClick={() => setResetModal({ isOpen: true, mode: 'defaults' })}
+              disabled={resetting}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold transition-all shadow-md shadow-amber-600/20 disabled:opacity-50"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset to Sample Baseline</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* CONFIRMATION MODAL */}
+      {resetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-3 rounded-xl ${
+                  resetModal.mode === 'blank'
+                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                    : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                }`}
+              >
+                {resetModal.mode === 'blank' ? (
+                  <Trash2 className="w-6 h-6" />
+                ) : (
+                  <RotateCcw className="w-6 h-6" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white">
+                  {resetModal.mode === 'blank' ? 'Purge Database to Clean Slate?' : 'Reset to Factory Baseline?'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {resetModal.mode === 'blank'
+                    ? 'This will permanently wipe all existing orders and records.'
+                    : 'This will overwrite existing data with factory baseline records.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+              <p className="font-semibold text-slate-800 dark:text-white">What will happen:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-slate-500">
+                {resetModal.mode === 'blank' ? (
+                  <>
+                    <li>Truncates MySQL tables (production, buyer orders, inventory)</li>
+                    <li>Wipes local storage cache on this device</li>
+                    <li>Broadcasts real-time system reset to connected floor mobiles</li>
+                    <li>Gives you a clean 0-record ERP for authentic live production</li>
+                  </>
+                ) : (
+                  <>
+                    <li>Overwrites MySQL tables with verified sample baseline records</li>
+                    <li>Synchronizes fresh baseline across all connected devices</li>
+                  </>
+                )}
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setResetModal(null)}
+                disabled={resetting}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                disabled={resetting}
+                className={`px-5 py-2 rounded-xl text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-50 ${
+                  resetModal.mode === 'blank'
+                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/30'
+                    : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/30'
+                }`}
+              >
+                {resetting ? 'Executing Reset...' : 'Confirm & Execute'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

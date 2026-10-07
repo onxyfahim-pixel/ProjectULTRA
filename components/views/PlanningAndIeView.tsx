@@ -21,6 +21,8 @@ import {
   Download,
   Filter,
   Search,
+  RefreshCw,
+  Zap,
 } from 'lucide-react';
 import { ModuleHeader, ModuleTabOption } from '@/components/ui/ModuleHeader';
 import { BuyerOrder } from '@/lib/types/modules';
@@ -113,6 +115,24 @@ import {
   INITIAL_PRODUCTION_EXECUTIONS,
 } from '@/lib/db/planning-ie-store';
 
+import {
+  ProductionUnit,
+  ProductionSection,
+  ProductionLine,
+} from '@/lib/types/production-management';
+import {
+  getProductionUnits,
+  saveProductionUnits,
+  getProductionSections,
+  saveProductionSections,
+  getProductionLines,
+  saveProductionLines,
+} from '@/lib/db/production-management-store';
+import {
+  getProductionRecords,
+  getSewingProductionTrackForPO,
+} from '@/lib/db/production-records-store';
+
 import { PlanningDashboardTab } from '@/components/modules/planning-ie/PlanningDashboardTab';
 import { MasterDataTab } from '@/components/modules/planning-ie/MasterDataTab';
 import { ProductionOrdersTab } from '@/components/modules/planning-ie/ProductionOrdersTab';
@@ -184,6 +204,12 @@ export function PlanningAndIeView({
   const [alerts, setAlerts] = useState<ProductionAlertItem[]>(getStoredProductionAlerts);
   const [auditLogs, setAuditLogs] = useState<UniversalAuditRecord[]>(getStoredAuditLogs);
 
+  // Live Production Management States (Synchronized with Production & Quality Modules)
+  const [managedUnits, setManagedUnits] = useState<ProductionUnit[]>(getProductionUnits);
+  const [managedSections, setManagedSections] = useState<ProductionSection[]>(getProductionSections);
+  const [managedLines, setManagedLines] = useState<ProductionLine[]>(getProductionLines);
+  const [liveProdRecords, setLiveProdRecords] = useState<ProductionOrder[]>(getProductionRecords);
+
   // Helper toast notification
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -220,6 +246,16 @@ export function PlanningAndIeView({
       setAuditLogs(getStoredAuditLogs());
     };
 
+    const handleManagementUpdate = () => {
+      setManagedUnits(getProductionUnits());
+      setManagedSections(getProductionSections());
+      setManagedLines(getProductionLines());
+    };
+
+    const handleProdRecordsUpdate = () => {
+      setLiveProdRecords(getProductionRecords());
+    };
+
     window.addEventListener('erp_bulletins_updated', handleUpdate);
     window.addEventListener('erp_schedules_updated', handleUpdate);
     window.addEventListener('erp_timestudies_updated', handleUpdate);
@@ -228,6 +264,9 @@ export function PlanningAndIeView({
     window.addEventListener('erp_wip_updated', handleUpdate);
     window.addEventListener('erp_kaizen_updated', handleUpdate);
     window.addEventListener('erp_audit_updated', handleUpdate);
+    window.addEventListener('erp_production_management_updated', handleManagementUpdate);
+    window.addEventListener('erp_production_records_updated', handleProdRecordsUpdate);
+    window.addEventListener('erp_sewing_track_updated', handleProdRecordsUpdate);
 
     return () => {
       window.removeEventListener('erp_bulletins_updated', handleUpdate);
@@ -238,6 +277,9 @@ export function PlanningAndIeView({
       window.removeEventListener('erp_wip_updated', handleUpdate);
       window.removeEventListener('erp_kaizen_updated', handleUpdate);
       window.removeEventListener('erp_audit_updated', handleUpdate);
+      window.removeEventListener('erp_production_management_updated', handleManagementUpdate);
+      window.removeEventListener('erp_production_records_updated', handleProdRecordsUpdate);
+      window.removeEventListener('erp_sewing_track_updated', handleProdRecordsUpdate);
     };
   }, []);
 
@@ -278,6 +320,115 @@ export function PlanningAndIeView({
   const handlePrint = (title: string = 'Production & IE Report') => {
     window.print();
     addAuditLog('EXPORT', 'PrintReport', title, `Sent print preview for ${title}`);
+  };
+
+  // Comprehensive Cross-Module Synchronizer
+  const handleSyncAllModules = () => {
+    let syncedCount = 0;
+    let nextProductionOrders = [...productionOrders];
+
+    propBuyerOrders.forEach((bo) => {
+      const existingIdx = nextProductionOrders.findIndex(
+        (o) => o.po === bo.orderNumber || o.buyerOrderId === bo.id
+      );
+
+      const fabricBom = bo.bomItems?.find((b) => b.itemType === 'FABRIC');
+      const fabricStatus =
+        fabricBom?.status === 'RECEIVED'
+          ? '100% In-House - Passed 4-Point Inspection'
+          : fabricBom?.status === 'PARTIALLY_RECEIVED'
+          ? 'Partial Inward - Ready for Relaxation'
+          : 'Fabric Sourced - Pending Mill Delivery';
+
+      const desc = bo.styleDescription.toLowerCase();
+      const isDenim = desc.includes('jeans') || desc.includes('denim');
+      const isPolo = desc.includes('polo');
+      const isHoodie = desc.includes('hoodie') || desc.includes('fleece');
+      const isShirt = desc.includes('shirt') && !isPolo;
+
+      let assignedLine = 'Sewing Line 01';
+      let productCategory = 'Knit Tops';
+      if (isDenim) {
+        assignedLine = 'Sewing Line 04';
+        productCategory = 'Denim Bottoms';
+      } else if (isPolo) {
+        assignedLine = 'Sewing Line 02';
+        productCategory = 'Knit Tops';
+      } else if (isHoodie) {
+        assignedLine = 'Sewing Line 03';
+        productCategory = 'Fleece Outerwear';
+      } else if (isShirt) {
+        assignedLine = 'Sewing Line 05';
+        productCategory = 'Woven Tops';
+      }
+
+      const plannedQty = Math.round(bo.orderQuantity * 1.03); // +3% cutting & rework buffer
+
+      const planRecord: ProductionOrderPlan = {
+        id: `po-plan-${bo.orderNumber.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+        orderNumber: `PRD-ORD-${bo.orderNumber.replace(/[^a-zA-Z0-9]/g, '')}`,
+        buyer: bo.buyerName,
+        style: bo.styleNumber,
+        po: bo.orderNumber,
+        article: `ART-${bo.styleNumber}`,
+        product: bo.styleDescription,
+        productCategory,
+        color: 'Standard Tech Pack Colorways',
+        size: 'S - XXL',
+        sizeRange: 'S, M, L, XL, XXL',
+        orderQuantity: bo.orderQuantity,
+        plannedQuantity: plannedQty,
+        productionStartDate: bo.cuttingStartDate || new Date().toISOString().split('T')[0],
+        productionEndDate: new Date(Date.now() + 25 * 86400000).toISOString().split('T')[0],
+        deliveryDate: bo.shipDate,
+        priority: 'HIGH',
+        assignedLine,
+        assignedDepartment: 'SEWING',
+        status: bo.status === 'SEWING' ? 'IN_PRODUCTION' : bo.status === 'CUTTING' ? 'RELEASED' : 'PLANNED',
+        remarks: `Synchronized with Buyer Order ${bo.orderNumber}. 3.0% overcut allowance applied.`,
+        createdAt: new Date().toISOString(),
+        buyerOrderId: bo.id,
+        fabricStatus,
+        cuttingStatus: bo.status === 'SEWING' ? '100% Cut & Numbered' : bo.status === 'CUTTING' ? '50% Cut - Spreading Active' : 'Scheduled',
+        smv: bo.smv || 14.5,
+        fobPrice: bo.fobPrice,
+        isSyncedWithBuyerOrder: true,
+        syncSource: 'Buyer Order Module',
+        fabricReadinessPercent: fabricBom?.status === 'RECEIVED' ? 100 : 70,
+      };
+
+      if (existingIdx >= 0) {
+        nextProductionOrders[existingIdx] = {
+          ...nextProductionOrders[existingIdx],
+          ...planRecord,
+          id: nextProductionOrders[existingIdx].id,
+          orderNumber: nextProductionOrders[existingIdx].orderNumber,
+        };
+      } else {
+        nextProductionOrders = [planRecord, ...nextProductionOrders];
+      }
+      syncedCount++;
+    });
+
+    setProductionOrders(nextProductionOrders);
+    saveStoredProductionOrders(nextProductionOrders);
+
+    const u = getProductionUnits();
+    const s = getProductionSections();
+    const l = getProductionLines();
+    const pr = getProductionRecords();
+    setManagedUnits(u);
+    setManagedSections(s);
+    setManagedLines(l);
+    setLiveProdRecords(pr);
+
+    addAuditLog(
+      'UPDATE',
+      'ModuleSync',
+      'BuyerOrder-PPC',
+      `Synchronized ${syncedCount} Buyer Orders, ${u.length} Units, ${s.length} Sections, ${l.length} Lines into Planning & IE`
+    );
+    showToast(`Full Plant Sync: ${syncedCount} Buyer Orders, ${u.length} Units, ${s.length} Sections, ${l.length} Lines Live-Synced!`);
   };
 
   // Operation Bulletin Handlers
@@ -453,6 +604,79 @@ export function PlanningAndIeView({
     showToast('Alert acknowledged & dismissed.');
   };
 
+  // Real Production Management Handlers (Units, Sections, Lines)
+  const handleAddUnit = (u: ProductionUnit) => {
+    const next = [u, ...managedUnits];
+    setManagedUnits(next);
+    saveProductionUnits(next);
+    addAuditLog('CREATE', 'ProductionUnit', u.unitCode, `Added unit ${u.name}`);
+    showToast(`Production Unit "${u.name}" created and synced.`);
+  };
+
+  const handleUpdateUnitStatus = (id: string, status: 'ACTIVE' | 'INACTIVE') => {
+    const next = managedUnits.map((u) => (u.id === id ? { ...u, status } : u));
+    setManagedUnits(next);
+    saveProductionUnits(next);
+    addAuditLog('UPDATE', 'ProductionUnit', id, `Updated unit status to ${status}`);
+    showToast(`Unit status updated to ${status}.`);
+  };
+
+  const handleDeleteUnit = (id: string) => {
+    const next = managedUnits.filter((u) => u.id !== id);
+    setManagedUnits(next);
+    saveProductionUnits(next);
+    addAuditLog('DELETE', 'ProductionUnit', id, `Removed production unit`);
+    showToast(`Production Unit removed.`);
+  };
+
+  const handleAddSection = (s: ProductionSection) => {
+    const next = [s, ...managedSections];
+    setManagedSections(next);
+    saveProductionSections(next);
+    addAuditLog('CREATE', 'ProductionSection', s.sectionCode, `Added section ${s.name}`);
+    showToast(`Section "${s.name}" created and synced.`);
+  };
+
+  const handleUpdateSectionStatus = (id: string, status: 'ACTIVE' | 'INACTIVE') => {
+    const next = managedSections.map((s) => (s.id === id ? { ...s, status } : s));
+    setManagedSections(next);
+    saveProductionSections(next);
+    addAuditLog('UPDATE', 'ProductionSection', id, `Updated section status to ${status}`);
+    showToast(`Section status updated to ${status}.`);
+  };
+
+  const handleDeleteSection = (id: string) => {
+    const next = managedSections.filter((s) => s.id !== id);
+    setManagedSections(next);
+    saveProductionSections(next);
+    addAuditLog('DELETE', 'ProductionSection', id, `Removed section`);
+    showToast(`Section removed.`);
+  };
+
+  const handleAddLine = (l: ProductionLine) => {
+    const next = [l, ...managedLines];
+    setManagedLines(next);
+    saveProductionLines(next);
+    addAuditLog('CREATE', 'ProductionLine', l.lineCode, `Added line ${l.name}`);
+    showToast(`Production Line "${l.name}" created and synced to floor.`);
+  };
+
+  const handleUpdateLineStatus = (id: string, status: 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE') => {
+    const next = managedLines.map((l) => (l.id === id ? { ...l, status } : l));
+    setManagedLines(next);
+    saveProductionLines(next);
+    addAuditLog('UPDATE', 'ProductionLine', id, `Updated line status to ${status}`);
+    showToast(`Line status changed to ${status}. Live sync dispatched.`);
+  };
+
+  const handleDeleteLine = (id: string) => {
+    const next = managedLines.filter((l) => l.id !== id);
+    setManagedLines(next);
+    saveProductionLines(next);
+    addAuditLog('DELETE', 'ProductionLine', id, `Removed line`);
+    showToast(`Production Line removed.`);
+  };
+
   // Domain Categories for clean navigation
   type NavCategory = 'all' | 'planning' | 'ie' | 'floor' | 'reports';
   const [selectedCategory, setSelectedCategory] = useState<NavCategory>('all');
@@ -527,13 +751,22 @@ export function PlanningAndIeView({
             <div className="hidden lg:flex items-center gap-2 pr-2 border-r border-slate-200 text-xs">
               <div className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80">
                 <span className="text-slate-400 text-[10px] uppercase font-bold block">Lines Running</span>
-                <span className="font-bold text-slate-800 font-mono">{lines.length} Lines</span>
+                <span className="font-bold text-slate-800 font-mono">{managedLines.length} Lines</span>
               </div>
               <div className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80">
                 <span className="text-slate-400 text-[10px] uppercase font-bold block">Avg Balance Eff</span>
                 <span className="font-bold text-emerald-700 font-mono">82.5%</span>
               </div>
             </div>
+
+            <button
+              onClick={handleSyncAllModules}
+              className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+              title="Sync Buyer Orders, Fabric Status, and Production Schedules"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+              <span>Sync All Modules</span>
+            </button>
 
             <button
               onClick={() => handleExportCsv('Production_Orders.csv', productionOrders)}
@@ -641,8 +874,9 @@ export function PlanningAndIeView({
       {/* TAB 2: FACTORY & IE MASTERS */}
       {activeTab === 'masters' && (
         <MasterDataTab
-          factories={INITIAL_FACTORIES}
-          lines={lines}
+          units={managedUnits}
+          sections={managedSections}
+          lines={managedLines}
           operations={operations}
           machines={machines}
           operators={operators}
@@ -666,6 +900,15 @@ export function PlanningAndIeView({
             showToast(`Operator ${o.name} registered.`);
           }}
           onUpdateSkillLevel={handleUpdateSkillLevel}
+          onAddUnit={handleAddUnit}
+          onUpdateUnitStatus={handleUpdateUnitStatus}
+          onDeleteUnit={handleDeleteUnit}
+          onAddSection={handleAddSection}
+          onUpdateSectionStatus={handleUpdateSectionStatus}
+          onDeleteSection={handleDeleteSection}
+          onAddLine={handleAddLine}
+          onUpdateLineStatus={handleUpdateLineStatus}
+          onDeleteLine={handleDeleteLine}
           onExportCsv={handleExportCsv}
         />
       )}
@@ -674,6 +917,8 @@ export function PlanningAndIeView({
       {activeTab === 'orders' && (
         <ProductionOrdersTab
           orders={productionOrders}
+          buyerOrders={propBuyerOrders}
+          lines={managedLines}
           onAddOrder={handleAddProductionOrder}
           onUpdateOrder={handleUpdateProductionOrder}
           onDeleteOrder={handleDeleteProductionOrder}
@@ -686,6 +931,7 @@ export function PlanningAndIeView({
       {/* TAB 4: PRODUCTION PLANNING & SCHEDULING (MPS & GANTT & TNA) */}
       {activeTab === 'planning' && (
         <ProductionPlanningTab
+          lines={managedLines}
           schedules={schedules}
           orders={productionOrders}
           onAddSchedule={handleAddSchedule}
@@ -697,6 +943,8 @@ export function PlanningAndIeView({
       {/* TAB 5: CAPACITY & LINE PLANNING */}
       {activeTab === 'capacity_line' && (
         <CapacityLineTab
+          lines={managedLines}
+          units={managedUnits}
           capacityPlans={capacityPlans}
           linePlans={linePlans}
           manpowerPlans={manpowerPlans}
@@ -712,6 +960,14 @@ export function PlanningAndIeView({
           onSelectBulletin={setSelectedBulletinId}
           onUpdateBulletin={handleUpdateBulletin}
           onDuplicateBulletin={handleDuplicateBulletin}
+          onAddNewBulletin={(newB) => {
+            const next = [newB, ...bulletins];
+            setBulletins(next);
+            saveStoredBulletins(next);
+            setSelectedBulletinId(newB.id);
+            addAuditLog('CREATE', 'StyleOperationBulletin', newB.styleNumber, `Created OB for ${newB.styleNumber} (${newB.garmentType})`);
+            showToast(`Created Operation Bulletin for ${newB.styleNumber}`);
+          }}
           onAddOperationToBulletin={handleAddOperationToBulletin}
           onDeleteOperationFromBulletin={handleDeleteOperationFromBulletin}
           onExportCsv={handleExportCsv}
@@ -754,6 +1010,8 @@ export function PlanningAndIeView({
       {/* TAB 10: QUALITY LINK & REWORK / REJECTION */}
       {activeTab === 'quality_link' && (
         <QualityLinkTab
+          lines={managedLines}
+          productionRecords={liveProdRecords}
           qualityLinks={qualityLinks}
           reworks={reworks}
           rejections={rejections}

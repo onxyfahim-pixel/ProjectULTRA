@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { CustomerComplaint } from '@/lib/types/modules';
 import { StatusBadge } from '@/components/ui/Badge';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface ComplaintDetailsPageProps {
   complaint: CustomerComplaint;
@@ -45,6 +46,7 @@ export function ComplaintDetailsPage({
   onDelete,
   showToast,
 }: ComplaintDetailsPageProps) {
+  const { canCreate, canEdit, canDelete } = useModulePermission('customer_complaint');
   const [activeTab, setActiveTab] = useState<'investigation' | 'capa' | 'settlement'>('investigation');
 
   const defectCategoryLabel = complaint.defectCategory.replace(/_/g, ' ');
@@ -89,34 +91,40 @@ export function ComplaintDetailsPage({
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => onEdit(complaint)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Claim</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(complaint)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Claim</span>
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => onDuplicate(complaint)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            <span>Duplicate</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(complaint)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Duplicate</span>
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => onDelete(complaint)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete</span>
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(complaint)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
+          )}
         </div>
       </div>
 

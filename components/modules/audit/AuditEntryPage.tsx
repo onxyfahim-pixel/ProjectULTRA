@@ -31,8 +31,13 @@ import {
   RotateCcw,
   UploadCloud,
   ShieldAlert,
+  MapPin,
+  Phone,
+  Mail,
+  ExternalLink,
 } from 'lucide-react';
 import { AddQuestionModal } from './AddQuestionModal';
+import { SubSupplierSelectorModal } from './SubSupplierSelectorModal';
 import {
   QualityAudit,
   AuditChecklistItem,
@@ -40,14 +45,24 @@ import {
   AuditQuestionStatus,
   AuditCategory,
   AuditPhotoEvidence,
+  AuditTypeDefinition,
+  SubSupplier,
 } from '@/lib/types/modules';
+import { MOCK_SUB_SUPPLIERS } from '@/lib/db/modules-mock-data';
 import {
   ISO_9001_DEFAULT_CHECKLIST,
   calculateAuditScore,
 } from './iso9001ChecklistData';
+import {
+  getStoredAuditTypes,
+  getStoredAuditQuestions,
+  convertManagedQuestionToChecklistItem,
+} from './audit-management-data';
 
 interface AuditEntryPageProps {
   initialAudit?: QualityAudit | null;
+  initialAuditType?: AuditTypeDefinition | null;
+  initialChecklist?: AuditChecklistItem[] | null;
   onBack: () => void;
   onSave: (audit: QualityAudit) => void;
   showToast: (msg: string) => void;
@@ -320,28 +335,54 @@ const QuestionCard = React.memo(function QuestionCard({
 // ─── MAIN AUDIT ENTRY PAGE ───────────────────────────────────────────────────
 export function AuditEntryPage({
   initialAudit,
+  initialAuditType,
+  initialChecklist,
   onBack,
   onSave,
   showToast,
 }: AuditEntryPageProps) {
+  const storedAuditTypes = useMemo(() => getStoredAuditTypes(), []);
+
   const defaultCategory: AuditCategory =
+    initialAuditType?.category ||
     initialAudit?.auditCategory ||
     (initialAudit?.auditType === 'INTERNAL' || initialAudit?.auditType === 'INTERNAL_QMS'
       ? 'INTERNAL'
       : initialAudit?.auditType === 'SUB_SUPPLIER'
       ? 'SUB_SUPPLIER'
+      : initialAudit?.auditType === 'SAFETY' || initialAudit?.auditType === 'SAF-EHS'
+      ? 'SAFETY'
       : 'EXTERNAL');
+
+  const [selectedAuditType, setSelectedAuditType] = useState<AuditTypeDefinition | null>(() => {
+    if (initialAuditType) return initialAuditType;
+    if (initialAudit) {
+      return (
+        storedAuditTypes.find(
+          (t) =>
+            t.code === initialAudit.auditType ||
+            t.category === initialAudit.auditCategory ||
+            (initialAudit.standard &&
+              t.name.toLowerCase().includes(initialAudit.standard.toLowerCase().slice(0, 10)))
+        ) || null
+      );
+    }
+    return storedAuditTypes[0] || null;
+  });
 
   const [category, setCategory] = useState<AuditCategory>(defaultCategory);
   const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<string | null>(null);
 
   const [auditCode, setAuditCode] = useState(
     initialAudit?.auditCode ||
-      `AUD-${category === 'INTERNAL' ? 'INT' : category === 'EXTERNAL' ? 'EXT' : 'SUB'}-${Date.now().toString().slice(-4)}`
+      `AUD-${selectedAuditType?.code || (category === 'INTERNAL' ? 'INT' : category === 'EXTERNAL' ? 'EXT' : category === 'SAFETY' ? 'SAF' : 'SUB')}-${Date.now().toString().slice(-4)}`
   );
   const [standard, setStandard] = useState(
     initialAudit?.standard ||
-      (category === 'INTERNAL'
+      initialAuditType?.standard ||
+      (category === 'SAFETY'
+        ? 'ISO 45001:2018 & National Fire & Safety Code'
+        : category === 'INTERNAL'
         ? 'ISO 9001:2015 Quality Management System'
         : category === 'SUB_SUPPLIER'
         ? 'Sub-Supplier QMS & Facility Evaluation'
@@ -352,14 +393,21 @@ export function AuditEntryPage({
   );
   const [auditorOrganization, setAuditorOrganization] = useState(
     initialAudit?.auditorOrganization ||
-      (category === 'INTERNAL'
+      initialAuditType?.defaultAuditorOrg ||
+      (category === 'SAFETY'
+        ? 'EHS & Occupational Safety Cell'
+        : category === 'INTERNAL'
         ? 'Valiant Internal Quality Assurance Dept.'
         : category === 'SUB_SUPPLIER'
         ? 'Valiant Vendor Quality Division'
         : 'SGS International / Buyer QA')
   );
   const [auditeeDepartment, setAuditeeDepartment] = useState(
-    initialAudit?.auditeeDepartment || 'Cutting, Sewing Line 01-12 & Lab QC'
+    initialAudit?.auditeeDepartment ||
+      initialAuditType?.defaultDepartment ||
+      (category === 'SAFETY'
+        ? 'Production, Maintenance & Chemical Store'
+        : 'Cutting, Sewing Line 01-12 & Lab QC')
   );
   const [leadAuditee, setLeadAuditee] = useState(
     initialAudit?.leadAuditee || 'Rafiqul Islam (QA Manager)'
@@ -375,10 +423,34 @@ export function AuditEntryPage({
     initialAudit?.executiveSummary || ''
   );
 
-  // ─── INTERNAL AUDIT CHECKLIST STATE ──────────────────────────────────────
+  // ─── INTERNAL & CHECKLIST AUDIT STATE ────────────────────────────────────
   const [checklist, setChecklist] = useState<AuditChecklistItem[]>(() => {
+    if (initialChecklist && initialChecklist.length > 0) {
+      return initialChecklist;
+    }
     if (initialAudit?.checklist && initialAudit.checklist.length > 0) {
       return initialAudit.checklist;
+    }
+    if (initialAuditType) {
+      const allStored = getStoredAuditQuestions();
+      const typeQuestions = allStored.filter((q) => q.auditTypeId === initialAuditType.id);
+      if (typeQuestions.length > 0) {
+        return typeQuestions.map((q, idx) => convertManagedQuestionToChecklistItem(q, idx));
+      }
+    }
+    if (defaultCategory === 'SAFETY') {
+      const allStored = getStoredAuditQuestions();
+      const safetyQs = allStored.filter((q) => q.auditTypeId === 'type-safety-ehs');
+      if (safetyQs.length > 0) {
+        return safetyQs.map((q, idx) => convertManagedQuestionToChecklistItem(q, idx));
+      }
+    }
+    if (defaultCategory === 'SUB_SUPPLIER') {
+      const allStored = getStoredAuditQuestions();
+      const subQs = allStored.filter((q) => q.auditTypeId === 'type-sub-supplier');
+      if (subQs.length > 0) {
+        return subQs.map((q, idx) => convertManagedQuestionToChecklistItem(q, idx));
+      }
     }
     return JSON.parse(JSON.stringify(ISO_9001_DEFAULT_CHECKLIST));
   });
@@ -393,7 +465,22 @@ export function AuditEntryPage({
     return calculateAuditScore(checklist);
   }, [checklist]);
 
-  // Dynamic counts per clause
+  const isChecklistAudit =
+    category === 'INTERNAL' ||
+    category === 'SAFETY' ||
+    category === 'COMPLIANCE' ||
+    category === 'SUB_SUPPLIER' ||
+    Boolean(selectedAuditType?.id && category !== 'EXTERNAL');
+
+  // Dynamic distinct clauses and counts from active checklist
+  const distinctClauses = useMemo(() => {
+    const set = new Set<string>();
+    checklist.forEach((item) => {
+      if (item.clause) set.add(item.clause);
+    });
+    return Array.from(set);
+  }, [checklist]);
+
   const clauseCounts = useMemo(() => {
     const counts: Record<string, number> = { ALL: checklist.length };
     checklist.forEach((item) => {
@@ -426,6 +513,70 @@ export function AuditEntryPage({
   const [approvalStatus, setApprovalStatus] = useState<
     'APPROVED' | 'CONDITIONAL' | 'PENDING' | 'REJECTED'
   >(initialAudit?.approvalStatus || 'APPROVED');
+
+  // Sub-Supplier Module Synced State (Exclusive for Sub-Supplier Audit)
+  const [isSubSupplierModalOpen, setIsSubSupplierModalOpen] = useState(false);
+  const [selectedSubSupplier, setSelectedSubSupplier] = useState<SubSupplier | null>(() => {
+    if (initialAudit?.subSupplierId || initialAudit?.supplierName) {
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('erp_sub_suppliers_v1') : null;
+      const list: SubSupplier[] = stored ? JSON.parse(stored) : MOCK_SUB_SUPPLIERS;
+      return (
+        list.find(
+          (s) =>
+            (initialAudit.subSupplierId && s.id === initialAudit.subSupplierId) ||
+            (initialAudit.supplierName && s.name.toLowerCase() === initialAudit.supplierName.toLowerCase())
+        ) || null
+      );
+    }
+    return null;
+  });
+
+  const [subSupplierId, setSubSupplierId] = useState(initialAudit?.subSupplierId || '');
+  const [subSupplierCode, setSubSupplierCode] = useState(initialAudit?.subSupplierCode || '');
+  const [subSupplierCountry, setSubSupplierCountry] = useState(initialAudit?.subSupplierCountry || '');
+  const [subSupplierLocation, setSubSupplierLocation] = useState(initialAudit?.subSupplierLocation || '');
+  const [subSupplierContact, setSubSupplierContact] = useState(initialAudit?.subSupplierContact || '');
+  const [subSupplierEmail, setSubSupplierEmail] = useState(initialAudit?.subSupplierEmail || '');
+  const [subSupplierPhone, setSubSupplierPhone] = useState(initialAudit?.subSupplierPhone || '');
+  const [subSupplierRating, setSubSupplierRating] = useState(initialAudit?.subSupplierRating || 'A+');
+  const [subSupplierAuditScore, setSubSupplierAuditScore] = useState<number | undefined>(
+    initialAudit?.subSupplierAuditScore
+  );
+
+  const handleSelectSubSupplier = (supplier: SubSupplier) => {
+    setSelectedSubSupplier(supplier);
+    setSupplierName(supplier.name);
+    setSubSupplierId(supplier.id);
+    setSubSupplierCode(supplier.code);
+    setSupplierCategory(
+      supplier.category === 'FABRIC_MILL'
+        ? 'Fabric Mill (Knits & Woven)'
+        : supplier.category === 'DYEING_HOUSE'
+        ? 'Dyeing & Finishing House'
+        : supplier.category === 'ZIPPERS'
+        ? 'Zippers & Fasteners'
+        : supplier.category === 'TRIMS_BUTTONS'
+        ? 'Trims & Accessories (Zippers, Buttons)'
+        : supplier.category === 'LABELS_PACKAGING'
+        ? 'Labels & Packaging Materials'
+        : 'Thread & Yarn Mill'
+    );
+    setSubSupplierCountry(supplier.country);
+    setSubSupplierLocation(supplier.facilityLocation || supplier.country);
+    setSubSupplierContact(supplier.contactPerson);
+    setSubSupplierEmail(supplier.email);
+    setSubSupplierPhone(supplier.phone);
+    setSubSupplierRating(supplier.qualityRating);
+    setSubSupplierAuditScore(supplier.auditScore);
+    if (supplier.complianceStatus === 'APPROVED') {
+      setApprovalStatus('APPROVED');
+    } else if (supplier.complianceStatus === 'PROVISIONAL') {
+      setApprovalStatus('CONDITIONAL');
+    } else {
+      setApprovalStatus('PENDING');
+    }
+    showToast(`Linked Sub-Supplier: ${supplier.name} (${supplier.code})`);
+  };
 
   // Fast Memoized Handlers for snappy zero-lag response with 5-tier scoring
   const handleQuestionStatusChange = useCallback((id: string, newStatus: AuditQuestionStatus) => {
@@ -567,7 +718,7 @@ export function AuditEntryPage({
     let finalMinor = 0;
     let finalVerdict: QualityAudit['verdict'] = 'PASSED_GRADE_A';
 
-    if (category === 'INTERNAL') {
+    if (isChecklistAudit) {
       finalScore = internalScoreResult.obtainedMarks;
       finalCritical = internalScoreResult.criticalNcCount;
       finalMajor = internalScoreResult.majorNcCount;
@@ -575,13 +726,16 @@ export function AuditEntryPage({
       finalNCs = internalScoreResult.nonConformityCount;
       finalPassed = internalScoreResult.isPassed;
 
+      const passThreshold = selectedAuditType?.passMarksThreshold || 80;
+      const autoFailOnCrit = selectedAuditType?.criticalNcFailsAudit !== false;
+
       // If 1 Critical NC found -> Immediately FAILED!
-      if (finalCritical > 0) {
+      if (finalCritical > 0 && autoFailOnCrit) {
         finalVerdict = 'FAILED';
         finalPassed = false;
       } else if (finalScore >= 90) {
         finalVerdict = 'PASSED_GRADE_A';
-      } else if (finalScore >= 80) {
+      } else if (finalScore >= passThreshold) {
         finalVerdict = 'PASSED_WITH_OBSERVATIONS';
       } else if (finalScore >= 60) {
         finalVerdict = 'ACTION_PLAN_REQUIRED';
@@ -613,7 +767,7 @@ export function AuditEntryPage({
     const savedAudit: QualityAudit = {
       id: initialAudit?.id || `aud-${Date.now()}`,
       auditCode: auditCode.trim(),
-      auditType: category,
+      auditType: selectedAuditType?.code || category,
       auditCategory: category,
       standard: standard.trim(),
       auditorName: auditorName.trim(),
@@ -621,23 +775,34 @@ export function AuditEntryPage({
       auditeeDepartment: auditeeDepartment.trim(),
       supplierName: category === 'SUB_SUPPLIER' ? supplierName.trim() : undefined,
       supplierCategory: category === 'SUB_SUPPLIER' ? supplierCategory.trim() : undefined,
+      subSupplierId: category === 'SUB_SUPPLIER' ? subSupplierId || undefined : undefined,
+      subSupplierCode: category === 'SUB_SUPPLIER' ? subSupplierCode || undefined : undefined,
+      subSupplierCountry: category === 'SUB_SUPPLIER' ? subSupplierCountry || undefined : undefined,
+      subSupplierLocation: category === 'SUB_SUPPLIER' ? subSupplierLocation || undefined : undefined,
+      subSupplierContact: category === 'SUB_SUPPLIER' ? subSupplierContact || undefined : undefined,
+      subSupplierEmail: category === 'SUB_SUPPLIER' ? subSupplierEmail || undefined : undefined,
+      subSupplierPhone: category === 'SUB_SUPPLIER' ? subSupplierPhone || undefined : undefined,
+      subSupplierRating: category === 'SUB_SUPPLIER' ? subSupplierRating || undefined : undefined,
+      subSupplierAuditScore: category === 'SUB_SUPPLIER' ? subSupplierAuditScore : undefined,
+      subSupplierLogoUrl: category === 'SUB_SUPPLIER' ? selectedSubSupplier?.logoUrl : undefined,
+      subSupplierCertifications: category === 'SUB_SUPPLIER' ? selectedSubSupplier?.certifications : undefined,
       auditDate,
-      totalMarks: 100,
+      totalMarks: selectedAuditType?.totalAvailableMarks || 100,
       obtainedMarks: finalScore,
-      passMarks: 80,
+      passMarks: selectedAuditType?.passMarksThreshold || 80,
       scorePercentage: finalScore,
       isPassed: finalPassed,
       nonConformancesCount: finalNCs,
       criticalNCs: finalCritical,
       majorNCs: finalMajor,
       minorNCs: finalMinor,
-      observations: category === 'INTERNAL' ? 2 : observations,
+      observations: isChecklistAudit ? 2 : observations,
       verdict: finalVerdict,
       nextAuditDate,
       executiveSummary: executiveSummary.trim() || undefined,
       leadAuditee: leadAuditee.trim(),
       approvalStatus: category === 'SUB_SUPPLIER' ? approvalStatus : undefined,
-      checklist: category === 'INTERNAL' ? checklist : undefined,
+      checklist: isChecklistAudit ? checklist : undefined,
       uploadedFiles: uploadedFiles.length > 0 ? uploadedFiles : undefined,
     };
 
@@ -661,16 +826,14 @@ export function AuditEntryPage({
     });
   }, [checklist, clauseFilter, statusFilter, questionSearchQuery]);
 
-  const clauseOptions = [
-    { label: `All Clauses (${clauseCounts['ALL'] || 0})`, value: 'ALL' },
-    { label: `Clause 4: Context (${clauseCounts['Clause 4'] || 0})`, value: 'Clause 4' },
-    { label: `Clause 5: Leadership (${clauseCounts['Clause 5'] || 0})`, value: 'Clause 5' },
-    { label: `Clause 6: Planning (${clauseCounts['Clause 6'] || 0})`, value: 'Clause 6' },
-    { label: `Clause 7: Support (${clauseCounts['Clause 7'] || 0})`, value: 'Clause 7' },
-    { label: `Clause 8: Operation (${clauseCounts['Clause 8'] || 0})`, value: 'Clause 8' },
-    { label: `Clause 9: Evaluation (${clauseCounts['Clause 9'] || 0})`, value: 'Clause 9' },
-    { label: `Clause 10: Improvement (${clauseCounts['Clause 10'] || 0})`, value: 'Clause 10' },
-  ];
+  const clauseOptions = useMemo(() => {
+    const list = [{ label: `All Sections / Clauses (${checklist.length})`, value: 'ALL' }];
+    distinctClauses.forEach((c) => {
+      const count = checklist.filter((item) => item.clause === c).length;
+      list.push({ label: `${c} (${count})`, value: c });
+    });
+    return list;
+  }, [distinctClauses, checklist]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -691,15 +854,11 @@ export function AuditEntryPage({
                 {initialAudit ? `Edit Audit: ${initialAudit.auditCode}` : 'Conduct Audit'}
               </h2>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                {category === 'INTERNAL'
-                  ? 'INTERNAL ISO 9001'
-                  : category === 'EXTERNAL'
-                  ? 'EXTERNAL'
-                  : 'SUB-SUPPLIER'}
+                {selectedAuditType?.name || (category === 'SAFETY' ? 'SAFETY AUDIT' : category === 'INTERNAL' ? 'INTERNAL ISO 9001' : category)}
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              100-mark evaluation • 80-mark pass benchmark
+              100-mark evaluation • {selectedAuditType?.passMarksThreshold || 80}-mark pass benchmark
             </p>
           </div>
         </div>
@@ -723,88 +882,79 @@ export function AuditEntryPage({
         </div>
       </div>
 
-      {/* ─── 3 AUDIT TYPE SELECTOR TABS ────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            setCategory('INTERNAL');
-            setStandard('ISO 9001:2015 Quality Management System');
-            setAuditorOrganization('Valiant Internal Quality Assurance Dept.');
-          }}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-            category === 'INTERNAL'
-              ? 'bg-blue-50/70 border-blue-400 shadow-xs ring-2 ring-blue-500/20'
-              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className={`p-2 rounded-xl ${category === 'INTERNAL' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-              <ShieldCheck className="w-4 h-4" />
-            </span>
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-              Live ISO Feed
-            </span>
-          </div>
-          <div className="font-bold text-slate-900 text-sm">Internal QMS Audit</div>
-          <div className="text-xs text-slate-500 mt-0.5">
-            ISO 9001:2015 checklist ({checklist.length} questions) with live scoring and multi-photo evidence.
-          </div>
-        </button>
+      {/* ─── AUDIT TYPE SELECTOR TABS ───────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+        {storedAuditTypes.map((type) => {
+          const isSelected =
+            selectedAuditType?.id === type.id ||
+            (!selectedAuditType && category === type.category);
+          return (
+            <button
+              key={type.id}
+              type="button"
+              onClick={() => {
+                setSelectedAuditType(type);
+                setCategory(type.category);
+                setStandard(type.standard);
+                if (type.defaultAuditorOrg) setAuditorOrganization(type.defaultAuditorOrg);
+                if (type.defaultDepartment) setAuditeeDepartment(type.defaultDepartment);
+                setAuditCode(
+                  `AUD-${type.code}-${Date.now().toString().slice(-4)}`
+                );
 
-        <button
-          type="button"
-          onClick={() => {
-            setCategory('EXTERNAL');
-            setStandard('H&M / Buyer Technical & Quality Standard');
-            setAuditorOrganization('SGS International / Buyer Technical Hub');
-          }}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-            category === 'EXTERNAL'
-              ? 'bg-indigo-50/70 border-indigo-400 shadow-xs ring-2 ring-indigo-500/20'
-              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className={`p-2 rounded-xl ${category === 'EXTERNAL' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-              <Award className="w-4 h-4" />
-            </span>
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
-              File & Score
-            </span>
-          </div>
-          <div className="font-bold text-slate-900 text-sm">External & Buyer Audit</div>
-          <div className="text-xs text-slate-500 mt-0.5">
-            Third-party certifications (SGS, BV, H&M) with score entry and report attachment.
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setCategory('SUB_SUPPLIER');
-            setStandard('Sub-Supplier QMS & Facility Evaluation');
-            setAuditorOrganization('Valiant Vendor Quality Division');
-          }}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-            category === 'SUB_SUPPLIER'
-              ? 'bg-emerald-50/70 border-emerald-400 shadow-xs ring-2 ring-emerald-500/20'
-              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className={`p-2 rounded-xl ${category === 'SUB_SUPPLIER' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-              <Building2 className="w-4 h-4" />
-            </span>
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-              Vendor Score
-            </span>
-          </div>
-          <div className="font-bold text-slate-900 text-sm">Sub-Supplier Audit</div>
-          <div className="text-xs text-slate-500 mt-0.5">
-            Evaluate fabric mills and trims suppliers with rating and approval status.
-          </div>
-        </button>
+                // Load questions for this audit type
+                const allStored = getStoredAuditQuestions();
+                const typeQuestions = allStored.filter((q) => q.auditTypeId === type.id);
+                if (typeQuestions.length > 0) {
+                  setChecklist(
+                    typeQuestions.map((q, idx) => convertManagedQuestionToChecklistItem(q, idx))
+                  );
+                } else if (type.category === 'SUB_SUPPLIER') {
+                  const subQs = allStored.filter((q) => q.auditTypeId === 'type-sub-supplier');
+                  setChecklist(
+                    subQs.map((q, idx) => convertManagedQuestionToChecklistItem(q, idx))
+                  );
+                } else if (type.category === 'INTERNAL') {
+                  setChecklist(JSON.parse(JSON.stringify(ISO_9001_DEFAULT_CHECKLIST)));
+                }
+                setClauseFilter('ALL');
+                setStatusFilter('ALL');
+              }}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                isSelected
+                  ? 'bg-blue-50/70 border-blue-400 shadow-xs ring-2 ring-blue-500/20'
+                  : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span
+                  className={`p-1.5 rounded-xl ${
+                    isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {type.category === 'SAFETY' ? (
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  ) : type.category === 'COMPLIANCE' ? (
+                    <Users className="w-4 h-4 text-purple-600" />
+                  ) : type.category === 'SUB_SUPPLIER' ? (
+                    <Building2 className="w-4 h-4 text-emerald-600" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4 text-blue-600" />
+                  )}
+                </span>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-800">
+                  {type.code}
+                </span>
+              </div>
+              <div className="font-bold text-slate-900 text-xs truncate" title={type.name}>
+                {type.name}
+              </div>
+              <div className="text-[10px] text-slate-500 truncate mt-0.5" title={type.standard}>
+                {type.standard}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* ─── GENERAL AUDIT SCOPE CARD ──────────────────────────────────────── */}
@@ -879,35 +1029,7 @@ export function AuditEntryPage({
             />
           </div>
 
-          {category === 'SUB_SUPPLIER' ? (
-            <>
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Sub-Supplier Name *</label>
-                <input
-                  type="text"
-                  value={supplierName}
-                  onChange={(e) => setSupplierName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  placeholder="e.g. Apex Spinning & Knitting"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Supplier Category</label>
-                <select
-                  value={supplierCategory}
-                  onChange={(e) => setSupplierCategory(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  <option value="Fabric Mill (Knits & Woven)">Fabric Mill (Knits & Woven)</option>
-                  <option value="Trims & Accessories (Zippers, Buttons)">Trims & Accessories (Zippers, Buttons)</option>
-                  <option value="Dyeing & Finishing House">Dyeing & Finishing House</option>
-                  <option value="Washing & Garment Dyeing">Washing & Garment Dyeing</option>
-                  <option value="Embroidery & Printing Plant">Embroidery & Printing Plant</option>
-                </select>
-              </div>
-            </>
-          ) : (
+          {category !== 'SUB_SUPPLIER' && (
             <>
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Audited Department / Lines</label>
@@ -933,21 +1055,207 @@ export function AuditEntryPage({
             </>
           )}
         </div>
+
+        {/* ─── DEDICATED SUB-SUPPLIER SELECTION (ONLY FOR SUB-SUPPLIER AUDIT) ──── */}
+        {category === 'SUB_SUPPLIER' && (
+          <div className="pt-4 border-t border-slate-200/80 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-emerald-50/50 p-4 rounded-xl border border-emerald-200">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-slate-900">
+                      Sub-Supplier Selection &amp; Directory Sync
+                    </h4>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      SubSupplier Module Integrated
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Select any registered vendor from the SubSupplier module to auto-fill code, category, contacts, facility location, and quality rating
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsSubSupplierModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs cursor-pointer self-start sm:self-auto shrink-0"
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>{supplierName ? 'Change Sub-Supplier' : 'Select Sub-Supplier'}</span>
+              </button>
+            </div>
+
+            {/* Selected Sub-Supplier Profile Highlight Card */}
+            {selectedSubSupplier || supplierName ? (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    {selectedSubSupplier?.logoUrl ? (
+                      <img
+                        src={selectedSubSupplier.logoUrl}
+                        alt={supplierName}
+                        className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 border border-emerald-200 text-sm">
+                        {(supplierName || 'SS').slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-slate-900">
+                          {supplierName}
+                        </span>
+                        {subSupplierCode && (
+                          <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-800">
+                            {subSupplierCode}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                          {supplierCategory}
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          ✓ Synced from SubSupplier Module
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
+                        {(subSupplierLocation || subSupplierCountry) && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{subSupplierLocation || subSupplierCountry}</span>
+                          </span>
+                        )}
+                        {subSupplierContact && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{subSupplierContact} {subSupplierPhone ? `(${subSupplierPhone})` : ''}</span>
+                          </span>
+                        )}
+                        {subSupplierEmail && (
+                          <span className="flex items-center gap-1">
+                            <Mail className="w-3.5 h-3.5 text-slate-400" />
+                            <span className="font-mono">{subSupplierEmail}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
+                    {subSupplierRating && (
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Quality Rating</span>
+                        <span className="font-mono font-bold text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          Grade {subSupplierRating}
+                        </span>
+                      </div>
+                    )}
+                    {subSupplierAuditScore !== undefined && (
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Vendor Score</span>
+                        <span className="font-mono font-bold text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                          {subSupplierAuditScore}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sub-Supplier Fine-Tuning Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-200/70 text-xs">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Sub-Supplier Name *</label>
+                    <input
+                      type="text"
+                      value={supplierName}
+                      onChange={(e) => setSupplierName(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Supplier Category</label>
+                    <select
+                      value={supplierCategory}
+                      onChange={(e) => setSupplierCategory(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
+                    >
+                      <option value="Fabric Mill (Knits & Woven)">Fabric Mill (Knits & Woven)</option>
+                      <option value="Dyeing & Finishing House">Dyeing & Finishing House</option>
+                      <option value="Trims & Accessories (Zippers, Buttons)">Trims & Accessories (Zippers, Buttons)</option>
+                      <option value="Zippers & Fasteners">Zippers & Fasteners</option>
+                      <option value="Labels & Packaging Materials">Labels & Packaging Materials</option>
+                      <option value="Thread & Yarn Mill">Thread & Yarn Mill</option>
+                      <option value="Washing & Garment Dyeing">Washing & Garment Dyeing</option>
+                      <option value="Embroidery & Printing Plant">Embroidery & Printing Plant</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Facility Location</label>
+                    <input
+                      type="text"
+                      value={subSupplierLocation}
+                      onChange={(e) => setSubSupplierLocation(e.target.value)}
+                      placeholder="e.g. Binh Duong / Gazipur"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Vendor Approval Recommendation</label>
+                    <select
+                      value={approvalStatus}
+                      onChange={(e) => setApprovalStatus(e.target.value as any)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-bold text-emerald-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
+                    >
+                      <option value="APPROVED">APPROVED (Authorized Vendor)</option>
+                      <option value="CONDITIONAL">CONDITIONAL (Subject to CAPA)</option>
+                      <option value="PENDING">PENDING REVIEW</option>
+                      <option value="REJECTED">REJECTED / BLACKLISTED</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 rounded-xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-2">
+                <Building2 className="w-8 h-8 text-slate-400 mx-auto" />
+                <p className="text-xs font-semibold text-slate-700">
+                  No sub-supplier selected yet from the SubSupplier module.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsSubSupplierModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Click here to select an active vendor from SubSupplier module</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ─── WORKFLOW A: INTERNAL AUDIT (CLEAN LIGHT EVALUATION SCORECARD) ──── */}
-      {category === 'INTERNAL' && (
+      {/* ─── WORKFLOW A: CHECKLIST AUDIT (CLEAN LIGHT EVALUATION SCORECARD) ──── */}
+      {isChecklistAudit && (
         <div className="space-y-6">
           {/* Light Evaluation Scoreboard Banner */}
           <div className="bg-gradient-to-br from-blue-50/70 via-white to-slate-50 rounded-2xl p-5 border border-blue-200 shadow-xs space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-2xl shrink-0 ${
-                  internalScoreResult.hasCriticalFail
+                  internalScoreResult.hasCriticalFail && selectedAuditType?.criticalNcFailsAudit !== false
                     ? 'bg-rose-100 text-rose-700'
                     : 'bg-blue-100 text-blue-700'
                 }`}>
-                  {internalScoreResult.hasCriticalFail ? (
+                  {internalScoreResult.hasCriticalFail && selectedAuditType?.criticalNcFailsAudit !== false ? (
                     <ShieldAlert className="w-8 h-8" />
                   ) : (
                     <ShieldCheck className="w-8 h-8" />
@@ -955,27 +1263,29 @@ export function AuditEntryPage({
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-blue-900 uppercase tracking-wider">
-                    ISO 9001:2015 Live Scoring Engine ({checklist.length} Questions)
+                    {selectedAuditType?.name || (category === 'SAFETY' ? 'Safety & EHS Audit' : 'ISO 9001:2015')} Live Scoring Engine ({checklist.length} Questions)
                   </div>
                   <div className="flex items-center gap-3 mt-1 flex-wrap">
                     <span className="text-3xl font-black font-mono text-slate-900">
                       {internalScoreResult.obtainedMarks}{' '}
-                      <span className="text-sm font-normal text-slate-500">/ 100 Marks</span>
+                      <span className="text-sm font-normal text-slate-500">
+                        / {selectedAuditType?.totalAvailableMarks || 100} Marks
+                      </span>
                     </span>
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-bold font-mono tracking-wide border ${
-                        internalScoreResult.hasCriticalFail
+                        internalScoreResult.hasCriticalFail && selectedAuditType?.criticalNcFailsAudit !== false
                           ? 'bg-rose-100 text-rose-800 border-rose-300 ring-1 ring-rose-400'
-                          : internalScoreResult.isPassed
+                          : internalScoreResult.obtainedMarks >= (selectedAuditType?.passMarksThreshold || 80)
                           ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                           : 'bg-rose-100 text-rose-800 border-rose-300'
                       }`}
                     >
-                      {internalScoreResult.hasCriticalFail
+                      {internalScoreResult.hasCriticalFail && selectedAuditType?.criticalNcFailsAudit !== false
                         ? 'AUDIT FAILED (CRITICAL NC FOUND)'
-                        : internalScoreResult.isPassed
-                        ? 'PASSED (≥80 MARKS)'
-                        : 'FAILED (<80 MARKS)'}
+                        : internalScoreResult.obtainedMarks >= (selectedAuditType?.passMarksThreshold || 80)
+                        ? `PASSED (≥${selectedAuditType?.passMarksThreshold || 80} MARKS)`
+                        : `FAILED (<${selectedAuditType?.passMarksThreshold || 80} MARKS)`}
                     </span>
                   </div>
                 </div>
@@ -1189,17 +1499,25 @@ export function AuditEntryPage({
         </div>
       )}
 
-      {/* ─── WORKFLOW B: EXTERNAL AUDIT ────────────────────────────────────── */}
+      {/* ─── WORKFLOW B: THIRD-PARTY & CUSTOMER EXTERNAL AUDIT (REPORT & SCORE MODE) ── */}
       {category === 'EXTERNAL' && (
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  NO QUESTION CHECKLIST REQUIRED
+                </span>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  Official Report & Certificate Mode
+                </span>
+              </div>
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Award className="w-5 h-5 text-indigo-600" />
-                <span>External Certification & Buyer Evaluation</span>
+                <span>Third-Party & Customer External Audit</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Record score, non-conformances, and attach official third-party audit report.
+                Record official score awarded by certifying body (SGS, Bureau Veritas, Intertek, WRAP, H&M, Inditex), log non-conformances, and upload official third-party audit report.
               </p>
             </div>
             <div className="text-right">
@@ -1370,165 +1688,6 @@ export function AuditEntryPage({
         </div>
       )}
 
-      {/* ─── WORKFLOW C: SUB-SUPPLIER AUDIT ────────────────────────────────── */}
-      {category === 'SUB_SUPPLIER' && (
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-emerald-600" />
-                <span>Sub-Supplier Quality Evaluation</span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Evaluate fabric knitting, dyeing, and trim vendor manufacturing capability.
-              </p>
-            </div>
-            <div>
-              <select
-                value={approvalStatus}
-                onChange={(e: any) => setApprovalStatus(e.target.value)}
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs border ${
-                  approvalStatus === 'APPROVED'
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : approvalStatus === 'CONDITIONAL'
-                    ? 'bg-amber-50 text-amber-800 border-amber-300'
-                    : 'bg-rose-50 text-rose-800 border-rose-300'
-                }`}
-              >
-                <option value="APPROVED">STATUS: APPROVED (TIER-1)</option>
-                <option value="CONDITIONAL">STATUS: CONDITIONAL</option>
-                <option value="PENDING">STATUS: PENDING</option>
-                <option value="REJECTED">STATUS: DISQUALIFIED</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <label className="text-xs font-bold text-slate-700 block mb-1">
-                Vendor Audit Score (0–100) *
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={externalScore}
-                  onChange={(e) => setExternalScore(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-xl font-bold font-mono text-emerald-700 rounded-xl border border-slate-200 bg-white"
-                />
-                <span className="text-xs font-bold text-slate-400">/ 100</span>
-              </div>
-              <span className="text-[10px] text-slate-500 block mt-1">Passing requirement: 80 marks.</span>
-            </div>
-
-            <div className="p-4 rounded-xl bg-rose-50/40 border border-rose-200">
-              <label className="text-xs font-bold text-rose-800 block mb-1">
-                Critical NCs (Fail Rule)
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={criticalNCs}
-                onChange={(e) => setCriticalNCs(Number(e.target.value))}
-                className="w-full px-3 py-2 text-xl font-bold font-mono text-rose-700 rounded-xl border border-rose-300 bg-white"
-              />
-              <span className="text-[10px] text-rose-600 block mt-1">Disqualifying findings.</span>
-            </div>
-
-            <div className="p-4 rounded-xl bg-orange-50/40 border border-orange-200">
-              <label className="text-xs font-bold text-orange-800 block mb-1">
-                Major Non-Conformances
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={majorNCs}
-                onChange={(e) => setMajorNCs(Number(e.target.value))}
-                className="w-full px-3 py-2 text-xl font-bold font-mono text-orange-700 rounded-xl border border-orange-300 bg-white"
-              />
-              <span className="text-[10px] text-orange-600 block mt-1">Critical findings.</span>
-            </div>
-
-            <div className="p-4 rounded-xl bg-amber-50/40 border border-amber-200">
-              <label className="text-xs font-bold text-amber-800 block mb-1">
-                Minor Observations / NCs
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={minorNCs}
-                onChange={(e) => setMinorNCs(Number(e.target.value))}
-                className="w-full px-3 py-2 text-xl font-bold font-mono text-amber-700 rounded-xl border border-amber-300 bg-white"
-              />
-              <span className="text-[10px] text-amber-600 block mt-1">Advisory items.</span>
-            </div>
-          </div>
-
-          {/* Supplier Report Upload */}
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-slate-800 block">
-              Supplier Evaluation Report Upload
-            </label>
-            <label className="flex flex-col items-center justify-center p-6 rounded-2xl border-2 border-dashed border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/30 transition-colors cursor-pointer text-center">
-              <Upload className="w-5 h-5 text-emerald-600 mb-1" />
-              <span className="text-xs font-bold text-slate-800">
-                Attach Supplier Evaluation PDF or Verification Photos
-              </span>
-              <input
-                type="file"
-                accept=".pdf,image/*"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    handleReportFileUpload(e.target.files[0]);
-                  }
-                }}
-              />
-            </label>
-
-            {uploadedFiles.length > 0 && (
-              <div className="space-y-2">
-                {uploadedFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs"
-                  >
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-emerald-600" />
-                      <div>
-                        <span className="font-bold text-slate-900 block">{file.fileName}</span>
-                        <span className="text-slate-500 text-[11px]">{file.fileSize} • {file.uploadDate}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveReportFile(file.id)}
-                      className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-slate-800 block mb-1">
-              Assessment Summary
-            </label>
-            <textarea
-              rows={3}
-              value={executiveSummary}
-              onChange={(e) => setExecutiveSummary(e.target.value)}
-              placeholder="Record evaluation summary of supplier quality and process controls..."
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-        </div>
-      )}
-
       {/* ─── BOTTOM SUBMISSION BAR ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
         <div className="text-xs text-slate-500">
@@ -1583,6 +1742,15 @@ export function AuditEntryPage({
         onAddQuestion={handleAddQuestion}
         onImportQuestions={handleImportQuestions}
         showToast={showToast}
+      />
+
+      {/* Sub-Supplier Selector Modal (Exclusive to Sub-Supplier Audit) */}
+      <SubSupplierSelectorModal
+        isOpen={isSubSupplierModalOpen}
+        onClose={() => setIsSubSupplierModalOpen(false)}
+        onSelectSupplier={handleSelectSubSupplier}
+        selectedSupplierId={subSupplierId}
+        selectedSupplierName={supplierName}
       />
     </div>
   );

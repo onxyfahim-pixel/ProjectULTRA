@@ -19,10 +19,20 @@ import {
   Edit2,
   Trash2,
   Copy,
+  Link2,
+  ShieldCheck,
+  Zap,
+  RotateCcw,
+  Sliders,
+  Check,
+  X,
 } from 'lucide-react';
 import {
-  FactoryMaster,
-  ProductionLineMaster,
+  ProductionUnit,
+  ProductionSection,
+  ProductionLine,
+} from '@/lib/types/production-management';
+import {
   OperationMasterItem,
   MachineMasterItem,
   OperatorMasterItem,
@@ -31,8 +41,9 @@ import {
 } from '@/lib/types/planning-ie';
 
 interface MasterDataTabProps {
-  factories: FactoryMaster[];
-  lines: ProductionLineMaster[];
+  units: ProductionUnit[];
+  sections: ProductionSection[];
+  lines: ProductionLine[];
   operations: OperationMasterItem[];
   machines: MachineMasterItem[];
   operators: OperatorMasterItem[];
@@ -41,13 +52,24 @@ interface MasterDataTabProps {
   onAddMachine: (m: MachineMasterItem) => void;
   onAddOperator: (o: OperatorMasterItem) => void;
   onUpdateSkillLevel: (id: string, newLevel: SkillLevelGrade) => void;
+  onAddUnit?: (u: ProductionUnit) => void;
+  onUpdateUnitStatus?: (id: string, status: 'ACTIVE' | 'INACTIVE') => void;
+  onDeleteUnit?: (id: string) => void;
+  onAddSection?: (s: ProductionSection) => void;
+  onUpdateSectionStatus?: (id: string, status: 'ACTIVE' | 'INACTIVE') => void;
+  onDeleteSection?: (id: string) => void;
+  onAddLine?: (l: ProductionLine) => void;
+  onUpdateLineStatus?: (id: string, status: 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE') => void;
+  onDeleteLine?: (id: string) => void;
   onExportCsv: (filename: string, rows: any[]) => void;
 }
 
 type SubTab = 'hierarchy' | 'operations' | 'machines' | 'operators' | 'skill_matrix';
+type HierarchyView = 'units' | 'sections' | 'lines';
 
 export function MasterDataTab({
-  factories,
+  units,
+  sections,
   lines,
   operations,
   machines,
@@ -57,11 +79,91 @@ export function MasterDataTab({
   onAddMachine,
   onAddOperator,
   onUpdateSkillLevel,
+  onAddUnit,
+  onUpdateUnitStatus,
+  onDeleteUnit,
+  onAddSection,
+  onUpdateSectionStatus,
+  onDeleteSection,
+  onAddLine,
+  onUpdateLineStatus,
+  onDeleteLine,
   onExportCsv,
 }: MasterDataTabProps) {
   const [subTab, setSubTab] = useState<SubTab>('hierarchy');
+  const [hierarchyView, setHierarchyView] = useState<HierarchyView>('lines');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDept, setFilterDept] = useState('ALL');
+  const [selectedUnitFilter, setSelectedUnitFilter] = useState('ALL');
+
+  // Modals
+  const [isLineModalOpen, setIsLineModalOpen] = useState(false);
+  const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
+  const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
+
+  // New Line Form State
+  const [newLineName, setNewLineName] = useState('');
+  const [newLineCode, setNewLineCode] = useState('');
+  const [newLineUnitId, setNewLineUnitId] = useState(units[0]?.id || 'unit-01');
+  const [newLineSectionId, setNewLineSectionId] = useState(sections[0]?.id || 'sec-01');
+  const [newLineChief, setNewLineChief] = useState('');
+  const [newLineQC, setNewLineQC] = useState('');
+  const [newLineCapacity, setNewLineCapacity] = useState(140);
+  const [newLineOperators, setNewLineOperators] = useState(48);
+  const [newLineMachines, setNewLineMachines] = useState(52);
+  const [newLineRemarks, setNewLineRemarks] = useState('');
+
+  // New Section Form State
+  const [newSecName, setNewSecName] = useState('');
+  const [newSecCode, setNewSecCode] = useState('');
+  const [newSecUnitId, setNewSecUnitId] = useState(units[0]?.id || 'unit-01');
+  const [newSecIncharge, setNewSecIncharge] = useState('');
+  const [newSecDesc, setNewSecDesc] = useState('');
+
+  // New Unit Form State
+  const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitCode, setNewUnitCode] = useState('');
+  const [newUnitLocation, setNewUnitLocation] = useState('');
+  const [newUnitManager, setNewUnitManager] = useState('');
+  const [newUnitDesc, setNewUnitDesc] = useState('');
+
+  // Filtered Lines
+  const filteredLines = useMemo(() => {
+    return lines.filter((l) => {
+      const matchSearch =
+        l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        l.lineCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (l.lineChief || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (l.qualityController || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (l.unitName || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchUnit = selectedUnitFilter === 'ALL' || l.unitId === selectedUnitFilter || l.unitName === selectedUnitFilter;
+      return matchSearch && matchUnit;
+    });
+  }, [lines, searchQuery, selectedUnitFilter]);
+
+  // Filtered Sections
+  const filteredSections = useMemo(() => {
+    return sections.filter((s) => {
+      const matchSearch =
+        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.sectionCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (s.inchargeName || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchUnit = selectedUnitFilter === 'ALL' || s.unitId === selectedUnitFilter || s.unitName === selectedUnitFilter;
+      return matchSearch && matchUnit;
+    });
+  }, [sections, searchQuery, selectedUnitFilter]);
+
+  // Filtered Units
+  const filteredUnits = useMemo(() => {
+    return units.filter((u) => {
+      return (
+        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.unitCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (u.managerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (u.location || '').toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    });
+  }, [units, searchQuery]);
 
   // Filtered Operations
   const filteredOperations = useMemo(() => {
@@ -99,7 +201,7 @@ export function MasterDataTab({
     });
   }, [operators, searchQuery]);
 
-  // Quick Skill Badge Renderer
+  // Skill Badge Renderer
   const renderSkillBadge = (level: SkillLevelGrade) => {
     const config = {
       0: { label: '0: Not Trained', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
@@ -115,9 +217,96 @@ export function MasterDataTab({
     );
   };
 
+  const handleCreateLineSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLineName.trim()) return;
+    const parentUnit = units.find((u) => u.id === newLineUnitId) || units[0];
+    const parentSec = sections.find((s) => s.id === newLineSectionId) || sections[0];
+
+    const newLine: ProductionLine = {
+      id: `line-${Date.now()}`,
+      name: newLineName.trim(),
+      lineCode: newLineCode.trim() || `L-${lines.length + 1}`,
+      unitId: parentUnit?.id || 'unit-01',
+      unitName: parentUnit?.name || 'Unit 01 (Dhaka Complex)',
+      sectionId: parentSec?.id || 'sec-01',
+      sectionName: parentSec?.name || 'Sewing Floor',
+      lineChief: newLineChief.trim() || 'Floor Supervisor',
+      qualityController: newLineQC.trim() || 'Quality Officer',
+      targetCapacityPerHour: Number(newLineCapacity) || 140,
+      operatorCount: Number(newLineOperators) || 48,
+      machineCount: Number(newLineMachines) || 52,
+      status: 'ACTIVE',
+      remarks: newLineRemarks.trim() || 'Added via Planning & IE Master Center',
+      createdAt: new Date().toISOString(),
+    };
+
+    if (onAddLine) {
+      onAddLine(newLine);
+    }
+    setIsLineModalOpen(false);
+    setNewLineName('');
+    setNewLineCode('');
+    setNewLineChief('');
+    setNewLineQC('');
+  };
+
+  const handleCreateSectionSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSecName.trim()) return;
+    const parentUnit = units.find((u) => u.id === newSecUnitId) || units[0];
+
+    const newSec: ProductionSection = {
+      id: `sec-${Date.now()}`,
+      name: newSecName.trim(),
+      sectionCode: newSecCode.trim() || `SEC-${sections.length + 1}`,
+      unitId: parentUnit?.id || 'unit-01',
+      unitName: parentUnit?.name || 'Unit 01 (Dhaka Complex)',
+      inchargeName: newSecIncharge.trim() || 'Section Incharge',
+      status: 'ACTIVE',
+      description: newSecDesc.trim() || 'Production Section',
+      createdAt: new Date().toISOString(),
+    };
+
+    if (onAddSection) {
+      onAddSection(newSec);
+    }
+    setIsSectionModalOpen(false);
+    setNewSecName('');
+    setNewSecCode('');
+    setNewSecIncharge('');
+    setNewSecDesc('');
+  };
+
+  const handleCreateUnitSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUnitName.trim()) return;
+
+    const newUnit: ProductionUnit = {
+      id: `unit-${Date.now()}`,
+      name: newUnitName.trim(),
+      unitCode: newUnitCode.trim() || `UNIT-0${units.length + 1}`,
+      location: newUnitLocation.trim() || 'Industrial Complex',
+      managerName: newUnitManager.trim() || 'Plant Manager',
+      status: 'ACTIVE',
+      description: newUnitDesc.trim() || 'Manufacturing Unit',
+      createdAt: new Date().toISOString(),
+    };
+
+    if (onAddUnit) {
+      onAddUnit(newUnit);
+    }
+    setIsUnitModalOpen(false);
+    setNewUnitName('');
+    setNewUnitCode('');
+    setNewUnitLocation('');
+    setNewUnitManager('');
+    setNewUnitDesc('');
+  };
+
   return (
     <div className="space-y-6">
-      {/* Sub Navigation Bar */}
+      {/* Top Sub-Navigation Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
@@ -129,7 +318,7 @@ export function MasterDataTab({
             }`}
           >
             <Building2 className="w-3.5 h-3.5" />
-            <span>01. Factory Hierarchy & Lines ({lines.length})</span>
+            <span>01. Real Factory Hierarchy &amp; Lines ({lines.length})</span>
           </button>
           <button
             onClick={() => setSubTab('operations')}
@@ -151,7 +340,7 @@ export function MasterDataTab({
             }`}
           >
             <Cpu className="w-3.5 h-3.5" />
-            <span>25. Machine Masters & Utilization ({machines.length})</span>
+            <span>25. Machine Masters &amp; Utilization ({machines.length})</span>
           </button>
           <button
             onClick={() => setSubTab('operators')}
@@ -177,14 +366,14 @@ export function MasterDataTab({
           </button>
         </div>
 
-        {/* Global Export Button for Current Master */}
+        {/* Global Export Button */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               if (subTab === 'operations') onExportCsv('Operations_Master.csv', operations);
               else if (subTab === 'machines') onExportCsv('Machine_Utilization_Master.csv', machines);
               else if (subTab === 'operators') onExportCsv('Operator_Master.csv', operators);
-              else if (subTab === 'hierarchy') onExportCsv('Factory_Lines_Master.csv', lines);
+              else if (subTab === 'hierarchy') onExportCsv('Production_Lines_Master.csv', lines);
               else onExportCsv('Skill_Matrix.csv', skillMatrix);
             }}
             className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -195,107 +384,354 @@ export function MasterDataTab({
         </div>
       </div>
 
-      {/* SUB-TAB 1: FACTORY HIERARCHY */}
+      {/* SUB-TAB 1: FACTORY, SECTIONS & LINES HIERARCHY */}
       {subTab === 'hierarchy' && (
         <div className="space-y-6">
-          {/* Factory Plant Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {factories.map((fac) => (
-              <div
-                key={fac.id}
-                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                      <Factory className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900">{fac.name}</h4>
-                      <p className="text-[11px] text-slate-500 font-mono">{fac.code} &bull; {fac.location}</p>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Operational
+          {/* Live Sync Banner */}
+          <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-blue-500/10 border border-emerald-200 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs">
+                <Link2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Live Synchronized with Production &amp; Quality Management
+                  </h4>
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center">
-                  <div className="bg-slate-50 p-2 rounded-xl">
-                    <div className="text-[10px] uppercase font-bold text-slate-400">Buildings</div>
-                    <div className="text-sm font-bold text-slate-800 mt-0.5">{fac.totalBuildings}</div>
-                  </div>
-                  <div className="bg-slate-50 p-2 rounded-xl">
-                    <div className="text-[10px] uppercase font-bold text-slate-400">Total Lines</div>
-                    <div className="text-sm font-bold text-slate-800 mt-0.5">{fac.totalLines}</div>
-                  </div>
-                  <div className="bg-slate-50 p-2 rounded-xl">
-                    <div className="text-[10px] uppercase font-bold text-slate-400">Shifts</div>
-                    <div className="text-sm font-bold text-slate-800 mt-0.5">2 (Day / Evg)</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Lines Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                  Production Lines Master & Capacities
-                </h4>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Assigned unit, line types, floor locations, and standard efficiency benchmarks
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Factory Units, Sections/Floors, and Production Lines are 100% unified in real-time. Any line added, section added, or status changed here updates Production and Quality instantaneously.
                 </p>
               </div>
-              <div className="text-xs font-bold text-blue-600">{lines.length} Active Lines</div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
-                  <tr>
-                    <th className="p-3">Line Name</th>
-                    <th className="p-3">Code</th>
-                    <th className="p-3">Line Type</th>
-                    <th className="p-3">Floor & Building</th>
-                    <th className="p-3 text-center">Operator Capacity</th>
-                    <th className="p-3 text-center">Machine Capacity</th>
-                    <th className="p-3 text-center">Std Efficiency</th>
-                    <th className="p-3 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {lines.map((l) => (
-                    <tr key={l.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900">{l.name}</td>
-                      <td className="p-3 font-mono text-slate-600">{l.lineCode}</td>
-                      <td className="p-3">
-                        <span className="font-bold text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                          {l.lineType}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-600">{l.floor}</td>
-                      <td className="p-3 text-center font-mono font-bold text-slate-800">{l.capacityOperators} Ops</td>
-                      <td className="p-3 text-center font-mono font-bold text-slate-800">{l.capacityMachines} M/c</td>
-                      <td className="p-3 text-center font-mono font-bold text-blue-700">{l.standardEfficiency}%</td>
-                      <td className="p-3 text-center">
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            l.status === 'ACTIVE'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
-                        >
-                          {l.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setHierarchyView('units')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all ${
+                  hierarchyView === 'units'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Units &amp; Plants ({units.length})
+              </button>
+              <button
+                onClick={() => setHierarchyView('sections')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all ${
+                  hierarchyView === 'sections'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Sections &amp; Floors ({sections.length})
+              </button>
+              <button
+                onClick={() => setHierarchyView('lines')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all ${
+                  hierarchyView === 'lines'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Production Lines ({lines.length})
+              </button>
             </div>
           </div>
+
+          {/* VIEW A: PRODUCTION UNITS */}
+          {hierarchyView === 'units' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">Manufacturing Units &amp; Complex Plants</h4>
+                  <p className="text-xs text-slate-500">Operational facilities for knit, denim, woven, and activewear production</p>
+                </div>
+                <button
+                  onClick={() => setIsUnitModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Production Unit</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredUnits.map((u) => {
+                  const assignedLinesCount = lines.filter((l) => l.unitId === u.id || l.unitName === u.name).length;
+                  const assignedSecsCount = sections.filter((s) => s.unitId === u.id || s.unitName === u.name).length;
+
+                  return (
+                    <div key={u.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                            <Factory className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900">{u.name}</h4>
+                            <p className="text-[11px] text-slate-500 font-mono">
+                              {u.unitCode} &bull; {u.location}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            if (onUpdateUnitStatus) {
+                              const nextStatus = u.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+                              onUpdateUnitStatus(u.id, nextStatus);
+                            }
+                          }}
+                          className={`text-[11px] font-bold px-2.5 py-1 rounded-full border cursor-pointer transition-all ${
+                            u.status === 'ACTIVE'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                          }`}
+                          title="Click to toggle status: ACTIVE <-> INACTIVE"
+                        >
+                          {u.status}
+                        </button>
+                      </div>
+
+                      <p className="text-xs text-slate-600 line-clamp-2">{u.description || 'Primary manufacturing facility.'}</p>
+
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center">
+                        <div className="bg-slate-50 p-2 rounded-xl">
+                          <div className="text-[10px] uppercase font-bold text-slate-400">Plant Manager</div>
+                          <div className="text-xs font-bold text-slate-800 mt-0.5 truncate">{u.managerName}</div>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-xl">
+                          <div className="text-[10px] uppercase font-bold text-slate-400">Sections</div>
+                          <div className="text-sm font-bold text-slate-800 mt-0.5">{assignedSecsCount || 5}</div>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-xl">
+                          <div className="text-[10px] uppercase font-bold text-slate-400">Lines Allocated</div>
+                          <div className="text-sm font-bold text-blue-700 mt-0.5">{assignedLinesCount}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW B: SECTIONS & FLOORS */}
+          {hierarchyView === 'sections' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">Plant Sections &amp; Department Floors</h4>
+                  <p className="text-xs text-slate-500">Sewing, Cutting, Finishing, Industrial Washing, and Quality Control AQL</p>
+                </div>
+                <button
+                  onClick={() => setIsSectionModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Section</span>
+                </button>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
+                      <tr>
+                        <th className="p-3">Section Name</th>
+                        <th className="p-3">Section Code</th>
+                        <th className="p-3">Assigned Unit</th>
+                        <th className="p-3">Incharge Name</th>
+                        <th className="p-3">Description</th>
+                        <th className="p-3 text-center">Status</th>
+                        <th className="p-3 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredSections.map((s) => (
+                        <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="p-3 font-bold text-slate-900 flex items-center gap-2">
+                            <Layers className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span>{s.name}</span>
+                          </td>
+                          <td className="p-3 font-mono text-slate-600">{s.sectionCode}</td>
+                          <td className="p-3 font-medium text-slate-800">{s.unitName}</td>
+                          <td className="p-3 font-semibold text-slate-700">{s.inchargeName}</td>
+                          <td className="p-3 text-slate-500 max-w-[220px] truncate">{s.description}</td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => {
+                                if (onUpdateSectionStatus) {
+                                  const next = s.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+                                  onUpdateSectionStatus(s.id, next);
+                                }
+                              }}
+                              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border cursor-pointer transition-all ${
+                                s.status === 'ACTIVE'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                              }`}
+                            >
+                              {s.status}
+                            </button>
+                          </td>
+                          <td className="p-3 text-center">
+                            {onDeleteSection && (
+                              <button
+                                onClick={() => onDeleteSection(s.id)}
+                                className="text-slate-400 hover:text-rose-600 p-1 rounded-lg cursor-pointer"
+                                title="Delete Section"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW C: PRODUCTION LINES MASTER */}
+          {hierarchyView === 'lines' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <div className="relative w-full">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search lines, supervisors, QC, unit..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedUnitFilter}
+                    onChange={(e) => setSelectedUnitFilter(e.target.value)}
+                    className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 focus:outline-none bg-white text-slate-700 font-medium"
+                  >
+                    <option value="ALL">All Factory Units</option>
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={() => setIsLineModalOpen(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Production Line</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Lines Table */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                      Live Production Lines Master &amp; Allocation
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Live sync across Production floor, Quality inspection, and IE planning
+                    </p>
+                  </div>
+                  <div className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{lines.length} Live Synced Lines</span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
+                      <tr>
+                        <th className="p-3">Line Name &amp; Code</th>
+                        <th className="p-3">Factory Unit</th>
+                        <th className="p-3">Section / Floor</th>
+                        <th className="p-3">Line Chief</th>
+                        <th className="p-3">Quality Controller</th>
+                        <th className="p-3 text-center">Hourly Target</th>
+                        <th className="p-3 text-center">Operators</th>
+                        <th className="p-3 text-center">Machines</th>
+                        <th className="p-3 text-center">Live Status</th>
+                        <th className="p-3 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredLines.map((l) => (
+                        <tr key={l.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="p-3">
+                            <div className="font-bold text-slate-900">{l.name}</div>
+                            <div className="text-[10px] font-mono text-blue-700 font-bold">{l.lineCode}</div>
+                          </td>
+                          <td className="p-3 font-semibold text-slate-800">{l.unitName}</td>
+                          <td className="p-3 text-slate-600">{l.sectionName || 'Sewing Floor'}</td>
+                          <td className="p-3 font-medium text-slate-700">{l.lineChief || 'Jahangir Alam'}</td>
+                          <td className="p-3 font-medium text-indigo-700 flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>{l.qualityController || 'Md. Rafiqul Islam'}</span>
+                          </td>
+                          <td className="p-3 text-center font-mono font-bold text-slate-800">
+                            {l.targetCapacityPerHour || 140} pcs/hr
+                          </td>
+                          <td className="p-3 text-center font-mono font-bold text-slate-700">{l.operatorCount || 48} Ops</td>
+                          <td className="p-3 text-center font-mono font-bold text-slate-700">{l.machineCount || 52} M/c</td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => {
+                                if (onUpdateLineStatus) {
+                                  const next = l.status === 'ACTIVE' ? 'MAINTENANCE' : l.status === 'MAINTENANCE' ? 'INACTIVE' : 'ACTIVE';
+                                  onUpdateLineStatus(l.id, next);
+                                }
+                              }}
+                              className={`text-[10px] font-bold px-2.5 py-1 rounded-full border cursor-pointer transition-all ${
+                                l.status === 'ACTIVE'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : l.status === 'MAINTENANCE'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                              }`}
+                              title="Click to toggle status: ACTIVE -> MAINTENANCE -> INACTIVE"
+                            >
+                              {l.status}
+                            </button>
+                          </td>
+                          <td className="p-3 text-center">
+                            {onDeleteLine && (
+                              <button
+                                onClick={() => onDeleteLine(l.id)}
+                                className="text-slate-400 hover:text-rose-600 p-1 rounded-lg cursor-pointer"
+                                title="Delete Line"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -335,10 +771,10 @@ export function MasterDataTab({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
                   <tr>
-                    <th className="p-3">Seq & Code</th>
+                    <th className="p-3">Seq &amp; Code</th>
                     <th className="p-3">Operation Name</th>
                     <th className="p-3">Section</th>
-                    <th className="p-3">Machine Type & Class</th>
+                    <th className="p-3">Machine Type &amp; Class</th>
                     <th className="p-3">Attachment / Work Aid</th>
                     <th className="p-3 text-center">Skill Req</th>
                     <th className="p-3 text-right">SMV (min)</th>
@@ -351,24 +787,24 @@ export function MasterDataTab({
                   {filteredOperations.map((op) => (
                     <tr key={op.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="p-3 font-mono font-bold text-blue-700">
-                        #{op.operationSequence} &bull; {op.operationCode}
+                        {op.operationSequence}. {op.operationCode}
                       </td>
                       <td className="p-3 font-semibold text-slate-900">{op.operationName}</td>
                       <td className="p-3">
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                        <span className="font-bold text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-700">
                           {op.department}
                         </span>
                       </td>
-                      <td className="p-3 text-slate-700">
-                        <div>{op.machineType}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">{op.machineClass}</div>
+                      <td className="p-3">
+                        <div className="font-medium text-slate-800">{op.machineType}</div>
+                        <div className="text-[10px] text-slate-500">{op.machineClass}</div>
                       </td>
-                      <td className="p-3 text-slate-600 text-[11px] max-w-xs">{op.attachment}</td>
+                      <td className="p-3 text-slate-600">{op.attachment || 'None'}</td>
                       <td className="p-3 text-center">{renderSkillBadge(op.skillLevel)}</td>
                       <td className="p-3 text-right font-mono font-bold text-slate-900">{op.smv.toFixed(2)}</td>
-                      <td className="p-3 text-right font-mono text-slate-600">{op.sam.toFixed(2)}</td>
-                      <td className="p-3 text-right font-mono font-bold text-indigo-700">{op.targetPerHour} pcs</td>
-                      <td className="p-3 text-right font-mono font-bold text-emerald-700">{op.operationCapacityPcs} pcs</td>
+                      <td className="p-3 text-right font-mono font-bold text-indigo-700">{op.sam.toFixed(2)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-700">{op.targetPerHour}</td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-700">{op.operationCapacityPcs} pcs</td>
                     </tr>
                   ))}
                 </tbody>
@@ -378,49 +814,26 @@ export function MasterDataTab({
         </div>
       )}
 
-      {/* SUB-TAB 3: MACHINE MASTERS & UTILIZATION */}
+      {/* SUB-TAB 3: MACHINE MASTER */}
       {subTab === 'machines' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase">Total Machine Fleet</div>
-              <div className="text-xl font-bold text-slate-900 mt-1">{machines.length} Units</div>
-              <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Juki, Pegasus, Yamato</div>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase">Avg Machine Utilization</div>
-              <div className="text-xl font-bold text-blue-700 mt-1">87.2%</div>
-              <div className="text-[11px] text-blue-600 font-medium mt-0.5">Target &ge; 85%</div>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase">Fleet Running Status</div>
-              <div className="text-xl font-bold text-emerald-700 mt-1">
-                {machines.filter((m) => m.status === 'RUNNING').length} Running
-              </div>
-              <div className="text-[11px] text-slate-500 font-medium mt-0.5">1 Under Maintenance</div>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase">Mean Time to Repair (MTTR)</div>
-              <div className="text-xl font-bold text-indigo-700 mt-1">18.5 min</div>
-              <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Dedicated mechanics on duty</div>
-            </div>
-          </div>
-
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                25. Factory Sewing &amp; Special Machine Inventory
+              </h4>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
                   <tr>
                     <th className="p-3">Machine ID</th>
-                    <th className="p-3">Type & Brand</th>
-                    <th className="p-3">Serial & Model</th>
-                    <th className="p-3">Assigned Line & Op</th>
+                    <th className="p-3">Type &amp; Category</th>
+                    <th className="p-3">Brand &amp; Model</th>
+                    <th className="p-3">Assigned Line</th>
                     <th className="p-3 text-center">Status</th>
-                    <th className="p-3 text-right">Avail Min</th>
-                    <th className="p-3 text-right">Run Min</th>
-                    <th className="p-3 text-right">Breakdown</th>
+                    <th className="p-3 text-center">Breakdowns</th>
                     <th className="p-3 text-right">Utilization %</th>
-                    <th className="p-3 text-right">Machine Eff %</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -429,41 +842,26 @@ export function MasterDataTab({
                       <td className="p-3 font-mono font-bold text-blue-700">{m.machineId}</td>
                       <td className="p-3">
                         <div className="font-semibold text-slate-900">{m.machineType}</div>
-                        <div className="text-[10px] text-slate-500">{m.brand} &bull; {m.machineCategory}</div>
-                      </td>
-                      <td className="p-3 font-mono text-[11px] text-slate-600">
-                        {m.model} ({m.serialNumber})
+                        <div className="text-[10px] text-slate-500">{m.machineCategory}</div>
                       </td>
                       <td className="p-3">
-                        <div className="font-semibold text-slate-800">{m.lineName}</div>
-                        <div className="text-[11px] text-slate-500">{m.operationName}</div>
+                        <div className="text-slate-800 font-medium">{m.brand}</div>
+                        <div className="text-[10px] text-slate-500">{m.model}</div>
                       </td>
+                      <td className="p-3 font-medium text-slate-800">{m.lineName}</td>
                       <td className="p-3 text-center">
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                             m.status === 'RUNNING'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : m.status === 'AVAILABLE'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : m.status === 'MAINTENANCE'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
                           }`}
                         >
                           {m.status}
                         </span>
                       </td>
-                      <td className="p-3 text-right font-mono text-slate-600">{m.availableMinutesDaily}m</td>
-                      <td className="p-3 text-right font-mono font-semibold text-slate-900">{m.runningMinutes}m</td>
-                      <td className="p-3 text-right font-mono text-rose-600">
-                        {m.breakdownMinutes > 0 ? `${m.breakdownMinutes}m` : '0m'}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-blue-700">
-                        {m.utilizationPercent.toFixed(1)}%
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-emerald-700">
-                        {m.machineEfficiency.toFixed(1)}%
-                      </td>
+                      <td className="p-3 text-center font-mono font-bold">{m.breakdownCountMonth}</td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-700">{m.utilizationPercent}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -473,69 +871,41 @@ export function MasterDataTab({
         </div>
       )}
 
-      {/* SUB-TAB 4: OPERATOR MASTERS */}
+      {/* SUB-TAB 4: OPERATOR MASTER */}
       {subTab === 'operators' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
-            <div className="relative w-full max-w-md">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search operators by name, ID, operation..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              />
-            </div>
-            <div className="text-xs font-semibold text-slate-600">
-              Showing {filteredOperators.length} Operators
-            </div>
-          </div>
-
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                23. Certified Sewing Machine Operators &amp; IE Performance
+              </h4>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
                   <tr>
-                    <th className="p-3">Operator ID</th>
-                    <th className="p-3">Name</th>
-                    <th className="p-3">Line & Dept</th>
+                    <th className="p-3">Operator ID &amp; Name</th>
+                    <th className="p-3">Assigned Line</th>
                     <th className="p-3">Primary Operation</th>
-                    <th className="p-3 text-center">Grade</th>
-                    <th className="p-3 text-center">Skill Level</th>
-                    <th className="p-3 text-center">Multi-Skill</th>
-                    <th className="p-3 text-center">Attendance</th>
-                    <th className="p-3 text-right">Efficiency %</th>
-                    <th className="p-3 text-right">Rating Factor</th>
+                    <th className="p-3 text-center">Skill Grade</th>
+                    <th className="p-3 text-right">Avg Efficiency %</th>
+                    <th className="p-3 text-right">DHU %</th>
+                    <th className="p-3 text-right">Attendance %</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredOperators.map((o) => (
                     <tr key={o.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="p-3 font-mono font-bold text-blue-700">{o.operatorId}</td>
-                      <td className="p-3 font-semibold text-slate-900">{o.name}</td>
-                      <td className="p-3 text-slate-700">{o.lineName}</td>
-                      <td className="p-3 text-slate-800 font-medium">{o.primaryOperation}</td>
-                      <td className="p-3 text-center">
-                        <span className="font-bold font-mono text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-800">
-                          {o.grade}
-                        </span>
+                      <td className="p-3">
+                        <div className="font-bold text-slate-900">{o.name}</div>
+                        <div className="text-[10px] font-mono text-slate-500">{o.operatorId}</div>
                       </td>
+                      <td className="p-3 font-semibold text-slate-800">{o.lineName}</td>
+                      <td className="p-3 text-slate-700 font-medium">{o.primaryOperation}</td>
                       <td className="p-3 text-center">{renderSkillBadge(o.skillLevel)}</td>
-                      <td className="p-3 text-center font-bold text-slate-700">
-                        {o.multiSkillCount} Ops
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {o.attendanceStatus}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-emerald-700">
-                        {o.efficiencyRate.toFixed(1)}%
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-blue-700">
-                        {o.performanceRating}%
-                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-700">{o.avgEfficiencyPercent}%</td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-700">{o.dhuPercent}%</td>
+                      <td className="p-3 text-right font-mono font-bold text-indigo-700">{o.attendancePercent}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -547,83 +917,364 @@ export function MasterDataTab({
 
       {/* SUB-TAB 5: SKILL MATRIX */}
       {subTab === 'skill_matrix' && (
-        <div className="space-y-4">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                  Operator &times; Operation Skill Competency Matrix
-                </h4>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Levels: 0 = Not Trained, 1 = Trainee, 2 = Basic, 3 = Competent, 4 = Expert
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
-                  Training Needed: {skillMatrix.filter((s) => s.trainingNeeded).length} Ops
-                </span>
-              </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-slate-100">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+              24. Operator &times; Operation Competency Skill Matrix
+            </h4>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
+                <tr>
+                  <th className="p-3">Operator Name</th>
+                  <th className="p-3">Operation Code</th>
+                  <th className="p-3">Operation Name</th>
+                  <th className="p-3 text-center">Skill Grade (0-4)</th>
+                  <th className="p-3 text-right">Demonstrated Cycle Time</th>
+                  <th className="p-3 text-right">Historical Efficiency</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {skillMatrix.map((sm) => (
+                  <tr key={sm.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="p-3 font-bold text-slate-900">{sm.operatorName}</td>
+                    <td className="p-3 font-mono font-bold text-blue-700">{sm.operationCode}</td>
+                    <td className="p-3 font-medium text-slate-800">{sm.operationName}</td>
+                    <td className="p-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {[0, 1, 2, 3, 4].map((grade) => (
+                          <button
+                            key={grade}
+                            onClick={() => onUpdateSkillLevel(sm.id, grade as SkillLevelGrade)}
+                            className={`w-5 h-5 rounded text-[10px] font-bold cursor-pointer transition-all ${
+                              sm.skillLevel === grade
+                                ? 'bg-blue-600 text-white shadow-2xs'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            {grade}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="p-3 text-right font-mono font-bold text-slate-800">{sm.cycleTimeSec}s</td>
+                    <td className="p-3 text-right font-mono font-bold text-blue-700">{sm.efficiencyPercent}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE LINE MODAL */}
+      {isLineModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">Add Production Line (Live Synced)</h3>
+              <button
+                onClick={() => setIsLineModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
+              >
+                &times;
+              </button>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
-                  <tr>
-                    <th className="p-3">Operator Name & ID</th>
-                    <th className="p-3">Line</th>
-                    <th className="p-3">Operation Evaluated</th>
-                    <th className="p-3 text-center">Current Skill Level</th>
-                    <th className="p-3 text-center">Change Level</th>
-                    <th className="p-3 text-center">Training Gap</th>
-                    <th className="p-3 text-slate-500">Certified Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {skillMatrix.map((sk) => (
-                    <tr key={sk.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="p-3">
-                        <div className="font-semibold text-slate-900">{sk.operatorName}</div>
-                        <div className="font-mono text-[10px] text-slate-400">{sk.operatorId}</div>
-                      </td>
-                      <td className="p-3 text-slate-600">{sk.lineName}</td>
-                      <td className="p-3 font-medium text-slate-800">
-                        {sk.operationName} <span className="font-mono text-[10px] text-slate-400">({sk.operationCode})</span>
-                      </td>
-                      <td className="p-3 text-center">{renderSkillBadge(sk.skillLevel)}</td>
-                      <td className="p-3 text-center">
-                        <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
-                          {([0, 1, 2, 3, 4] as SkillLevelGrade[]).map((lvl) => (
-                            <button
-                              key={lvl}
-                              onClick={() => onUpdateSkillLevel(sk.id, lvl)}
-                              className={`px-2 py-0.5 text-[10px] font-bold cursor-pointer transition-colors ${
-                                sk.skillLevel === lvl
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-white hover:bg-slate-100 text-slate-700'
-                              }`}
-                            >
-                              {lvl}
-                            </button>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="p-3 text-center">
-                        {sk.trainingNeeded ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                            Training Required
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                            Certified
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-slate-500 font-mono text-[11px]">{sk.certifiedDate || 'Pending'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <form onSubmit={handleCreateLineSubmit} className="mt-4 space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Line Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Sewing Line 09 (Fleece Jackets)"
+                  value={newLineName}
+                  onChange={(e) => setNewLineName(e.target.value)}
+                  className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Line Code</label>
+                  <input
+                    type="text"
+                    placeholder="L-09"
+                    value={newLineCode}
+                    onChange={(e) => setNewLineCode(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Factory Unit</label>
+                  <select
+                    value={newLineUnitId}
+                    onChange={(e) => setNewLineUnitId(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none bg-white font-medium"
+                  >
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Floor Section</label>
+                  <select
+                    value={newLineSectionId}
+                    onChange={(e) => setNewLineSectionId(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none bg-white font-medium"
+                  >
+                    {sections.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Line Chief / Supervisor</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Jahangir Alam"
+                    value={newLineChief}
+                    onChange={(e) => setNewLineChief(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Target / hr</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newLineCapacity}
+                    onChange={(e) => setNewLineCapacity(Number(e.target.value))}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Operators</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newLineOperators}
+                    onChange={(e) => setNewLineOperators(Number(e.target.value))}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Machines</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newLineMachines}
+                    onChange={(e) => setNewLineMachines(Number(e.target.value))}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Quality Controller (QC Officer)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Md. Rafiqul Islam"
+                  value={newLineQC}
+                  onChange={(e) => setNewLineQC(e.target.value)}
+                  className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsLineModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer shadow-xs"
+                >
+                  Save &amp; Sync to Production
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE SECTION MODAL */}
+      {isSectionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">Add Production Section</h3>
+              <button
+                onClick={() => setIsSectionModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
+              >
+                &times;
+              </button>
             </div>
+
+            <form onSubmit={handleCreateSectionSubmit} className="mt-4 space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Section Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Automated Embroidery Floor"
+                  value={newSecName}
+                  onChange={(e) => setNewSecName(e.target.value)}
+                  className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Section Code</label>
+                  <input
+                    type="text"
+                    placeholder="SEC-EMB"
+                    value={newSecCode}
+                    onChange={(e) => setNewSecCode(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Factory Unit</label>
+                  <select
+                    value={newSecUnitId}
+                    onChange={(e) => setNewSecUnitId(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none bg-white font-medium"
+                  >
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Section Incharge</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Monir Hossain"
+                  value={newSecIncharge}
+                  onChange={(e) => setNewSecIncharge(e.target.value)}
+                  className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsSectionModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer shadow-xs"
+                >
+                  Save Section
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE UNIT MODAL */}
+      {isUnitModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">Add Manufacturing Unit / Plant</h3>
+              <button
+                onClick={() => setIsUnitModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUnitSubmit} className="mt-4 space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Unit Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Unit 05 (Manikganj Knit Composite)"
+                  value={newUnitName}
+                  onChange={(e) => setNewUnitName(e.target.value)}
+                  className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Unit Code</label>
+                  <input
+                    type="text"
+                    placeholder="UNIT-05"
+                    value={newUnitCode}
+                    onChange={(e) => setNewUnitCode(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Plant Manager</label>
+                  <input
+                    type="text"
+                    placeholder="Engr. M. Rahman"
+                    value={newUnitManager}
+                    onChange={(e) => setNewUnitManager(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Location Address</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Manikganj Highway Industrial Area, Dhaka"
+                  value={newUnitLocation}
+                  onChange={(e) => setNewUnitLocation(e.target.value)}
+                  className="w-full p-2 rounded-xl border border-slate-200 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsUnitModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer shadow-xs"
+                >
+                  Save Plant Unit
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

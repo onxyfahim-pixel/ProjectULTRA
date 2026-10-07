@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useAppearance } from '@/hooks/use-appearance';
+import { useErpAuth } from '@/hooks/use-erp-auth';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -43,6 +44,7 @@ import {
   User,
   HelpCircle as LifeBuoy,
   Sliders,
+  Lock,
 } from 'lucide-react';
 
 export type NavTab =
@@ -110,6 +112,8 @@ export function ErpSidebar({
   isCollapsed = false,
   onToggleCollapse,
 }: ErpSidebarProps) {
+  const { can } = useErpAuth();
+
   // Navigation organized exactly as shown in the reference QMS design with all ERP modules included
   const navGroups: NavGroup[] = [
     {
@@ -424,85 +428,96 @@ export function ErpSidebar({
 
         {/* Navigation Groups with clean uppercase section titles */}
         <div className={`flex-1 overflow-y-auto space-y-4 pb-6 ${isCollapsed ? 'p-2' : 'px-3 py-3'}`}>
-          {navGroups.map((group, gIdx) => (
-            <div key={gIdx} className="space-y-0.5">
-              {!isCollapsed ? (
-                <div className={`px-3 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider select-none ${
-                  isDarkSidebar ? 'text-slate-400' : 'text-slate-400 dark:text-slate-500'
-                }`}>
-                  {group.groupTitle}
-                </div>
-              ) : (
-                <div className={`my-2 border-t relative group flex justify-center ${isDarkSidebar ? 'border-slate-800' : 'border-slate-100 dark:border-slate-800'}`}>
-                  <div className="hidden group-hover:block absolute left-full ml-3 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider rounded whitespace-nowrap z-50 shadow-lg pointer-events-none">
+          {navGroups.map((group, gIdx) => {
+            // Filter items: Only show modules the user has view permission for (totally hide unauthorized modules)
+            const visibleItems = group.items.filter((item) => {
+              if (item.id === 'settings') return true; // Accessible for User Profile / Appearance
+              return can(item.id, 'view');
+            });
+
+            // If no items in this group are permitted for the user's role, hide the entire group
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <div key={gIdx} className="space-y-0.5">
+                {!isCollapsed ? (
+                  <div className={`px-3 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider select-none ${
+                    isDarkSidebar ? 'text-slate-400' : 'text-slate-400 dark:text-slate-500'
+                  }`}>
                     {group.groupTitle}
                   </div>
-                </div>
-              )}
-
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-
-                const activeClasses = isDarkSidebar
-                  ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/30'
-                  : 'bg-blue-50/90 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 font-bold shadow-2xs';
-
-                const inactiveClasses = isDarkSidebar
-                  ? 'text-slate-300 hover:text-white hover:bg-white/10 font-medium'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50/80 dark:hover:bg-slate-800/60 font-medium';
-
-                return (
-                  <div key={item.id} className="relative group">
-                    <button
-                      id={`sidebar-nav-${item.id}`}
-                      onClick={() => {
-                        onSelectTab(item.id);
-                        onCloseMobile();
-                      }}
-                      className={`w-full rounded-xl transition-all duration-150 flex items-center justify-between cursor-pointer ${
-                        isCollapsed
-                          ? 'justify-center p-2'
-                          : 'px-3 py-2 text-left'
-                      } ${isActive ? activeClasses : inactiveClasses}`}
-                      title={isCollapsed ? item.label : undefined}
-                    >
-                      <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 min-w-0'}`}>
-                        <Icon
-                          className={`w-4 h-4 shrink-0 transition-colors ${
-                            isActive
-                              ? isDarkSidebar ? 'text-white' : 'text-blue-600 dark:text-blue-400'
-                              : isDarkSidebar ? 'text-slate-400 group-hover:text-white' : 'text-slate-400 group-hover:text-slate-600'
-                          }`}
-                        />
-
-                        {!isCollapsed && (
-                          <span className="text-xs truncate">{item.label}</span>
-                        )}
-                      </div>
-
-                      {!isCollapsed && item.hasChevron && (
-                        <ChevronRight
-                          className={`w-3.5 h-3.5 shrink-0 ${
-                            isActive
-                              ? isDarkSidebar ? 'text-white/60' : 'text-blue-400'
-                              : isDarkSidebar ? 'text-slate-500 group-hover:text-slate-300' : 'text-slate-300 group-hover:text-slate-400'
-                          }`}
-                        />
-                      )}
-                    </button>
-
-                    {/* Hover Tooltip in Collapsed Mode */}
-                    {isCollapsed && (
-                      <div className="hidden group-hover:flex items-center fixed left-20 ml-2 px-3 py-1.5 bg-slate-900 text-white text-xs rounded-xl shadow-xl z-50 pointer-events-none whitespace-nowrap animate-in fade-in zoom-in-95 duration-100 border border-slate-800 font-semibold">
-                        {item.label}
-                      </div>
-                    )}
+                ) : (
+                  <div className={`my-2 border-t relative group flex justify-center ${isDarkSidebar ? 'border-slate-800' : 'border-slate-100 dark:border-slate-800'}`}>
+                    <div className="hidden group-hover:block absolute left-full ml-3 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider rounded whitespace-nowrap z-50 shadow-lg pointer-events-none">
+                      {group.groupTitle}
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          ))}
+                )}
+
+                {visibleItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+
+                  const activeClasses = isDarkSidebar
+                    ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-600/30'
+                    : 'bg-blue-50/90 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 font-bold shadow-2xs';
+
+                  const inactiveClasses = isDarkSidebar
+                    ? 'text-slate-300 hover:text-white hover:bg-white/10 font-medium'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50/80 dark:hover:bg-slate-800/60 font-medium';
+
+                  return (
+                    <div key={item.id} className="relative group">
+                      <button
+                        id={`sidebar-nav-${item.id}`}
+                        onClick={() => {
+                          onSelectTab(item.id);
+                          onCloseMobile();
+                        }}
+                        className={`w-full rounded-xl transition-all duration-150 flex items-center justify-between cursor-pointer ${
+                          isCollapsed
+                            ? 'justify-center p-2'
+                            : 'px-3 py-2 text-left'
+                        } ${isActive ? activeClasses : inactiveClasses}`}
+                        title={isCollapsed ? item.label : undefined}
+                      >
+                        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 min-w-0'}`}>
+                          <Icon
+                            className={`w-4 h-4 shrink-0 transition-colors ${
+                              isActive
+                                ? isDarkSidebar ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                                : isDarkSidebar ? 'text-slate-400 group-hover:text-white' : 'text-slate-400 group-hover:text-slate-600'
+                            }`}
+                          />
+
+                          {!isCollapsed && (
+                            <span className="text-xs truncate">{item.label}</span>
+                          )}
+                        </div>
+
+                        {!isCollapsed && item.hasChevron && (
+                          <ChevronRight
+                            className={`w-3.5 h-3.5 shrink-0 ${
+                              isActive
+                                ? isDarkSidebar ? 'text-white/60' : 'text-blue-400'
+                                : isDarkSidebar ? 'text-slate-500 group-hover:text-slate-300' : 'text-slate-300 group-hover:text-slate-400'
+                            }`}
+                          />
+                        )}
+                      </button>
+
+                      {/* Hover Tooltip in Collapsed Mode */}
+                      {isCollapsed && (
+                        <div className="hidden group-hover:flex items-center fixed left-20 ml-2 px-3 py-1.5 bg-slate-900 text-white text-xs rounded-xl shadow-xl z-50 pointer-events-none whitespace-nowrap animate-in fade-in zoom-in-95 duration-100 border border-slate-800 font-semibold">
+                          {item.label}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
 
         {/* Bottom Quick Links matching screenshot: Settings, Help & Support, Profile */}

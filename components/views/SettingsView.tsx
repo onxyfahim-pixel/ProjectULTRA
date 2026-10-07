@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 
 // 12 Settings Sub-Modules including Overview and Export Templates
+import { useErpAuth } from '@/hooks/use-erp-auth';
 import { OverviewTab } from '@/components/modules/settings/OverviewTab';
 import { GeneralTab } from '@/components/modules/settings/GeneralTab';
 import { AppearanceTab } from '@/components/modules/settings/AppearanceTab';
@@ -109,10 +110,10 @@ const SETTINGS_TABS: SettingsTabDef[] = [
   {
     id: 'database_backup',
     sequence: 7,
-    label: 'Database & Backup',
+    label: 'Database, Backup & Reset',
     icon: Database,
     tag: 'Disaster Recovery',
-    description: 'Live MySQL status, zero-downtime snapshots, manual download & JSON restore',
+    description: 'Live MySQL status, server snapshots, JSON restore & clean slate factory reset',
   },
   {
     id: 'export_templates',
@@ -157,18 +158,36 @@ const SETTINGS_TABS: SettingsTabDef[] = [
 ];
 
 export function SettingsView() {
+  const { user } = useErpAuth();
+  const isSuperAdmin = Boolean(user?.isSuperAdmin || user?.role === 'Super Admin' || user?.role === 'ADMIN');
+
+  // Non-Super Admin users can ONLY access User Profile and Appearance Setting
+  const visibleTabs = React.useMemo(() => {
+    if (isSuperAdmin) {
+      return SETTINGS_TABS;
+    }
+    return SETTINGS_TABS.filter((t) => t.id === 'user_profile' || t.id === 'appearance');
+  }, [isSuperAdmin]);
+
   const [activeTab, setActiveTab] = useState<SettingsTabId>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('settings_active_tab') as SettingsTabId;
-      if (saved && SETTINGS_TABS.some((t) => t.id === saved)) return saved;
+      if (saved && (isSuperAdmin ? SETTINGS_TABS : visibleTabs).some((t) => t.id === saved)) return saved;
     }
-    return 'overview';
+    return isSuperAdmin ? 'overview' : 'user_profile';
   });
+
+  // Ensure non-super admin cannot remain on a restricted tab
+  React.useEffect(() => {
+    if (!isSuperAdmin && activeTab !== 'user_profile' && activeTab !== 'appearance') {
+      setActiveTab('user_profile');
+    }
+  }, [isSuperAdmin, activeTab]);
 
   React.useEffect(() => {
     const handleSubtabNav = (e: any) => {
       const target = e.detail as SettingsTabId;
-      if (target && SETTINGS_TABS.some((t) => t.id === target)) {
+      if (target && visibleTabs.some((t) => t.id === target)) {
         setActiveTab(target);
       }
     };
@@ -176,16 +195,21 @@ export function SettingsView() {
     return () => {
       window.removeEventListener('navigate-settings-subtab', handleSubtabNav as EventListener);
     };
-  }, []);
+  }, [visibleTabs]);
 
   const handleTabSelect = (tabId: SettingsTabId) => {
+    if (!isSuperAdmin && tabId !== 'user_profile' && tabId !== 'appearance') {
+      setActiveTab('user_profile');
+      return;
+    }
     setActiveTab(tabId);
     if (typeof window !== 'undefined') {
       localStorage.setItem('settings_active_tab', tabId);
     }
   };
 
-  const currentTab = SETTINGS_TABS.find((t) => t.id === activeTab) || SETTINGS_TABS[0];
+  const currentTab = visibleTabs.find((t) => t.id === activeTab) || visibleTabs[0];
+  const currentIndex = visibleTabs.findIndex((t) => t.id === currentTab.id);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-300">
@@ -198,14 +222,16 @@ export function SettingsView() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">
-                Enterprise System Settings
+                {isSuperAdmin ? 'Enterprise System Settings' : 'Personal & Appearance Settings'}
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 uppercase tracking-wide">
-                Production Control
+                {isSuperAdmin ? 'Production Control' : 'User Settings'}
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-              Centralized administrative console for factory identity, visual appearance, real-time alerts, RBAC access, hardware telemetry, database backups, audit compliance, security, and cloud sync.
+              {isSuperAdmin
+                ? 'Centralized administrative console for factory identity, visual appearance, real-time alerts, RBAC access, hardware telemetry, database backups, audit compliance, security, and cloud sync.'
+                : 'Configure personal profile, factory contact details, credentials, and visual appearance.'}
             </p>
           </div>
         </div>
@@ -224,7 +250,7 @@ export function SettingsView() {
       {/* Navigation Sub-Tabs Bar: Horizontal scrollable with clean modern styling */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-2 shadow-xs">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
-          {SETTINGS_TABS.map((tab) => {
+          {visibleTabs.map((tab, idx) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
@@ -246,7 +272,7 @@ export function SettingsView() {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-500 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
                   }`}
                 >
-                  {tab.sequence}
+                  {idx + 1}
                 </span>
 
                 <Icon
@@ -266,7 +292,7 @@ export function SettingsView() {
       <div className="flex items-center justify-between px-1 text-xs text-slate-500 dark:text-slate-400">
         <div className="flex items-center gap-2">
           <span className="font-bold text-slate-800 dark:text-slate-200">
-            Tab {currentTab.sequence} of {SETTINGS_TABS.length}: {currentTab.label}
+            Tab {currentIndex + 1} of {visibleTabs.length}: {currentTab.label}
           </span>
           <span className="text-slate-300 dark:text-slate-700">•</span>
           <span>{currentTab.description}</span>
@@ -278,20 +304,20 @@ export function SettingsView() {
 
       {/* Tab Content Display Area */}
       <div className="transition-all duration-300">
-        {activeTab === 'overview' && (
+        {activeTab === 'overview' && isSuperAdmin && (
           <OverviewTab onNavigateTab={(tab) => handleTabSelect(tab)} />
         )}
-        {activeTab === 'general' && <GeneralTab />}
+        {activeTab === 'general' && isSuperAdmin && <GeneralTab />}
         {activeTab === 'appearance' && <AppearanceTab />}
-        {activeTab === 'notification' && <NotificationTab />}
-        {activeTab === 'users_rbac' && <UsersRbacTab />}
-        {activeTab === 'system_status' && <SystemHealthTab />}
-        {activeTab === 'database_backup' && <DatabaseBackupTab />}
-        {activeTab === 'export_templates' && <ExportTemplatesTab />}
-        {activeTab === 'audit_trails' && <AuditTrailsTab />}
-        {activeTab === 'security_privacy' && <SecurityPrivacyTab />}
+        {activeTab === 'notification' && isSuperAdmin && <NotificationTab />}
+        {activeTab === 'users_rbac' && isSuperAdmin && <UsersRbacTab />}
+        {activeTab === 'system_status' && isSuperAdmin && <SystemHealthTab />}
+        {activeTab === 'database_backup' && isSuperAdmin && <DatabaseBackupTab />}
+        {activeTab === 'export_templates' && isSuperAdmin && <ExportTemplatesTab />}
+        {activeTab === 'audit_trails' && isSuperAdmin && <AuditTrailsTab />}
+        {activeTab === 'security_privacy' && isSuperAdmin && <SecurityPrivacyTab />}
         {activeTab === 'user_profile' && <UserProfileTab />}
-        {activeTab === 'cloud_integration' && <CloudIntegrationTab />}
+        {activeTab === 'cloud_integration' && isSuperAdmin && <CloudIntegrationTab />}
       </div>
     </div>
   );

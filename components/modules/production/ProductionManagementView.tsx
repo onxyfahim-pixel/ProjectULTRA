@@ -46,12 +46,14 @@ import {
   toggleCommonProductionDefect,
   resetProductionDefectsToDefault,
 } from '@/lib/db/production-defects-store';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface ProductionManagementViewProps {
   showToast: (msg: string) => void;
 }
 
 export function ProductionManagementView({ showToast }: ProductionManagementViewProps) {
+  const { canCreate, canEdit, canDelete } = useModulePermission('production');
   const [units, setUnits] = useState<ProductionUnit[]>([]);
   const [sections, setSections] = useState<ProductionSection[]>([]);
   const [lines, setLines] = useState<ProductionLine[]>([]);
@@ -402,52 +404,54 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
         </div>
 
         {/* Global Add Actions */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setEditingDefect(null);
-              setIsDefectModalOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5 text-amber-700" />
-            <span>Add Defect</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingUnit(null);
-              setIsUnitModalOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5 text-slate-600" />
-            <span>Add Unit</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingSection(null);
-              setIsSectionModalOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5 text-slate-600" />
-            <span>Add Section</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingLine(null);
-              setIsLineModalOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Production Line</span>
-          </button>
-        </div>
+        {canCreate && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setEditingDefect(null);
+                setIsDefectModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-amber-700" />
+              <span>Add Defect</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingUnit(null);
+                setIsUnitModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-slate-600" />
+              <span>Add Unit</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingSection(null);
+                setIsSectionModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-slate-600" />
+              <span>Add Section</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingLine(null);
+                setIsLineModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Production Line</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ------------------------------------------------------------- */}
@@ -645,31 +649,38 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
                       {/* Actions */}
                       <td className="py-3 px-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingLine(line);
-                              setIsLineModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors cursor-pointer"
-                            title="Edit Line & Reassign Line Chief / Quality Controller"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setItemToDelete({
-                                type: 'line',
-                                id: line.id,
-                                title: line.name,
-                              });
-                            }}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-                            title="Delete Line"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingLine(line);
+                                setIsLineModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors cursor-pointer"
+                              title="Edit Line & Reassign Line Chief / Quality Controller"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setItemToDelete({
+                                  type: 'line',
+                                  id: line.id,
+                                  title: line.name,
+                                });
+                              }}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+                              title="Delete Line"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {!canEdit && !canDelete && (
+                            <span className="text-[10px] text-slate-400 italic">Read-only</span>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -704,31 +715,35 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
                     <p className="text-xs text-slate-500">{sec.unitName}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingSection(sec);
-                        setIsSectionModalOpen(true);
-                      }}
-                      className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-                      title="Edit Section"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setItemToDelete({
-                          type: 'section',
-                          id: sec.id,
-                          title: sec.name,
-                        })
-                      }
-                      className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
-                      title="Delete Section"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSection(sec);
+                          setIsSectionModalOpen(true);
+                        }}
+                        className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                        title="Edit Section"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setItemToDelete({
+                            type: 'section',
+                            id: sec.id,
+                            title: sec.name,
+                          })
+                        }
+                        className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                        title="Delete Section"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -786,31 +801,35 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingUnit(unit);
-                        setIsUnitModalOpen(true);
-                      }}
-                      className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-                      title="Edit Unit"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setItemToDelete({
-                          type: 'unit',
-                          id: unit.id,
-                          title: unit.name,
-                        })
-                      }
-                      className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
-                      title="Delete Unit"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingUnit(unit);
+                          setIsUnitModalOpen(true);
+                        }}
+                        className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                        title="Edit Unit"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setItemToDelete({
+                            type: 'unit',
+                            id: unit.id,
+                            title: unit.name,
+                          })
+                        }
+                        className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                        title="Delete Unit"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -923,25 +942,29 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleResetDefects}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-                title="Restore default factory defects (19 standard garment defects)"
-              >
-                <span>Reset Defaults</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingDefect(null);
-                  setIsDefectModalOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Defect</span>
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={handleResetDefects}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                  title="Restore default factory defects (19 standard garment defects)"
+                >
+                  <span>Reset Defaults</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingDefect(null);
+                    setIsDefectModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Defect</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1042,31 +1065,38 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
                         </td>
                         <td className="py-3 px-3 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingDefect(def);
-                                setIsDefectModalOpen(true);
-                              }}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors"
-                              title="Edit Defect"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setItemToDelete({
-                                  type: 'defect',
-                                  id: def.id,
-                                  title: def.name,
-                                })
-                              }
-                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
-                              title="Delete Defect"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingDefect(def);
+                                  setIsDefectModalOpen(true);
+                                }}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors"
+                                title="Edit Defect"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setItemToDelete({
+                                    type: 'defect',
+                                    id: def.id,
+                                    title: def.name,
+                                  })
+                                }
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                                title="Delete Defect"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {!canEdit && !canDelete && (
+                              <span className="text-[10px] text-slate-400 italic">Read-only</span>
+                            )}
                           </div>
                         </td>
                       </tr>

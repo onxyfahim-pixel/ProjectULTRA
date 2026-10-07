@@ -25,28 +25,42 @@ import {
   Layers,
   LayoutDashboard,
   Table2,
+  Sliders,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
-import { QualityAudit, AuditCategory } from '@/lib/types/modules';
+import { QualityAudit, AuditCategory, AuditTypeDefinition, AuditChecklistItem } from '@/lib/types/modules';
 import { MOCK_AUDITS } from '@/lib/db/modules-mock-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
+import {
+  getStoredAuditTypes,
+  convertManagedQuestionToChecklistItem,
+} from '../modules/audit/audit-management-data';
 
 // Subcomponents
 import { AuditDetailsPage } from '../modules/audit/AuditDetailsPage';
 import { AuditEntryPage } from '../modules/audit/AuditEntryPage';
 import { AuditCalendarView } from '../modules/audit/AuditCalendarView';
 import { DeleteAuditModal } from '../modules/audit/DeleteAuditModal';
+import { AuditManagementTab } from '../modules/audit/AuditManagementTab';
+import { AuditSummaryDashboard } from '../modules/audit/AuditSummaryDashboard';
 
 type AuditSubView =
   | { type: 'none' }
   | { type: 'details'; audit: QualityAudit }
-  | { type: 'add' }
+  | {
+      type: 'add';
+      initialAuditType?: AuditTypeDefinition;
+      initialChecklist?: AuditChecklistItem[];
+    }
   | { type: 'edit'; audit: QualityAudit };
 
 export function AuditView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('audit');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
-  const [audits, setAudits] = useState<QualityAudit[]>(MOCK_AUDITS);
+  const [audits, setAudits] = useLiveModuleData<QualityAudit[]>('audit_records', MOCK_AUDITS);
 
   // Dedicated Separate Pages (Details, Add, Edit)
   const [subView, setSubView] = useState<AuditSubView>({ type: 'none' });
@@ -112,6 +126,17 @@ export function AuditView() {
     (a) => a.auditCategory === 'SUB_SUPPLIER' || a.auditType === 'SUB_SUPPLIER'
   ).length;
 
+  const safetyCount = audits.filter(
+    (a) =>
+      a.auditCategory === 'SAFETY' ||
+      a.auditType === 'SAFETY' ||
+      a.auditType === 'SAF-EHS' ||
+      a.standard?.toLowerCase().includes('safety') ||
+      a.standard?.toLowerCase().includes('45001')
+  ).length;
+
+  const storedAuditTypesCount = getStoredAuditTypes().length;
+
   // Scheduled audits count
   const scheduledCount = audits.filter((a) => a.nextAuditDate).length;
 
@@ -155,16 +180,24 @@ export function AuditView() {
 
   // Filtered audits
   const filteredAudits = audits.filter((a) => {
+    const isSafety =
+      a.auditCategory === 'SAFETY' ||
+      a.auditType === 'SAFETY' ||
+      a.auditType === 'SAF-EHS' ||
+      a.standard?.toLowerCase().includes('safety') ||
+      a.standard?.toLowerCase().includes('45001');
     const isInternal =
-      a.auditCategory === 'INTERNAL' || a.auditType === 'INTERNAL' || a.auditType === 'INTERNAL_QMS';
+      !isSafety &&
+      (a.auditCategory === 'INTERNAL' || a.auditType === 'INTERNAL' || a.auditType === 'INTERNAL_QMS');
     const isSubSupplier =
       a.auditCategory === 'SUB_SUPPLIER' || a.auditType === 'SUB_SUPPLIER';
-    const isExternal = !isInternal && !isSubSupplier;
+    const isExternal = !isInternal && !isSubSupplier && !isSafety;
 
     let matchesCategory = true;
     if (activeCategoryFilter === 'INTERNAL') matchesCategory = isInternal;
     else if (activeCategoryFilter === 'EXTERNAL') matchesCategory = isExternal;
     else if (activeCategoryFilter === 'SUB_SUPPLIER') matchesCategory = isSubSupplier;
+    else if (activeCategoryFilter === 'SAFETY') matchesCategory = isSafety;
 
     const matchesVerdict = verdictFilter === 'ALL' || a.verdict === verdictFilter;
 
@@ -186,30 +219,39 @@ export function AuditView() {
       header: 'Audit Reference',
       sortable: true,
       width: '18%',
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-md border border-slate-200 overflow-hidden bg-slate-100 shrink-0 flex items-center justify-center text-blue-600">
-            {item.auditCategory === 'INTERNAL' || item.auditType === 'INTERNAL' ? (
-              <ShieldCheck className="w-4 h-4 text-blue-600" />
-            ) : item.auditCategory === 'SUB_SUPPLIER' || item.auditType === 'SUB_SUPPLIER' ? (
-              <Building2 className="w-4 h-4 text-emerald-600" />
-            ) : (
-              <Award className="w-4 h-4 text-indigo-600" />
-            )}
+      render: (item) => {
+        const isSafety =
+          item.auditCategory === 'SAFETY' ||
+          item.auditType === 'SAFETY' ||
+          item.auditType === 'SAF-EHS' ||
+          item.standard?.toLowerCase().includes('safety');
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-md border border-slate-200 overflow-hidden bg-slate-100 shrink-0 flex items-center justify-center text-blue-600">
+              {isSafety ? (
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+              ) : item.auditCategory === 'INTERNAL' || item.auditType === 'INTERNAL' ? (
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+              ) : item.auditCategory === 'SUB_SUPPLIER' || item.auditType === 'SUB_SUPPLIER' ? (
+                <Building2 className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <Award className="w-4 h-4 text-indigo-600" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <span
+                onClick={() => setSubView({ type: 'details', audit: item })}
+                className="font-mono font-bold text-blue-700 text-xs block leading-tight hover:underline cursor-pointer"
+              >
+                {item.auditCode}
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono block leading-tight">
+                {item.auditDate}
+              </span>
+            </div>
           </div>
-          <div className="min-w-0">
-            <span
-              onClick={() => setSubView({ type: 'details', audit: item })}
-              className="font-mono font-bold text-blue-700 text-xs block leading-tight hover:underline cursor-pointer"
-            >
-              {item.auditCode}
-            </span>
-            <span className="text-[10px] text-slate-500 font-mono block leading-tight">
-              {item.auditDate}
-            </span>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: 'type',
@@ -217,21 +259,38 @@ export function AuditView() {
       sortable: true,
       width: '14%',
       render: (item) => {
+        const isSafety =
+          item.auditCategory === 'SAFETY' ||
+          item.auditType === 'SAFETY' ||
+          item.auditType === 'SAF-EHS' ||
+          item.standard?.toLowerCase().includes('safety');
         const isInternal =
-          item.auditCategory === 'INTERNAL' || item.auditType === 'INTERNAL' || item.auditType === 'INTERNAL_QMS';
+          !isSafety &&
+          (item.auditCategory === 'INTERNAL' ||
+            item.auditType === 'INTERNAL' ||
+            item.auditType === 'INTERNAL_QMS');
         const isSubSupplier =
           item.auditCategory === 'SUB_SUPPLIER' || item.auditType === 'SUB_SUPPLIER';
 
         return (
           <span
-            className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-full border inline-block ${isInternal
+            className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-full border inline-block ${
+              isSafety
+                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                : isInternal
                 ? 'bg-blue-50 text-blue-800 border-blue-200'
                 : isSubSupplier
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : 'bg-indigo-50 text-indigo-800 border-indigo-200'
-              }`}
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+            }`}
           >
-            {isInternal ? 'INTERNAL ISO' : isSubSupplier ? 'SUB-SUPPLIER' : 'EXTERNAL'}
+            {isSafety
+              ? 'SAFETY EHS'
+              : isInternal
+              ? 'INTERNAL ISO'
+              : isSubSupplier
+              ? 'SUB-SUPPLIER'
+              : 'EXTERNAL'}
           </span>
         );
       },
@@ -246,8 +305,13 @@ export function AuditView() {
           <div className="font-semibold text-slate-900 text-xs truncate max-w-[210px]" title={item.standard}>
             {item.standard}
           </div>
-          <div className="text-[10px] text-slate-500 truncate max-w-[210px]">
-            {item.supplierName || item.auditeeDepartment || 'Factory Wide Operations'}
+          <div className="text-[10px] text-slate-500 truncate max-w-[210px] flex items-center gap-1.5">
+            {item.subSupplierCode && (
+              <span className="font-mono text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                {item.subSupplierCode}
+              </span>
+            )}
+            <span className="truncate">{item.supplierName || item.auditeeDepartment || 'Factory Wide Operations'}</span>
           </div>
         </div>
       ),
@@ -351,24 +415,28 @@ export function AuditView() {
           </button>
 
           {/* Edit Button (Pencil) */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', audit: item })}
-            className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Audit"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', audit: item })}
+              className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Audit"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button (Trash) */}
-          <button
-            type="button"
-            onClick={() => handleDeleteAudit(item)}
-            className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Audit"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleDeleteAudit(item)}
+              className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Audit"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -376,17 +444,21 @@ export function AuditView() {
 
   // Batch actions
   const batchActions: BatchAction<QualityAudit>[] = [
-    {
-      label: 'Delete Selected',
-      variant: 'danger',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setDeleteModal({
-          isOpen: true,
-          audits: selected,
-        });
-      },
-    },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            variant: 'danger' as const,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            onClick: (selected: QualityAudit[]) => {
+              setDeleteModal({
+                isOpen: true,
+                audits: selected,
+              });
+            },
+          },
+        ]
+      : []),
   ];
 
   // ─── RENDER SUBVIEWS (SEPARATE PAGES) ────────────────────────────────────
@@ -409,6 +481,8 @@ export function AuditView() {
     return (
       <AuditEntryPage
         initialAudit={subView.type === 'edit' ? subView.audit : null}
+        initialAuditType={subView.type === 'add' ? subView.initialAuditType : null}
+        initialChecklist={subView.type === 'add' ? subView.initialChecklist : null}
         onBack={() => setSubView({ type: 'none' })}
         onSave={handleSaveAudit}
         showToast={showToast}
@@ -430,7 +504,7 @@ export function AuditView() {
       {/* Module Header */}
       <ModuleHeader
         id="audits-compliance-module"
-        title="Audit ISO 9001:2015"
+        title="Audits & Compliance Management"
         activeView={viewMode}
         onViewChange={setViewMode}
         customTabs={[
@@ -452,64 +526,38 @@ export function AuditView() {
             icon: Calendar,
             count: `${scheduledCount}`,
           },
+          {
+            id: 'management',
+            label: 'Management',
+            icon: Sliders,
+            count: `${storedAuditTypesCount} Types`,
+          },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'add' })}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Conduct New Audit</span>
-          </button>
+          canCreate ? (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'add' })}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Conduct New Audit</span>
+            </button>
+          ) : undefined
         }
       />
 
-      {/* ─── VIEW 1: SUMMARY (KPI STAT CARDS) ──────────────────────────────── */}
+      {/* ─── VIEW 1: SUMMARY (EXECUTIVE CHARTS & KPI DASHBOARD) ───────────── */}
       {viewMode === 'summary' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <StatCard
-              title="Total QMS Audits"
-              value={totalCount}
-              subtitle="All Audit Categories"
-              icon={<ShieldCheck className="w-5 h-5 text-blue-600" />}
-            />
-            <StatCard
-              title="Average Audit Score"
-              value={`${avgAuditScore}%`}
-              subtitle="100-Mark Scale Target"
-              delta={{ value: '+2.4%', isPositive: true, label: 'vs benchmark' }}
-              icon={<BarChart3 className="w-5 h-5 text-indigo-600" />}
-            />
-            <StatCard
-              title="Pass Rate (≥80 Marks)"
-              value={`${passRate}%`}
-              subtitle={`${passedCount} of ${totalCount} Passed`}
-              delta={{ value: `${passRate}%`, isPositive: true, label: 'standard met' }}
-              icon={<CheckCircle className="w-5 h-5 text-emerald-600" />}
-            />
-            <StatCard
-              title="Non-Conformances"
-              value={totalNCs}
-              subtitle="Total Corrective Actions"
-              delta={{ value: '-4', isPositive: true, label: 'resolved' }}
-              icon={<AlertTriangle className="w-5 h-5 text-amber-600" />}
-            />
-            <StatCard
-              title="Next Scheduled Audit"
-              value="Oct 12"
-              subtitle="Pacific Trims Re-Audit"
-              icon={<Calendar className="w-5 h-5 text-purple-600" />}
-            />
-          </div>
-
-          <SwitchToListBanner
-            label="Open Audit Certification Registry"
-            recordCount={filteredAudits.length}
-            onSwitchToList={() => setViewMode('list')}
-          />
-        </div>
+        <AuditSummaryDashboard
+          audits={audits}
+          onSelectAudit={(audit) => setSubView({ type: 'details', audit })}
+          onConductAudit={(initialAuditType) =>
+            setSubView({ type: 'add', initialAuditType })
+          }
+          onSwitchToList={() => setViewMode('list')}
+          onSwitchToCalendar={() => setViewMode('calendar')}
+        />
       )}
 
       {/* ─── VIEW 2: CALENDAR VIEW ─────────────────────────────────────────── */}
@@ -584,6 +632,22 @@ export function AuditView() {
                   {subSupplierCount}
                 </span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveCategoryFilter('SAFETY')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer ${
+                  activeCategoryFilter === 'SAFETY'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-amber-50/50'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Safety & EHS</span>
+                <span className="font-mono text-[11px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800">
+                  {safetyCount}
+                </span>
+              </button>
             </div>
 
             {/* Search Bar */}
@@ -607,9 +671,27 @@ export function AuditView() {
             title="Quality & Compliance Audits Register"
             data={filteredAudits}
             columns={columns}
+            moduleKey="audit"
             batchActions={batchActions}
           />
         </div>
+      )}
+
+      {/* ─── VIEW 4: AUDIT MANAGEMENT TAB ─────────────────────────────────── */}
+      {viewMode === 'management' && (
+        <AuditManagementTab
+          onConductAudit={(auditType, managedQuestions) => {
+            const checklistItems = managedQuestions.map((q, idx) =>
+              convertManagedQuestionToChecklistItem(q, idx)
+            );
+            setSubView({
+              type: 'add',
+              initialAuditType: auditType,
+              initialChecklist: checklistItems,
+            });
+          }}
+          showToast={showToast}
+        />
       )}
 
       {/* Delete Audit Modal */}

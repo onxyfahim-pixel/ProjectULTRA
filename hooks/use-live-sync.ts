@@ -31,6 +31,45 @@ export function useLiveSync(onEventReceived?: (event: RealTimeEvent) => void): L
         { ...event, id: `${Date.now()}-${Math.random().toString(36).substring(2, 6)}` },
         ...prev.slice(0, 14),
       ]);
+      if ((event as any).type === 'MODULE_DATA_UPDATED') {
+        const modEvent = event as any;
+        if (modEvent.moduleKey && modEvent.data !== undefined) {
+          try {
+            localStorage.setItem(`erp_module_${modEvent.moduleKey}`, JSON.stringify(modEvent.data));
+            window.dispatchEvent(
+              new CustomEvent(`erp_module_${modEvent.moduleKey}_updated`, { detail: modEvent.data })
+            );
+            if (modEvent.moduleKey === 'production_records') {
+              window.dispatchEvent(new CustomEvent('erp_production_records_updated'));
+            }
+            if (modEvent.moduleKey === 'buyer_orders') {
+              window.dispatchEvent(new CustomEvent('erp_buyer_orders_updated'));
+            }
+            if (modEvent.moduleKey === 'sub_suppliers') {
+              window.dispatchEvent(new CustomEvent('erp_sub_suppliers_updated', { detail: modEvent.data }));
+            }
+          } catch {}
+        }
+      } else if ((event as any).type === 'PRODUCTION_RECORD_UPSERTED' || (event as any).type === 'PRODUCTION_RECORD_DELETED') {
+        try {
+          window.dispatchEvent(new CustomEvent('erp_production_records_updated'));
+        } catch {}
+      } else if ((event as any).type === 'BUYER_ORDER_UPSERTED' || (event as any).type === 'BUYER_ORDER_DELETED') {
+        try {
+          window.dispatchEvent(new CustomEvent('erp_buyer_orders_updated'));
+        } catch {}
+      } else if ((event as any).type === 'SYSTEM_RESET') {
+        const sysEvent = event as any;
+        if (sysEvent.mode === 'blank') {
+          try {
+            Object.keys(localStorage).forEach((k) => {
+              if (k.startsWith('erp_') || k.startsWith('garments_')) {
+                localStorage.removeItem(k);
+              }
+            });
+          } catch {}
+        }
+      }
       if (onEventReceived) {
         onEventReceived(event);
       }

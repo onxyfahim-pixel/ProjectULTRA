@@ -29,6 +29,8 @@ import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { MOCK_ROOT_CAUSE_CASES } from '@/lib/db/modules-mock-data';
 import { RootCauseCase, RcaStatus, RcaSeverity } from '@/lib/types/modules';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 // Subcomponents
 import { RcaDetailsPage } from '../modules/root-cause/RcaDetailsPage';
@@ -60,8 +62,9 @@ const SEVERITY_BADGES: Record<string, { label: string; cls: string }> = {
 };
 
 export function RootCauseAnalysisView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('root_cause');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
-  const [cases, setCases] = useState<RootCauseCase[]>(MOCK_ROOT_CAUSE_CASES);
+  const [cases, setCases] = useLiveModuleData<RootCauseCase[]>('root_cause_cases', MOCK_ROOT_CAUSE_CASES);
   const [activeCase, setActiveCase] = useState<RootCauseCase>(cases[0] || MOCK_ROOT_CAUSE_CASES[0]);
   const [activeTab, setActiveTab] = useState<'5why' | 'fishbone'>('5why');
 
@@ -299,20 +302,24 @@ export function RootCauseAnalysisView() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button
-            onClick={() => setSubView({ type: 'edit', rcaCase: item })}
-            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
-            title="Edit RCA"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => handleDeleteCase(item)}
-            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-            title="Delete Record"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setSubView({ type: 'edit', rcaCase: item })}
+              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+              title="Edit RCA"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => handleDeleteCase(item)}
+              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+              title="Delete Record"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -320,17 +327,17 @@ export function RootCauseAnalysisView() {
 
   // Batch actions
   const batchActions: BatchAction<RootCauseCase>[] = [
-    {
+    ...(canDelete ? [{
       label: 'Delete Selected',
       icon: <Trash2 className="w-4 h-4" />,
-      variant: 'danger',
-      onClick: (selectedItems) => {
+      variant: 'danger' as const,
+      onClick: (selectedItems: RootCauseCase[]) => {
         setDeleteModal({
           isOpen: true,
           cases: selectedItems,
         });
       },
-    },
+    }] : []),
   ];
 
   // RENDER SUB-VIEWS
@@ -391,21 +398,25 @@ export function RootCauseAnalysisView() {
         listCount={`${cases.length} RCA Cases`}
         actions={
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportCsv}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
-              title="Export RCA Ledger to CSV"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
-              <span className="hidden sm:inline">Export CSV</span>
-            </button>
-            <button
-              onClick={() => setSubView({ type: 'add' })}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New RCA Investigation</span>
-            </button>
+            {canExport && (
+              <button
+                onClick={handleExportCsv}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
+                title="Export RCA Ledger to CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Export CSV</span>
+              </button>
+            )}
+            {canCreate && (
+              <button
+                onClick={() => setSubView({ type: 'add' })}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New RCA Investigation</span>
+              </button>
+            )}
           </div>
         }
       />
@@ -735,6 +746,9 @@ export function RootCauseAnalysisView() {
               'buyer',
               'investigationLead',
             ]}
+            moduleKey="root_cause"
+            canExport={canExport}
+            canDelete={canDelete}
           />
         </div>
       )}

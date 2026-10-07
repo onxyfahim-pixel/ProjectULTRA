@@ -29,6 +29,8 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { MeetingMinutesItem, MeetingStatus, MeetingType } from '@/lib/types/modules';
 import { INITIAL_MEETING_MINUTES, MEETING_TYPE_LABELS } from '../modules/meeting-minutes/meeting-minutes-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { MeetingMinutesDetailsPage } from '../modules/meeting-minutes/MeetingMinutesDetailsPage';
 import { MeetingMinutesEntryPage } from '../modules/meeting-minutes/MeetingMinutesEntryPage';
 import { DeleteMeetingModal } from '../modules/meeting-minutes/DeleteMeetingModal';
@@ -40,9 +42,14 @@ type MeetingSubView =
   | { type: 'edit'; meeting: MeetingMinutesItem };
 
 export function MeetingMinutesView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('meeting_minutes');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [subView, setSubView] = useState<MeetingSubView>({ type: 'none' });
-  const [meetings, setMeetings] = useState<MeetingMinutesItem[]>(INITIAL_MEETING_MINUTES);
+  const [meetings, setMeetings] = useLiveModuleData<MeetingMinutesItem[]>(
+    'meeting_minutes',
+    INITIAL_MEETING_MINUTES,
+    'erp_meeting_minutes_v1'
+  );
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Filters
@@ -63,28 +70,8 @@ export function MeetingMinutesView() {
     meetings: [],
   });
 
-  // LocalStorage Persistence
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('erp_meeting_minutes_v1');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMeetings(parsed);
-        }
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, []);
-
   const saveMeetings = (updated: MeetingMinutesItem[]) => {
     setMeetings(updated);
-    try {
-      localStorage.setItem('erp_meeting_minutes_v1', JSON.stringify(updated));
-    } catch {
-      // Ignore
-    }
   };
 
   const showToast = (msg: string) => {
@@ -344,30 +331,36 @@ export function MeetingMinutesView() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', meeting: item })}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Minutes"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDuplicateMeeting(item)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
-            title="Duplicate as Template"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleteModalState({ isOpen: true, meetings: [item] })}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Delete Minutes"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', meeting: item })}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Minutes"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateMeeting(item)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
+              title="Duplicate as Template"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModalState({ isOpen: true, meetings: [item] })}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Delete Minutes"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -375,23 +368,23 @@ export function MeetingMinutesView() {
 
   // Batch actions for Data Table
   const batchActions: BatchAction<MeetingMinutesItem>[] = [
-    {
+    ...(canDelete ? [{
       label: 'Delete Selected',
-      variant: 'danger',
+      variant: 'danger' as const,
       icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
+      onClick: (selected: MeetingMinutesItem[]) => {
         setDeleteModalState({
           isOpen: true,
           meetings: selected,
         });
       },
-    },
-    {
+    }] : []),
+    ...(canExport ? [{
       label: 'Export Selected',
-      onClick: (selected) => {
+      onClick: (selected: MeetingMinutesItem[]) => {
         showToast(`Exported ${selected.length} meeting records`);
       },
-    },
+    }] : []),
   ];
 
   // Compile all action items across all meetings for the Action Tracker tab
@@ -677,14 +670,16 @@ export function MeetingMinutesView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Minutes</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Minutes</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={batchActions}
               />

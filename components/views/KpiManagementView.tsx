@@ -34,6 +34,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { KpiMetric, KpiCategory, KpiStatus, KpiTrend } from '@/lib/types/modules';
 import { INITIAL_KPIS, KPI_CATEGORY_CONFIG } from '../modules/kpi-management/kpi-management-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { KpiDetailsPage } from '../modules/kpi-management/KpiDetailsPage';
 import { KpiEntryPage } from '../modules/kpi-management/KpiEntryPage';
 import { DeleteKpiModal } from '../modules/kpi-management/DeleteKpiModal';
@@ -49,7 +50,11 @@ type KpiSubView =
 export function KpiManagementView() {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [subView, setSubView] = useState<KpiSubView>({ type: 'none' });
-  const [kpis, setKpis] = useState<KpiMetric[]>(INITIAL_KPIS);
+  const [kpis, setKpis] = useLiveModuleData<KpiMetric[]>(
+    'kpi_metrics',
+    INITIAL_KPIS,
+    'erp_kpis_v1'
+  );
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Export Modals State

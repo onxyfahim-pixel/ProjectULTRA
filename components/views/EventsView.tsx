@@ -28,6 +28,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { FactoryEventItem, EventType, EventStatus, EventPriority } from '@/lib/types/modules';
 import { INITIAL_FACTORY_EVENTS, EVENT_TYPE_CONFIG } from '../modules/events/events-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { EventDetailsPage } from '../modules/events/EventDetailsPage';
 import { EventEntryPage } from '../modules/events/EventEntryPage';
 import { DeleteEventModal } from '../modules/events/DeleteEventModal';
@@ -41,7 +42,11 @@ type EventSubView =
 export function EventsView() {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [subView, setSubView] = useState<EventSubView>({ type: 'none' });
-  const [events, setEvents] = useState<FactoryEventItem[]>(INITIAL_FACTORY_EVENTS);
+  const [events, setEvents] = useLiveModuleData<FactoryEventItem[]>(
+    'factory_events',
+    INITIAL_FACTORY_EVENTS,
+    'erp_factory_events_v1'
+  );
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Filters
@@ -58,28 +63,8 @@ export function EventsView() {
     events: [],
   });
 
-  // LocalStorage Persistence
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('erp_factory_events_v1');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setEvents(parsed);
-        }
-      }
-    } catch {
-      // Ignore
-    }
-  }, []);
-
   const saveEvents = (updated: FactoryEventItem[]) => {
     setEvents(updated);
-    try {
-      localStorage.setItem('erp_factory_events_v1', JSON.stringify(updated));
-    } catch {
-      // Ignore
-    }
   };
 
   const showToast = (msg: string) => {

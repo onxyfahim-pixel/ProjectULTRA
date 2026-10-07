@@ -36,6 +36,7 @@ import {
 import { InspectionRecord, InspectionType, InspectionStatus, InspectionStage } from '@/lib/types/erp';
 import { calculateAqlInspection, calculateQuantityVariance } from '@/lib/aql';
 import { syncRecordCheckpoints } from './inspection-checkpoints';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface InspectionDetailsPageProps {
   record: InspectionRecord;
@@ -122,6 +123,7 @@ export function InspectionDetailsPage({
   onSelectRecord,
   showToast,
 }: InspectionDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('inspections');
   const [activeTab, setActiveTab] = useState<'overview' | 'defects' | 'checkpoints'>('overview');
   const syncedCheckpoints = syncRecordCheckpoints(record.checkpoints);
   const checkpointsPassedCount = syncedCheckpoints.filter((c) => c.status === 'PASS').length;
@@ -236,7 +238,7 @@ export function InspectionDetailsPage({
 
         {/* Action Buttons - Styled identically to Buyer & Order module */}
         <div className="flex items-center flex-wrap gap-2">
-          {onExport && (
+          {canExport && onExport && (
             <button
               type="button"
               onClick={() => onExport(record)}
@@ -248,35 +250,41 @@ export function InspectionDetailsPage({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => onDuplicate(record)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
-            title="Duplicate as new audit template"
-          >
-            <Copy className="w-3.5 h-3.5 text-slate-500" />
-            <span>Duplicate Audit</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(record)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
+              title="Duplicate as new audit template"
+            >
+              <Copy className="w-3.5 h-3.5 text-slate-500" />
+              <span>Duplicate Audit</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => onEdit(record)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
-            title="Edit this inspection record"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Inspection</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(record)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
+              title="Edit this inspection record"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Inspection</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => onDelete(record)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
-            title="Delete this audit record"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete</span>
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(record)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
+              title="Delete this audit record"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -34,14 +34,17 @@ import { MOCK_CUSTOMER_COMPLAINTS } from '@/lib/db/modules-mock-data';
 import { AddComplaintModal } from '../modules/customer-complaint/AddComplaintModal';
 import { ComplaintDetailsPage } from '../modules/customer-complaint/ComplaintDetailsPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 type ComplaintSubView =
   | { type: 'none' }
   | { type: 'details'; complaint: CustomerComplaint };
 
 export function CustomerComplaintView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('customer_complaint');
   const [viewMode, setViewMode] = useState<'summary' | 'list' | 'capa'>('summary');
-  const [complaints, setComplaints] = useState<CustomerComplaint[]>(MOCK_CUSTOMER_COMPLAINTS);
+  const [complaints, setComplaints] = useLiveModuleData<CustomerComplaint[]>('customer_complaints', MOCK_CUSTOMER_COMPLAINTS);
 
   // Dedicated Separate Page for Complaint Details
   const [complaintSubView, setComplaintSubView] = useState<ComplaintSubView>({ type: 'none' });
@@ -326,37 +329,43 @@ export function CustomerComplaintView() {
           </button>
 
           {/* 2. Edit Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setComplaintToEdit(row);
-              setIsAddModalOpen(true);
-            }}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Claim"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setComplaintToEdit(row);
+                setIsAddModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Claim"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* 3. Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateComplaint(row)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate Claim"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateComplaint(row)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate Claim"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* 4. Delete Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, complaints: [row] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Claim"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, complaints: [row] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Claim"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -386,6 +395,21 @@ export function CustomerComplaintView() {
             { id: 'list', label: 'Claims Register', count: complaints.length },
             { id: 'capa', label: 'CAPA & 8D Cards', count: complaints.length },
           ]}
+          actions={
+            canCreate ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setComplaintToEdit(null);
+                  setIsAddModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Log New Claim</span>
+              </button>
+            ) : undefined
+          }
         />
       )}
 
@@ -599,36 +623,47 @@ export function CustomerComplaintView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setComplaintToEdit(null);
-                      setIsAddModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Log New Claim</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setComplaintToEdit(null);
+                        setIsAddModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Log New Claim</span>
+                    </button>
+                  ) : undefined
                 }
+                moduleKey="customer_complaint"
                 batchActions={[
-                  {
-                    label: 'Delete Selected',
-                    variant: 'danger',
-                    icon: <Trash2 className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
-                      setDeleteModal({
-                        isOpen: true,
-                        complaints: selected,
-                      });
-                    },
-                  },
-                  {
-                    label: 'Export Selected',
-                    onClick: (selected) => {
-                      showToast(`Exported ${selected.length} customer claims`);
-                    },
-                  },
+                  ...(canDelete
+                    ? [
+                        {
+                          label: 'Delete Selected',
+                          variant: 'danger' as const,
+                          icon: <Trash2 className="w-3.5 h-3.5" />,
+                          onClick: (selected: CustomerComplaint[]) => {
+                            setDeleteModal({
+                              isOpen: true,
+                              complaints: selected,
+                            });
+                          },
+                        },
+                      ]
+                    : []),
+                  ...(canExport
+                    ? [
+                        {
+                          label: 'Export Selected',
+                          onClick: (selected: CustomerComplaint[]) => {
+                            showToast(`Exported ${selected.length} customer claims`);
+                          },
+                        },
+                      ]
+                    : []),
                 ]}
               />
             </div>
@@ -705,17 +740,19 @@ export function CustomerComplaintView() {
                       </div>
 
                       {/* LOG CLAIM BUTTON */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setComplaintToEdit(null);
-                          setIsAddModalOpen(true);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Log New Claim</span>
-                      </button>
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setComplaintToEdit(null);
+                            setIsAddModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Log New Claim</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -824,25 +861,29 @@ export function CustomerComplaintView() {
                           </span>
 
                           <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setComplaintToEdit(c);
-                                setIsAddModalOpen(true);
-                              }}
-                              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-                              title="Edit Claim"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteModal({ isOpen: true, complaints: [c] })}
-                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-                              title="Delete Claim"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setComplaintToEdit(c);
+                                  setIsAddModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+                                title="Edit Claim"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteModal({ isOpen: true, complaints: [c] })}
+                                className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+                                title="Delete Claim"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => setComplaintSubView({ type: 'details', complaint: c })}
@@ -889,36 +930,47 @@ export function CustomerComplaintView() {
                     </div>
                   }
                   primaryAction={
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setComplaintToEdit(null);
-                        setIsAddModalOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Log New Claim</span>
-                    </button>
+                    canCreate ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setComplaintToEdit(null);
+                          setIsAddModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Log New Claim</span>
+                      </button>
+                    ) : undefined
                   }
+                  moduleKey="customer_complaint"
                   batchActions={[
-                    {
-                      label: 'Delete Selected',
-                      variant: 'danger',
-                      icon: <Trash2 className="w-3.5 h-3.5" />,
-                      onClick: (selected) => {
-                        setDeleteModal({
-                          isOpen: true,
-                          complaints: selected,
-                        });
-                      },
-                    },
-                    {
-                      label: 'Export Selected',
-                      onClick: (selected) => {
-                        showToast(`Exported ${selected.length} customer claims`);
-                      },
-                    },
+                    ...(canDelete
+                      ? [
+                          {
+                            label: 'Delete Selected',
+                            variant: 'danger' as const,
+                            icon: <Trash2 className="w-3.5 h-3.5" />,
+                            onClick: (selected: CustomerComplaint[]) => {
+                              setDeleteModal({
+                                isOpen: true,
+                                complaints: selected,
+                              });
+                            },
+                          },
+                        ]
+                      : []),
+                    ...(canExport
+                      ? [
+                          {
+                            label: 'Export Selected',
+                            onClick: (selected: CustomerComplaint[]) => {
+                              showToast(`Exported ${selected.length} customer claims`);
+                            },
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               )}

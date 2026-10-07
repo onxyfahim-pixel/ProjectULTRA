@@ -32,6 +32,8 @@ import { StatCard } from '@/components/ui/StatCard';
 import { ModuleHeader, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { DefectDefinition } from '@/lib/types/modules';
 import { MOCK_DEFECTS_LIBRARY } from '@/lib/db/modules-mock-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { DefectDetailsPage } from '../modules/defect-library/DefectDetailsPage';
 import { DefectEntryPage } from '../modules/defect-library/DefectEntryPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
@@ -58,8 +60,9 @@ const ZONE_BADGES: Record<string, { label: string; cls: string }> = {
 };
 
 export function DefectsLibraryView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('defects_library');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
-  const [defects, setDefects] = useState<DefectDefinition[]>(MOCK_DEFECTS_LIBRARY);
+  const [defects, setDefects] = useLiveModuleData<DefectDefinition[]>('defects_library', MOCK_DEFECTS_LIBRARY);
 
   // Dedicated Separate Sub-Pages State
   const [subView, setSubView] = useState<DefectSubView>({ type: 'none' });
@@ -171,22 +174,30 @@ export function DefectsLibraryView() {
 
   // Batch Actions - Exactly matching Buyer & Order module
   const batchActions: BatchAction<DefectDefinition>[] = [
-    {
-      label: 'Delete Selected',
-      variant: 'danger',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setDeleteModal({ isOpen: true, defects: selected });
-      },
-    },
-    {
-      label: 'Export Selected',
-      variant: 'default',
-      icon: <Download className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        showToast(`Exported ${selected.length} defect specification sheets (PDF/Excel)`);
-      },
-    },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            variant: 'danger' as const,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            onClick: (selected: DefectDefinition[]) => {
+              setDeleteModal({ isOpen: true, defects: selected });
+            },
+          },
+        ]
+      : []),
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected',
+            variant: 'default' as const,
+            icon: <Download className="w-3.5 h-3.5" />,
+            onClick: (selected: DefectDefinition[]) => {
+              showToast(`Exported ${selected.length} defect specification sheets (PDF/Excel)`);
+            },
+          },
+        ]
+      : []),
   ];
 
   // Column Definitions - Rich, Interactive, Styled like Buyer & Order module
@@ -331,34 +342,40 @@ export function DefectsLibraryView() {
           </button>
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', defect: item })}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit defect definition"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', defect: item })}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit defect definition"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateDefect(item)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate as new defect entry"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateDefect(item)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate as new defect entry"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, defects: [item] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete defect entry"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, defects: [item] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete defect entry"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -514,14 +531,16 @@ export function DefectsLibraryView() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-xs cursor-pointer mt-2"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Register New Quality Defect</span>
-                  </button>
+                  {canCreate && (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-xs cursor-pointer mt-2"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Register New Quality Defect</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Category Breakdown Card */}
@@ -634,16 +653,21 @@ export function DefectsLibraryView() {
                     </div>
                   }
                   primaryAction={
-                    <button
-                      type="button"
-                      onClick={() => setSubView({ type: 'add' })}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Defect</span>
-                    </button>
+                    canCreate ? (
+                      <button
+                        type="button"
+                        onClick={() => setSubView({ type: 'add' })}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Defect</span>
+                      </button>
+                    ) : undefined
                   }
                   batchActions={batchActions}
+                  moduleKey="defects_library"
+                  canExport={canExport}
+                  canDelete={canDelete}
                 />
               ) : (
                 /* VISUAL CARD GRID VIEW */
@@ -734,14 +758,16 @@ export function DefectsLibraryView() {
                       </div>
 
                       {/* Add Defect Button - Matching Buyer & Order module */}
-                      <button
-                        type="button"
-                        onClick={() => setSubView({ type: 'add' })}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add Defect</span>
-                      </button>
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => setSubView({ type: 'add' })}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Defect</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -786,13 +812,15 @@ export function DefectsLibraryView() {
                       >
                         Clear Filters
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setSubView({ type: 'add' })}
-                        className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
-                      >
-                        + Add New Defect
-                      </button>
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => setSubView({ type: 'add' })}
+                          className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
+                        >
+                          + Add New Defect
+                        </button>
+                      )}
                     </div>
                   ) : (
                     /* RESPONSIVE CARD GRID */
@@ -916,30 +944,36 @@ export function DefectsLibraryView() {
                                 </button>
 
                                 <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSubView({ type: 'edit', defect: item })}
-                                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-                                    title="Edit Defect"
-                                  >
-                                    <Edit className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDuplicateDefect(item)}
-                                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-                                    title="Duplicate Defect"
-                                  >
-                                    <Copy className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeleteModal({ isOpen: true, defects: [item] })}
-                                    className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                    title="Delete Defect"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSubView({ type: 'edit', defect: item })}
+                                      className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                                      title="Edit Defect"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {canCreate && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDuplicateDefect(item)}
+                                      className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                                      title="Duplicate Defect"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {canDelete && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeleteModal({ isOpen: true, defects: [item] })}
+                                      className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                      title="Delete Defect"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>

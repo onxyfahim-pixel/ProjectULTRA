@@ -32,6 +32,8 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { FactoryCertificate } from '@/lib/types/modules';
 import { MOCK_CERTIFICATES } from '@/lib/db/modules-mock-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 // Subcomponents (Separate Pages)
 import { CertificateEntryPage } from '../modules/certificate/CertificateEntryPage';
@@ -45,36 +47,14 @@ type CertificateSubView =
   | { type: 'edit'; cert: FactoryCertificate };
 
 export function CertificateView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('certificate');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Load from localStorage or fallback to MOCK_CERTIFICATES
-  const [certs, setCerts] = useState<FactoryCertificate[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_factory_certificates_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed parsing stored certificates:', err);
-      }
-    }
-    return MOCK_CERTIFICATES;
-  });
-
-  // Save to localStorage whenever certs change
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_factory_certificates_v1', JSON.stringify(certs));
-      } catch (err) {
-        console.warn('Failed saving certificates to localStorage:', err);
-      }
-    }
-  }, [certs]);
+  const [certs, setCerts] = useLiveModuleData<FactoryCertificate[]>(
+    'factory_certificates',
+    MOCK_CERTIFICATES,
+    'erp_factory_certificates_v1'
+  );
 
   // Dedicated Separate Pages (Details, Add, Edit)
   const [subView, setSubView] = useState<CertificateSubView>({ type: 'none' });
@@ -339,34 +319,40 @@ export function CertificateView() {
           </button>
 
           {/* Edit Button (Pencil) */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', cert: item })}
-            className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Certificate"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', cert: item })}
+              className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Certificate"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Download PDF */}
-          <button
-            type="button"
-            onClick={() => triggerDownload(item.name)}
-            className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Download Certificate PDF"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => triggerDownload(item.name)}
+              className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Download Certificate PDF"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button (Trash) */}
-          <button
-            type="button"
-            onClick={() => handleDeleteCert(item)}
-            className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Certificate"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleDeleteCert(item)}
+              className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Certificate"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -374,17 +360,21 @@ export function CertificateView() {
 
   // Batch actions
   const batchActions: BatchAction<FactoryCertificate>[] = [
-    {
-      label: 'Delete Selected',
-      variant: 'danger',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setDeleteModal({
-          isOpen: true,
-          certificates: selected,
-        });
-      },
-    },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            variant: 'danger' as const,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            onClick: (selected: FactoryCertificate[]) => {
+              setDeleteModal({
+                isOpen: true,
+                certificates: selected,
+              });
+            },
+          },
+        ]
+      : []),
   ];
 
   // ─── RENDER SUBVIEWS (SEPARATE PAGES) ────────────────────────────────────
@@ -444,14 +434,16 @@ export function CertificateView() {
           },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'add' })}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Register New Certificate</span>
-          </button>
+          canCreate ? (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'add' })}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Register New Certificate</span>
+            </button>
+          ) : undefined
         }
       />
 
@@ -690,6 +682,9 @@ export function CertificateView() {
             data={filteredCerts}
             columns={columns}
             batchActions={batchActions}
+            moduleKey="certificate"
+            canExport={canExport}
+            canDelete={canDelete}
           />
         </div>
       )}

@@ -54,6 +54,7 @@ import {
 import { BuyerOrder, SubSupplier } from '@/lib/types/modules';
 import { MOCK_BUYER_ORDERS, MOCK_SUB_SUPPLIERS } from '@/lib/db/modules-mock-data';
 import { useErpAuth } from '@/hooks/use-erp-auth';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { AddInventoryModal } from '../modules/inventory/AddInventoryModal';
 import { InventoryDetailsPage } from '../modules/inventory/InventoryDetailsPage';
 import { ReceiveMaterialModal } from '../modules/inventory/ReceiveMaterialModal';
@@ -110,6 +111,7 @@ export function InventoryView({
   const [issueRecords, setIssueRecords] = useState<IssueRecord[]>(INITIAL_ISSUE_REGISTRY);
 
   const { user, permissions } = useErpAuth();
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('inventory');
 
   // Sub-view: Detailed single-item view
   const [inventorySubView, setInventorySubView] = useState<InventorySubView>({ type: 'none' });
@@ -486,17 +488,19 @@ export function InventoryView({
       render: (i) => (
         <div className="flex items-center gap-1 justify-end">
           {/* Quick Issue Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setItemToIssue(i);
-              setIsIssueModalOpen(true);
-            }}
-            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors cursor-pointer"
-            title="Issue to Floor (SIV)"
-          >
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => {
+                setItemToIssue(i);
+                setIsIssueModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors cursor-pointer"
+              title="Issue to Floor (SIV)"
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* View Specs Button */}
           <button
@@ -509,49 +513,55 @@ export function InventoryView({
           </button>
 
           {/* Individual Export Button (PDF or Excel) */}
-          <button
-            type="button"
-            onClick={() => {
-              const linkedGrns = receiveRecords.filter(
-                (r) => r.sku === i.sku || (r.batchLot && r.batchLot === i.batchLot)
-              );
-              const linkedIssues = issueRecords.filter((s) => s.sku === i.sku);
-              setSingleExportTarget({
-                type: 'stock',
-                item: i,
-                linkedGrns,
-                linkedIssues,
-              });
-              setIsSingleExportModalOpen(true);
-            }}
-            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Export Item Record (PDF or Excel)"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                const linkedGrns = receiveRecords.filter(
+                  (r) => r.sku === i.sku || (r.batchLot && r.batchLot === i.batchLot)
+                );
+                const linkedIssues = issueRecords.filter((s) => s.sku === i.sku);
+                setSingleExportTarget({
+                  type: 'stock',
+                  item: i,
+                  linkedGrns,
+                  linkedIssues,
+                });
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Export Item Record (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setItemToEdit(i);
-              setIsAddEditModalOpen(true);
-            }}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Modify Stock Item"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setItemToEdit(i);
+                setIsAddEditModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Modify Stock Item"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, items: [i] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Item"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, items: [i] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Item"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -681,18 +691,20 @@ export function InventoryView({
       align: 'right',
       render: (r) => (
         <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => {
-              const matched = items.find((i) => i.sku === r.sku);
-              setSingleExportTarget({ type: 'receive', record: r, matchedItem: matched });
-              setIsSingleExportModalOpen(true);
-            }}
-            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Export GRN (PDF or Excel)"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                const matched = items.find((i) => i.sku === r.sku);
+                setSingleExportTarget({ type: 'receive', record: r, matchedItem: matched });
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Export GRN (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -804,18 +816,20 @@ export function InventoryView({
       align: 'right',
       render: (s) => (
         <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => {
-              const matched = items.find((i) => i.sku === s.sku);
-              setSingleExportTarget({ type: 'issue', record: s, matchedItem: matched });
-              setIsSingleExportModalOpen(true);
-            }}
-            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Export SIV (PDF or Excel)"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                const matched = items.find((i) => i.sku === s.sku);
+                setSingleExportTarget({ type: 'issue', record: s, matchedItem: matched });
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Export SIV (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -847,20 +861,22 @@ export function InventoryView({
             { id: 'issue', label: 'Issue Register (SIV)', count: issueRecords.length, icon: ArrowUpRight },
           ]}
           actions={
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedStockIds([]);
-                setSelectedReceiveIds([]);
-                setSelectedIssueIds([]);
-                setIsGlobalExportModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
-              title="Global Export: Register Summary Sheet (PDF or Excel)"
-            >
-              <FileDown className="w-3.5 h-3.5 text-blue-600" />
-              <span>Export Register</span>
-            </button>
+            canExport ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedStockIds([]);
+                  setSelectedReceiveIds([]);
+                  setSelectedIssueIds([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
+                title="Global Export: Register Summary Sheet (PDF or Excel)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Export Register</span>
+              </button>
+            ) : null
           }
         />
       )}
@@ -1177,41 +1193,44 @@ export function InventoryView({
                   </div>
                 }
                 primaryAction={
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setItemToEdit(null);
-                        setIsAddEditModalOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span>+ Add Item</span>
-                    </button>
+                  canCreate ? (
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemToEdit(null);
+                          setIsAddEditModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span>+ Add Item</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setItemToIssue(null);
-                        setIsIssueModalOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
-                    >
-                      <ArrowUpRight className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                      <span>Issue (SIV)</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemToIssue(null);
+                          setIsIssueModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
+                      >
+                        <ArrowUpRight className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                        <span>Issue (SIV)</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setIsReceiveModalOpen(true)}
-                      className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer whitespace-nowrap"
-                    >
-                      <ArrowDownLeft className="w-3.5 h-3.5 shrink-0" />
-                      <span>Receive (GRN)</span>
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsReceiveModalOpen(true)}
+                        className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer whitespace-nowrap"
+                      >
+                        <ArrowDownLeft className="w-3.5 h-3.5 shrink-0" />
+                        <span>Receive (GRN)</span>
+                      </button>
+                    </div>
+                  ) : null
                 }
+                moduleKey="inventory"
                 onExport={(exportItems) => {
                   setSelectedStockIds(exportItems.map((x) => x.id));
                   setIsGlobalExportModalOpen(true);
@@ -1232,15 +1251,18 @@ export function InventoryView({
                 searchPlaceholder="Search GRN number, supplier, challan, PO, or SKU..."
                 searchableKeys={['grnNumber', 'supplierName', 'challanNumber', 'poNumber', 'sku', 'itemName', 'batchLot']}
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setIsReceiveModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Inward Shipment (GRN)</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsReceiveModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Inward Shipment (GRN)</span>
+                    </button>
+                  ) : null
                 }
+                moduleKey="inventory"
                 onExport={(exportRecords) => {
                   setSelectedReceiveIds(exportRecords.map((r) => r.id));
                   setIsGlobalExportModalOpen(true);
@@ -1270,18 +1292,21 @@ export function InventoryView({
                 searchPlaceholder="Search SIV number, destination line, style, PO, or SKU..."
                 searchableKeys={['sivNumber', 'departmentDetail', 'poNumber', 'styleNumber', 'requisitionNumber', 'sku', 'itemName']}
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setItemToIssue(null);
-                      setIsIssueModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Issue to Floor (SIV)</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setItemToIssue(null);
+                        setIsIssueModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Issue to Floor (SIV)</span>
+                    </button>
+                  ) : null
                 }
+                moduleKey="inventory"
                 onExport={(exportRecords) => {
                   setSelectedIssueIds(exportRecords.map((s) => s.id));
                   setIsGlobalExportModalOpen(true);

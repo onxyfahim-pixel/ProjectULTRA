@@ -29,6 +29,7 @@ import {
   INITIAL_PROCESS_FLOW_CHARTS,
   MASTER_GARMENT_FLOW_STEPS,
 } from '../modules/process-flow/process-flow-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { ProcessFlowDetailsPage } from '../modules/process-flow/ProcessFlowDetailsPage';
 import { ProcessFlowEntryPage } from '../modules/process-flow/ProcessFlowEntryPage';
 import { DeleteProcessFlowModal } from '../modules/process-flow/DeleteProcessFlowModal';
@@ -42,34 +43,11 @@ type ProcessFlowSubView =
 export function ProcessFlowView() {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Load from localStorage or fallback to INITIAL_PROCESS_FLOW_CHARTS
-  const [flows, setFlows] = useState<ProcessFlowChart[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_process_flow_library_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed parsing stored process flows:', err);
-      }
-    }
-    return INITIAL_PROCESS_FLOW_CHARTS;
-  });
-
-  // Sync to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_process_flow_library_v1', JSON.stringify(flows));
-      } catch (err) {
-        console.warn('Failed saving process flows to localStorage:', err);
-      }
-    }
-  }, [flows]);
+  const [flows, setFlows] = useLiveModuleData<ProcessFlowChart[]>(
+    'process_flows',
+    INITIAL_PROCESS_FLOW_CHARTS,
+    'erp_process_flow_library_v1'
+  );
 
   // Subview State (Details, Add, Edit)
   const [subView, setSubView] = useState<ProcessFlowSubView>({ type: 'none' });

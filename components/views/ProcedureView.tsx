@@ -21,6 +21,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { ProcedureItem } from '@/lib/types/modules';
 import { INITIAL_PROCEDURES_LIBRARY, INITIAL_CONFORMING_PROCESS_CONTROL } from '../modules/procedure/procedure-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { ProcedureDetailsPage } from '../modules/procedure/ProcedureDetailsPage';
 import { ProcedureEntryPage } from '../modules/procedure/ProcedureEntryPage';
 import { DeleteProcedureModal } from '../modules/procedure/DeleteProcedureModal';
@@ -34,34 +35,11 @@ type ProcedureSubView =
 export function ProcedureView() {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Load procedures from localStorage or fallback to INITIAL_PROCEDURES_LIBRARY
-  const [procedures, setProcedures] = useState<ProcedureItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_procedure_library_v2');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed parsing stored procedures:', err);
-      }
-    }
-    return INITIAL_PROCEDURES_LIBRARY;
-  });
-
-  // Sync to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_procedure_library_v2', JSON.stringify(procedures));
-      } catch (err) {
-        console.warn('Failed saving procedures to localStorage:', err);
-      }
-    }
-  }, [procedures]);
+  const [procedures, setProcedures] = useLiveModuleData<ProcedureItem[]>(
+    'procedure_library',
+    INITIAL_PROCEDURES_LIBRARY,
+    'erp_procedure_library_v2'
+  );
 
   // Subview State (Details, Add, Edit)
   const [subView, setSubView] = useState<ProcedureSubView>({ type: 'none' });

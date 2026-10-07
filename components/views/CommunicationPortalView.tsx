@@ -44,6 +44,7 @@ import {
 import { NoticeDetailsPage } from '../modules/communication/NoticeDetailsPage';
 import { NoticeEntryPage } from '../modules/communication/NoticeEntryPage';
 import { DeleteNoticeModal } from '../modules/communication/DeleteNoticeModal';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 
 const STORAGE_KEY = 'erp_communication_notices_v1';
 
@@ -54,20 +55,11 @@ type SubView =
 
 export function CommunicationPortalView() {
   const [activeTab, setActiveTab] = useState<'summary' | 'list' | 'acknowledgments'>('summary');
-  const [notices, setNotices] = useState<CommunicationNotice[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (err) {
-        console.error('Error loading notices from localStorage:', err);
-      }
-    }
-    return INITIAL_NOTICES;
-  });
+  const [notices, setNotices] = useLiveModuleData<CommunicationNotice[]>(
+    'communication_notices',
+    INITIAL_NOTICES,
+    'erp_communication_notices_v1'
+  );
 
   const [subView, setSubView] = useState<SubView>({ type: 'none' });
   const [deleteModal, setDeleteModal] = useState<{
@@ -87,15 +79,6 @@ export function CommunicationPortalView() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
-
-  // Sync to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(notices));
-    } catch (err) {
-      console.error('Failed to save notices to localStorage:', err);
-    }
-  }, [notices]);
 
   // Keep details page synced if notice changes
   useEffect(() => {

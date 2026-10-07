@@ -31,6 +31,8 @@ import { StatCard } from '@/components/ui/StatCard';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { SopItem } from '@/lib/types/modules';
 import { MOCK_SOPS } from '@/lib/db/modules-mock-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 // Subcomponents
 import { SopDetailsPage } from '../modules/sop/SopDetailsPage';
@@ -44,36 +46,14 @@ type SopSubView =
   | { type: 'edit'; sop: SopItem };
 
 export function SopManagementView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('sop_management');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Load from localStorage or fallback to enriched MOCK_SOPS
-  const [sops, setSops] = useState<SopItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_sop_library_v2');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed parsing stored SOPs:', err);
-      }
-    }
-    return MOCK_SOPS;
-  });
-
-  // Save to localStorage whenever sops change
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_sop_library_v2', JSON.stringify(sops));
-      } catch (err) {
-        console.warn('Failed saving SOPs to localStorage:', err);
-      }
-    }
-  }, [sops]);
+  const [sops, setSops] = useLiveModuleData<SopItem[]>(
+    'sop_library',
+    MOCK_SOPS,
+    'erp_sop_library_v2'
+  );
 
   // Subview State (Details, Add, Edit)
   const [subView, setSubView] = useState<SopSubView>({ type: 'none' });
@@ -404,34 +384,40 @@ export function SopManagementView() {
           </button>
 
           {/* Edit Button (Pencil) - Exactly styled like Document Control Module */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', sop: item })}
-            className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Standard Operating Procedure"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', sop: item })}
+              className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Standard Operating Procedure"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Direct Download Button */}
-          <button
-            type="button"
-            onClick={() => handleDownloadSop(item)}
-            className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Download SOP File"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => handleDownloadSop(item)}
+              className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Download SOP File"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button (Trash) - Exactly styled like Document Control Module */}
-          <button
-            type="button"
-            onClick={() => handleDeleteSop(item)}
-            className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete SOP"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleDeleteSop(item)}
+              className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete SOP"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -439,17 +425,17 @@ export function SopManagementView() {
 
   // Batch actions
   const batchActions: BatchAction<SopItem>[] = [
-    {
+    ...(canDelete ? [{
       label: 'Delete Selected',
-      variant: 'danger',
+      variant: 'danger' as const,
       icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
+      onClick: (selected: SopItem[]) => {
         setDeleteModal({
           isOpen: true,
           sops: selected,
         });
       },
-    },
+    }] : []),
   ];
 
   // ─── RENDER SUBVIEWS (SEPARATE DEDICATED PAGES) ──────────────────────────
@@ -509,14 +495,16 @@ export function SopManagementView() {
           },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'add' })}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create New SOP</span>
-          </button>
+          canCreate ? (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'add' })}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create New SOP</span>
+            </button>
+          ) : undefined
         }
       />
 
@@ -776,6 +764,9 @@ export function SopManagementView() {
             data={filteredSops}
             columns={columns}
             batchActions={batchActions}
+            moduleKey="sop_management"
+            canExport={canExport}
+            canDelete={canDelete}
           />
         </div>
       )}

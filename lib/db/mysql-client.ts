@@ -707,6 +707,19 @@ export class MySqlDatabaseManager {
     }
   }
 
+  public async deleteProductionRecord(id: string): Promise<boolean> {
+    if (!this.isConnected) return false;
+    try {
+      const pool = this.getPool();
+      if (!pool) return false;
+      await pool.query('DELETE FROM production_records WHERE id = ?', [id]);
+      return true;
+    } catch (err) {
+      console.error('[MySQL Host] Error deleting production record:', err);
+      return false;
+    }
+  }
+
   // --- Inventory Operations ---
   public async loadInventory(): Promise<InventoryItem[]> {
     if (!this.isConnected) return [];
@@ -1122,6 +1135,26 @@ export class MySqlDatabaseManager {
       console.log('[MySQL Host] Initial database verification and seeding complete.');
     } catch (err) {
       console.error('[MySQL Host] Error during seed:', err);
+    }
+  }
+
+  public async resetDatabase(mode: 'blank' | 'defaults'): Promise<boolean> {
+    if (!this.isConnected) return false;
+    try {
+      const pool = this.getPool();
+      if (!pool) return false;
+      await pool.query('TRUNCATE TABLE production_records');
+      await pool.query('TRUNCATE TABLE buyer_orders');
+      await pool.query('TRUNCATE TABLE inventory_items');
+      await pool.query('TRUNCATE TABLE inspection_records');
+      await pool.query('TRUNCATE TABLE module_store');
+      await pool.query('TRUNCATE TABLE planning_records');
+      await pool.query('TRUNCATE TABLE production_orders');
+      console.log(`[MySQL Host] Successfully truncated all ERP relational tables (Mode: ${mode}).`);
+      return true;
+    } catch (err) {
+      console.error('[MySQL Host] Error resetting database:', err);
+      return false;
     }
   }
 }

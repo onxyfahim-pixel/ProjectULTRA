@@ -16,6 +16,7 @@ import {
   ChevronRight,
   SlidersHorizontal,
 } from 'lucide-react';
+import { useErpAuth } from '@/hooks/use-erp-auth';
 
 export type SortDirection = 'asc' | 'desc' | null;
 
@@ -68,6 +69,10 @@ interface DataTableProps<T extends { id: string }> {
   tableLayout?: 'auto' | 'fixed';
   minTableWidth?: string;
   onExport?: (items: T[]) => void;
+  // RBAC Permission Props
+  moduleKey?: string;
+  canExport?: boolean;
+  canDelete?: boolean;
 }
 
 export function DataTable<T extends { id: string }>({
@@ -89,7 +94,20 @@ export function DataTable<T extends { id: string }>({
   tableLayout = 'auto',
   minTableWidth,
   onExport,
+  moduleKey,
+  canExport: canExportProp,
+  canDelete: canDeleteProp,
 }: DataTableProps<T>) {
+  // Auth & RBAC
+  const { can, user } = useErpAuth();
+  const isSuperAdmin = Boolean(user?.isSuperAdmin || user?.role === 'Super Admin' || user?.role === 'ADMIN');
+  const effectiveCanExport = canExportProp !== undefined
+    ? canExportProp
+    : isSuperAdmin || !moduleKey || can(moduleKey, 'export');
+  const effectiveCanDelete = canDeleteProp !== undefined
+    ? canDeleteProp
+    : isSuperAdmin || !moduleKey || can(moduleKey, 'delete');
+
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey || null);
@@ -345,15 +363,17 @@ export function DataTable<T extends { id: string }>({
               <span className="font-semibold text-slate-800">{data.length}</span> items
             </div>
 
-            <button
-              id={`${id}-export-btn`}
-              onClick={handleExportCsv}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shrink-0 cursor-pointer"
-              title="Export CSV"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
-              <span>Export ({selectedItems.length > 0 ? selectedItems.length : sortedData.length})</span>
-            </button>
+            {effectiveCanExport && (
+              <button
+                id={`${id}-export-btn`}
+                onClick={handleExportCsv}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shrink-0 cursor-pointer"
+                title="Export CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span>Export ({selectedItems.length > 0 ? selectedItems.length : sortedData.length})</span>
+              </button>
+            )}
 
             {primaryAction}
           </div>
@@ -372,7 +392,18 @@ export function DataTable<T extends { id: string }>({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {batchActions.map((action, idx) => (
+              {batchActions
+                .filter((action) => {
+                  const labelLower = action.label.toLowerCase();
+                  if ((action.variant === 'danger' || labelLower.includes('delete') || labelLower.includes('remove')) && !effectiveCanDelete) {
+                    return false;
+                  }
+                  if (labelLower.includes('export') && !effectiveCanExport) {
+                    return false;
+                  }
+                  return true;
+                })
+                .map((action, idx) => (
                 <button
                   key={idx}
                   id={`${id}-batch-action-${idx}`}

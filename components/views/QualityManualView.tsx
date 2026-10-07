@@ -29,6 +29,7 @@ import { DataTable, ColumnDef } from '@/components/ui/DataTable';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { QualityManualSection, QualityManualStatus } from '@/lib/types/modules';
 import { INITIAL_QUALITY_MANUAL_SECTIONS } from '../modules/quality-manual/quality-manual-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { QualityManualDetailsPage } from '../modules/quality-manual/QualityManualDetailsPage';
 import { QualityManualEntryPage } from '../modules/quality-manual/QualityManualEntryPage';
 import { DeleteQualityManualModal } from '../modules/quality-manual/DeleteQualityManualModal';
@@ -42,34 +43,11 @@ type QualityManualSubView =
 export function QualityManualView() {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Load chapters from localStorage or fallback to INITIAL_QUALITY_MANUAL_SECTIONS
-  const [sections, setSections] = useState<QualityManualSection[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_quality_manual_chapters_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed parsing stored quality manual chapters:', err);
-      }
-    }
-    return INITIAL_QUALITY_MANUAL_SECTIONS;
-  });
-
-  // Sync to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_quality_manual_chapters_v1', JSON.stringify(sections));
-      } catch (err) {
-        console.warn('Failed saving quality manual chapters to localStorage:', err);
-      }
-    }
-  }, [sections]);
+  const [sections, setSections] = useLiveModuleData<QualityManualSection[]>(
+    'quality_manual_chapters',
+    INITIAL_QUALITY_MANUAL_SECTIONS,
+    'erp_quality_manual_chapters_v1'
+  );
 
   // Subview State (Details, Add, Edit)
   const [subView, setSubView] = useState<QualityManualSubView>({ type: 'none' });

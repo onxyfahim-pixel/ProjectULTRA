@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { InventoryItem } from '@/lib/types/erp';
 import { GradeBadge, StatusBadge } from '@/components/ui/Badge';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface InventoryDetailsPageProps {
   item: InventoryItem;
@@ -47,6 +48,7 @@ export function InventoryDetailsPage({
   onExport,
   showToast,
 }: InventoryDetailsPageProps) {
+  const { canEdit, canDelete, canExport, canCreate } = useModulePermission('inventory');
   const totalValueUSD = item.quantityMeters * item.unitCost;
 
   // Listen for Escape key to quickly exit Details view
@@ -91,7 +93,7 @@ export function InventoryDetailsPage({
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
           {/* Individual Export Button */}
-          {onExport && (
+          {canExport && onExport && (
             <button
               type="button"
               onClick={() => onExport(item)}
@@ -104,34 +106,40 @@ export function InventoryDetailsPage({
           )}
 
           {/* Adjust / Edit Button */}
-          <button
-            type="button"
-            onClick={() => onEdit(item)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Adjust Stock</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(item)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Adjust Stock</span>
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => onDuplicate(item)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            <span>Duplicate</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(item)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Duplicate</span>
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => onDelete(item)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete</span>
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(item)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
+          )}
         </div>
       </div>
 

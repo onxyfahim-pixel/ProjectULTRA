@@ -33,6 +33,8 @@ import { GradeBadge, StatusBadge } from '@/components/ui/Badge';
 import { ModuleHeader } from '@/components/ui/ModuleHeader';
 import { IncomingQCLot } from '@/lib/types/modules';
 import { MOCK_INCOMING_QC } from '@/lib/db/modules-mock-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { InventoryItem, MaterialCategory, QualityGrade } from '@/lib/types/erp';
 import { INITIAL_INVENTORY } from '@/lib/db/mock-data';
 import { AddInspectionModal } from '../modules/incoming-qc/AddInspectionModal';
@@ -62,8 +64,9 @@ export function IncomingQcView({
   inventoryItems: initialInventory = INITIAL_INVENTORY,
   onUpdateInventoryItem,
 }: IncomingQcViewProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('incoming_qc');
   const [viewMode, setViewMode] = useState<'summary' | 'list' | 'cards'>('summary');
-  const [lots, setLots] = useState<IncomingQCLot[]>(MOCK_INCOMING_QC);
+  const [lots, setLots] = useLiveModuleData<IncomingQCLot[]>('incoming_qc_lots', MOCK_INCOMING_QC);
   const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
 
   // Sub-view: Detailed single QC certificate view
@@ -401,25 +404,29 @@ export function IncomingQcView({
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setLotToEdit(item);
-              setIsAddModalOpen(true);
-            }}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Inspection"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, items: [item] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Record"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setLotToEdit(item);
+                setIsAddModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Inspection"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, items: [item] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Record"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -427,30 +434,34 @@ export function IncomingQcView({
 
   // Batch actions on Table
   const batchActions: BatchAction<IncomingQCLot>[] = [
-    {
-      label: 'Approve & Release to Warehouse',
-      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-      variant: 'default',
-      onClick: (selected) => {
-        const ids = new Set(selected.map((s) => s.id));
-        setLots((prev) =>
-          prev.map((l) => (ids.has(l.id) ? { ...l, result: 'ACCEPTED', qualityGradeAssigned: 'GRADE_A' } : l))
-        );
-        showToast(`Approved & released ${selected.length} lots to bulk warehouse`);
-      },
-    },
-    {
-      label: 'Quarantine Selected',
-      icon: <XCircle className="w-3.5 h-3.5" />,
-      variant: 'danger',
-      onClick: (selected) => {
-        const ids = new Set(selected.map((s) => s.id));
-        setLots((prev) =>
-          prev.map((l) => (ids.has(l.id) ? { ...l, result: 'REJECTED', qualityGradeAssigned: 'ON_HOLD' } : l))
-        );
-        showToast(`Quarantined ${selected.length} lots for mill replacement`);
-      },
-    },
+    ...(canEdit
+      ? [
+          {
+            label: 'Approve & Release to Warehouse',
+            icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+            variant: 'default' as const,
+            onClick: (selected: IncomingQCLot[]) => {
+              const ids = new Set(selected.map((s) => s.id));
+              setLots((prev) =>
+                prev.map((l) => (ids.has(l.id) ? { ...l, result: 'ACCEPTED', qualityGradeAssigned: 'GRADE_A' } : l))
+              );
+              showToast(`Approved & released ${selected.length} lots to bulk warehouse`);
+            },
+          },
+          {
+            label: 'Quarantine Selected',
+            icon: <XCircle className="w-3.5 h-3.5" />,
+            variant: 'danger' as const,
+            onClick: (selected: IncomingQCLot[]) => {
+              const ids = new Set(selected.map((s) => s.id));
+              setLots((prev) =>
+                prev.map((l) => (ids.has(l.id) ? { ...l, result: 'REJECTED', qualityGradeAssigned: 'ON_HOLD' } : l))
+              );
+              showToast(`Quarantined ${selected.length} lots for mill replacement`);
+            },
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -760,19 +771,24 @@ export function IncomingQcView({
                   </select>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLotToEdit(null);
-                      setIsAddModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>New Inspection</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLotToEdit(null);
+                        setIsAddModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>New Inspection</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={batchActions}
+                moduleKey="incoming_qc"
+                canExport={canExport}
+                canDelete={canDelete}
               />
             </div>
           )}
@@ -820,19 +836,21 @@ export function IncomingQcView({
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLotToEdit(null);
-                      setIsAddModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>New Inspection</span>
-                  </button>
-                </div>
+                {canCreate && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLotToEdit(null);
+                        setIsAddModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>New Inspection</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Cards Grid matching Buyer & Order styling */}
@@ -921,25 +939,29 @@ export function IncomingQcView({
                         </span>
 
                         <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setLotToEdit(lot);
-                              setIsAddModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-                            title="Edit"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteModal({ isOpen: true, items: [lot] })}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLotToEdit(lot);
+                                setIsAddModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+                              title="Edit"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteModal({ isOpen: true, items: [lot] })}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setQcSubView({ type: 'details', lot })}

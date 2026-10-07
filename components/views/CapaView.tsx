@@ -31,6 +31,8 @@ import { StatCard } from '@/components/ui/StatCard';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { CapaItem, CapaSource, CapaStatus } from '@/lib/types/modules';
 import { MOCK_CAPA } from '@/lib/db/modules-mock-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 // Subcomponents
 import { CapaDetailsPage } from '../modules/capa/CapaDetailsPage';
@@ -44,8 +46,9 @@ type CapaSubView =
   | { type: 'edit'; capa: CapaItem };
 
 export function CapaView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('capa');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
-  const [capas, setCapas] = useState<CapaItem[]>(MOCK_CAPA);
+  const [capas, setCapas] = useLiveModuleData<CapaItem[]>('capa_records', MOCK_CAPA);
 
   // Dedicated Separate Pages (Details, Add, Edit)
   const [subView, setSubView] = useState<CapaSubView>({ type: 'none' });
@@ -311,24 +314,28 @@ export function CapaView() {
           </button>
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', capa: item })}
-            className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Resolution Plan"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', capa: item })}
+              className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Resolution Plan"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => handleDeleteCapa(item)}
-            className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete CAPA"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleDeleteCapa(item)}
+              className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete CAPA"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -336,38 +343,46 @@ export function CapaView() {
 
   // Batch actions
   const batchActions: BatchAction<CapaItem>[] = [
-    {
-      label: 'Delete Selected',
-      variant: 'danger',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setDeleteModal({
-          isOpen: true,
-          capas: selected,
-        });
-      },
-    },
-    {
-      label: 'Mark as Closed & Verified',
-      variant: 'primary',
-      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        const ids = new Set(selected.map((s) => s.id));
-        setCapas((prev) =>
-          prev.map((c) =>
-            ids.has(c.id)
-              ? {
-                ...c,
-                status: 'CLOSED',
-                effectivenessVerified: true,
-                actualCompletionDate: new Date().toISOString().split('T')[0],
-              }
-              : c
-          )
-        );
-        showToast(`Marked ${selected.length} CAPA records as Closed & Verified`);
-      },
-    },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            variant: 'danger' as const,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            onClick: (selected: CapaItem[]) => {
+              setDeleteModal({
+                isOpen: true,
+                capas: selected,
+              });
+            },
+          },
+        ]
+      : []),
+    ...(canEdit
+      ? [
+          {
+            label: 'Mark as Closed & Verified',
+            variant: 'primary' as const,
+            icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+            onClick: (selected: CapaItem[]) => {
+              const ids = new Set(selected.map((s) => s.id));
+              setCapas((prev) =>
+                prev.map((c) =>
+                  ids.has(c.id)
+                    ? {
+                        ...c,
+                        status: 'CLOSED',
+                        effectivenessVerified: true,
+                        actualCompletionDate: new Date().toISOString().split('T')[0],
+                      }
+                    : c
+                )
+              );
+              showToast(`Marked ${selected.length} CAPA records as Closed & Verified`);
+            },
+          },
+        ]
+      : []),
   ];
 
   // ─── RENDER SUBVIEWS (SEPARATE DEDICATED PAGES) ──────────────────────────
@@ -435,14 +450,16 @@ export function CapaView() {
           },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'add' })}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Raise New CAPA</span>
-          </button>
+          canCreate ? (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'add' })}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Raise New CAPA</span>
+            </button>
+          ) : undefined
         }
       />
 
@@ -637,6 +654,9 @@ export function CapaView() {
             data={filteredCapas}
             columns={columns}
             batchActions={batchActions}
+            moduleKey="capa"
+            canExport={canExport}
+            canDelete={canDelete}
           />
         </div>
       )}

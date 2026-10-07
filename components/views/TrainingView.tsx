@@ -47,6 +47,8 @@ import { TrainingDetailsPage } from '../modules/training/TrainingDetailsPage';
 import { TrainingEntryPage } from '../modules/training/TrainingEntryPage';
 import { TrainingEvaluationPage } from '../modules/training/TrainingEvaluationPage';
 import { ExamPaperCreationPage } from '../modules/training/ExamPaperCreationPage';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { AnnualMasterCalendarView } from '../modules/training/AnnualMasterCalendarView';
 import { DeleteTrainingModal } from '../modules/training/DeleteTrainingModal';
 
@@ -60,111 +62,30 @@ type TrainingSubView =
   | { type: 'edit_exam'; exam: TrainingExamPaper };
 
 export function TrainingView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('training');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Courses state with localStorage persistence
-  const [courses, setCourses] = useState<TrainingMatrixItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_training_courses_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (e) {
-        console.warn('Failed parsing stored training courses:', e);
-      }
-    }
-    return INITIAL_TRAINING_COURSES;
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_training_courses_v1', JSON.stringify(courses));
-      } catch (e) {
-        console.warn('Failed saving training courses:', e);
-      }
-    }
-  }, [courses]);
-
-  // Exam Papers state
-  const [examPapers, setExamPapers] = useState<TrainingExamPaper[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_training_exams_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (e) {
-        console.warn('Failed parsing stored exam papers:', e);
-      }
-    }
-    return INITIAL_EXAM_PAPERS;
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_training_exams_v1', JSON.stringify(examPapers));
-      } catch (e) {
-        console.warn('Failed saving exam papers:', e);
-      }
-    }
-  }, [examPapers]);
-
-  // Evaluation Records state
-  const [evaluations, setEvaluations] = useState<TrainingEvaluationRecord[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_training_evaluations_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (e) {
-        console.warn('Failed parsing stored evaluations:', e);
-      }
-    }
-    return INITIAL_EVALUATION_RECORDS;
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_training_evaluations_v1', JSON.stringify(evaluations));
-      } catch (e) {
-        console.warn('Failed saving evaluations:', e);
-      }
-    }
-  }, [evaluations]);
-
-  // Annual Master Schedule state (Full Year 12 Months)
-  const [annualSchedule, setAnnualSchedule] = useState<AnnualTrainingScheduleItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_annual_training_schedule_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (e) {
-        console.warn('Failed parsing stored annual schedule:', e);
-      }
-    }
-    return INITIAL_ANNUAL_TRAINING_SCHEDULE;
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_annual_training_schedule_v1', JSON.stringify(annualSchedule));
-      } catch (e) {
-        console.warn('Failed saving annual schedule:', e);
-      }
-    }
-  }, [annualSchedule]);
+  // Real-time Live Synchronized Module Data
+  const [courses, setCourses] = useLiveModuleData<TrainingMatrixItem[]>(
+    'training_courses',
+    INITIAL_TRAINING_COURSES,
+    'erp_training_courses_v1'
+  );
+  const [examPapers, setExamPapers] = useLiveModuleData<TrainingExamPaper[]>(
+    'training_exams',
+    INITIAL_EXAM_PAPERS,
+    'erp_training_exams_v1'
+  );
+  const [evaluations, setEvaluations] = useLiveModuleData<TrainingEvaluationRecord[]>(
+    'training_evaluations',
+    INITIAL_EVALUATION_RECORDS,
+    'erp_training_evaluations_v1'
+  );
+  const [annualSchedule, setAnnualSchedule] = useLiveModuleData<AnnualTrainingScheduleItem[]>(
+    'training_annual_schedule',
+    INITIAL_ANNUAL_TRAINING_SCHEDULE,
+    'erp_annual_training_schedule_v1'
+  );
 
   // Subview State
   const [subView, setSubView] = useState<TrainingSubView>({ type: 'none' });
@@ -457,44 +378,52 @@ export function TrainingView() {
           </button>
 
           {/* Evaluate Trainees */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'evaluation', course: item })}
-            className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Conduct Trainee Evaluation"
-          >
-            <ClipboardCheck className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'evaluation', course: item })}
+              className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Conduct Trainee Evaluation"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Edit */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', course: item })}
-            className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
-            title="Edit Course"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', course: item })}
+              className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
+              title="Edit Course"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Duplicate */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateCourse(item)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate Course"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateCourse(item)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate Course"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, itemType: 'COURSE', items: [item] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Course"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, itemType: 'COURSE', items: [item] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Course"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -576,22 +505,26 @@ export function TrainingView() {
       align: 'right',
       render: (item) => (
         <div className="flex items-center justify-end gap-1">
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit_exam', exam: item })}
-            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors cursor-pointer"
-            title="Open Exam Editor"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, itemType: 'EXAM', items: [item] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Exam Paper"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit_exam', exam: item })}
+              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors cursor-pointer"
+              title="Open Exam Editor"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, itemType: 'EXAM', items: [item] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Exam Paper"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -683,6 +616,7 @@ export function TrainingView() {
             onClick={() => setDeleteModal({ isOpen: true, itemType: 'EVALUATION', items: [item] })}
             className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
             title="Delete Evaluation Record"
+            style={{ display: canDelete ? undefined : 'none' }}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -831,14 +765,16 @@ export function TrainingView() {
                     <Eye className="w-3.5 h-3.5 text-slate-600" />
                     <span>View Needle Policy</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Schedule Training Session</span>
-                  </button>
+                  {canCreate && (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Schedule Training Session</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -925,6 +861,7 @@ export function TrainingView() {
 
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-xs text-slate-500 font-mono">ISO 9001 Clause 7.2</span>
+                  {canCreate && (
                     <button
                       type="button"
                       onClick={() => setSubView({ type: 'create_exam' })}
@@ -933,6 +870,7 @@ export function TrainingView() {
                       <Plus className="w-3.5 h-3.5" />
                       <span>Compose Exam Paper</span>
                     </button>
+                  )}
                   </div>
                 </div>
               </div>
@@ -994,35 +932,37 @@ export function TrainingView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Schedule Training Session</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Schedule Training Session</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={[
-                  {
+                  ...(canDelete ? [{
                     label: 'Delete Selected',
-                    variant: 'danger',
+                    variant: 'danger' as const,
                     icon: <Trash2 className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
+                    onClick: (selected: TrainingMatrixItem[]) => {
                       setDeleteModal({
                         isOpen: true,
                         itemType: 'COURSE',
                         items: selected,
                       });
                     },
-                  },
-                  {
+                  }] : []),
+                  ...(canExport ? [{
                     label: 'Export Matrix',
                     icon: <Download className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
+                    onClick: (selected: TrainingMatrixItem[]) => {
                       showToast(`Exported ${selected.length} training records`);
                     },
-                  },
+                  }] : []),
                 ]}
               />
             </div>
@@ -1039,28 +979,30 @@ export function TrainingView() {
                 searchPlaceholder="Search exam code, title, linked course, or department..."
                 searchableKeys={['examCode', 'title', 'courseCode', 'courseTitle', 'targetDepartment']}
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'create_exam' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Create Exam Paper</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'create_exam' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Create Exam Paper</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={[
-                  {
+                  ...(canDelete ? [{
                     label: 'Delete Selected',
-                    variant: 'danger',
+                    variant: 'danger' as const,
                     icon: <Trash2 className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
+                    onClick: (selected: TrainingExamPaper[]) => {
                       setDeleteModal({
                         isOpen: true,
                         itemType: 'EXAM',
                         items: selected,
                       });
                     },
-                  },
+                  }] : []),
                 ]}
               />
             </div>
@@ -1077,31 +1019,33 @@ export function TrainingView() {
                 searchPlaceholder="Search evaluation code, course title, assessor, or trainer..."
                 searchableKeys={['evaluationCode', 'courseTitle', 'courseCode', 'evaluatorName']}
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const c = courses[0] || INITIAL_TRAINING_COURSES[0];
-                      setSubView({ type: 'evaluation', course: c });
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <ClipboardCheck className="w-3.5 h-3.5" />
-                    <span>+ Conduct Trainee Evaluation</span>
-                  </button>
+                  canEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const c = courses[0] || INITIAL_TRAINING_COURSES[0];
+                        setSubView({ type: 'evaluation', course: c });
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <ClipboardCheck className="w-3.5 h-3.5" />
+                      <span>+ Conduct Trainee Evaluation</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={[
-                  {
+                  ...(canDelete ? [{
                     label: 'Delete Selected',
-                    variant: 'danger',
+                    variant: 'danger' as const,
                     icon: <Trash2 className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
+                    onClick: (selected: TrainingEvaluationRecord[]) => {
                       setDeleteModal({
                         isOpen: true,
                         itemType: 'EVALUATION',
                         items: selected,
                       });
                     },
-                  },
+                  }] : []),
                 ]}
               />
             </div>

@@ -183,14 +183,18 @@ export function StatusBadge({
 }
 
 export function RoleBadge({ role }: { role: Role }) {
-  const configs: Record<Role, { label: string; variant: BadgeProps['variant'] }> = {
+  const configs: Partial<Record<Role, { label: string; variant: BadgeProps['variant'] }>> = {
     ADMIN: { label: 'Administrator (Super)', variant: 'purple' },
     QA_MANAGER: { label: 'QA Lead (AQL Authority)', variant: 'info' },
     WAREHOUSE_INSPECTOR: { label: 'Warehouse Inspector', variant: 'success' },
     PRODUCTION_HEAD: { label: 'Production Head', variant: 'warning' },
     OPERATOR: { label: 'Floor Operator', variant: 'default' },
+    'Super Admin': { label: 'Super Admin', variant: 'purple' },
+    'QC Manager': { label: 'QC Manager', variant: 'info' },
+    Inspector: { label: 'Inspector', variant: 'success' },
+    Viewer: { label: 'Viewer', variant: 'default' },
   };
 
-  const config = configs[role] || { label: role, variant: 'default' };
+  const config = configs[role] || { label: String(role), variant: 'default' };
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }

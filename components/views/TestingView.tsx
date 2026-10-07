@@ -34,6 +34,8 @@ import { StatCard } from '@/components/ui/StatCard';
 import { ModuleHeader, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { LabTestRecord, GarmentIsoTestMethod } from '@/lib/types/modules';
 import { MOCK_LAB_TESTS, GARMENT_ISO_TEST_METHODS } from '@/lib/db/modules-mock-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { TestDetailsPage } from '../modules/testing/TestDetailsPage';
 import { TestEntryPage } from '../modules/testing/TestEntryPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
@@ -51,8 +53,9 @@ const VERDICT_BADGES: Record<string, { label: string; cls: string }> = {
 };
 
 export function TestingView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('testing');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
-  const [tests, setTests] = useState<LabTestRecord[]>(MOCK_LAB_TESTS);
+  const [tests, setTests] = useLiveModuleData<LabTestRecord[]>('testing_records', MOCK_LAB_TESTS);
 
   // Dedicated Separate Sub-Pages State (Matching Buyer & Order module)
   const [subView, setSubView] = useState<TestSubView>({ type: 'none' });
@@ -173,20 +176,28 @@ export function TestingView() {
 
   // Batch Actions for DataTable
   const batchActions: BatchAction<LabTestRecord>[] = [
-    {
-      label: 'Delete Selected',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      variant: 'danger',
-      onClick: (selected) => setDeleteModal({ isOpen: true, tests: selected }),
-    },
-    {
-      label: 'Export Certificates',
-      icon: <Award className="w-3.5 h-3.5" />,
-      variant: 'default',
-      onClick: (selected) => {
-        showToast(`Exported ${selected.length} accredited test certificates (PDF)`);
-      },
-    },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            variant: 'danger' as const,
+            onClick: (selected: LabTestRecord[]) => setDeleteModal({ isOpen: true, tests: selected }),
+          },
+        ]
+      : []),
+    ...(canExport
+      ? [
+          {
+            label: 'Export Certificates',
+            icon: <Award className="w-3.5 h-3.5" />,
+            variant: 'default' as const,
+            onClick: (selected: LabTestRecord[]) => {
+              showToast(`Exported ${selected.length} accredited test certificates (PDF)`);
+            },
+          },
+        ]
+      : []),
   ];
 
   // Column Definitions - Styled like Buyer & Order module
@@ -358,34 +369,40 @@ export function TestingView() {
           </button>
 
           {/* Edit Icon Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', test: item })}
-            className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-            title="Edit Test Report"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', test: item })}
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              title="Edit Test Report"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Duplicate Icon Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateTest(item)}
-            className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-            title="Duplicate Test"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateTest(item)}
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              title="Duplicate Test"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Icon Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, tests: [item] })}
-            className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-            title="Delete Test"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, tests: [item] })}
+              className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+              title="Delete Test"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -432,6 +449,18 @@ export function TestingView() {
             { id: 'list', label: 'Lab Test Registry', count: tests.length },
             { id: 'standards', label: 'ISO Test Standards', count: GARMENT_ISO_TEST_METHODS.length },
           ]}
+          actions={
+            canCreate ? (
+              <button
+                type="button"
+                onClick={() => setSubView({ type: 'add' })}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Test</span>
+              </button>
+            ) : undefined
+          }
         />
       )}
 
@@ -649,15 +678,18 @@ export function TestingView() {
                     </div>
                   }
                   primaryAction={
-                    <button
-                      type="button"
-                      onClick={() => setSubView({ type: 'add' })}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Test</span>
-                    </button>
+                    canCreate ? (
+                      <button
+                        type="button"
+                        onClick={() => setSubView({ type: 'add' })}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Test</span>
+                      </button>
+                    ) : undefined
                   }
+                  moduleKey="testing"
                   batchActions={batchActions}
                 />
               ) : (
@@ -737,14 +769,16 @@ export function TestingView() {
                       </div>
 
                       {/* Add Test Button - Matching Buyer & Order module */}
-                      <button
-                        type="button"
-                        onClick={() => setSubView({ type: 'add' })}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add Test</span>
-                      </button>
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => setSubView({ type: 'add' })}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Test</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -776,13 +810,15 @@ export function TestingView() {
                       <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
                         No laboratory reports match your current filter criteria. Reset filters or register a new test.
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setSubView({ type: 'add' })}
-                        className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
-                      >
-                        + Add New Lab Test
-                      </button>
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => setSubView({ type: 'add' })}
+                          className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
+                        >
+                          + Add New Lab Test
+                        </button>
+                      )}
                     </div>
                   ) : (
                     /* RESPONSIVE CARD GRID */
@@ -905,30 +941,36 @@ export function TestingView() {
                                 </button>
 
                                 <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSubView({ type: 'edit', test: item })}
-                                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-                                    title="Edit Test Report"
-                                  >
-                                    <Edit className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDuplicateTest(item)}
-                                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-                                    title="Duplicate Test Report"
-                                  >
-                                    <Copy className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeleteModal({ isOpen: true, tests: [item] })}
-                                    className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                    title="Delete Test Report"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSubView({ type: 'edit', test: item })}
+                                      className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                                      title="Edit Test Report"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {canCreate && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDuplicateTest(item)}
+                                      className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                                      title="Duplicate Test Report"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {canDelete && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeleteModal({ isOpen: true, tests: [item] })}
+                                      className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                      title="Delete Test Report"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -1098,14 +1140,16 @@ export function TestingView() {
                     {/* Card Action Footer */}
                     <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                       <span className="text-[11px] text-slate-500 font-medium">Accredited ISO/IEC 17025 Method</span>
-                      <button
-                        type="button"
-                        onClick={() => setSubView({ type: 'add', initialMethod: method })}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer shadow-2xs"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Log Test Using This Standard</span>
-                      </button>
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => setSubView({ type: 'add', initialMethod: method })}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer shadow-2xs"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Log Test Using This Standard</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

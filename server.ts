@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import cookieParser from 'cookie-parser';
 import { signToken, verifyToken, DEMO_USERS, hasPermission } from './lib/auth/jwt';
 import { UserStorageManager } from './lib/auth/user-storage';
+import { RoleStorageManager } from './lib/auth/role-storage';
 import { erpStore } from './lib/db/store';
 import { Role, UserSession } from './lib/types/erp';
 import fs from 'fs';
@@ -217,11 +218,154 @@ app.prepare().then(() => {
     return res.json({ success: true, user: req.user });
   });
 
-  // 3. Demo Users List (For quick role switching)
+  // 3. Users List & Provisioning (backed by UserStorageManager and MySQL)
   server.get('/api/auth/users', (_req: Request, res: Response) => {
     return res.json({
-      users: DEMO_USERS.map(({ password: _, ...rest }) => rest),
+      success: true,
+      users: UserStorageManager.getUsers().map(({ password: _, ...rest }) => rest),
     });
+  });
+
+  server.post('/api/auth/users', (req: Request, res: Response) => {
+    try {
+      const { username, name, email, password, role, department, avatarUrl } = req.body;
+      if (!username || !password || !name || !email || !role) {
+        return res.status(400).json({ success: false, error: 'Username, password, name, email, and role are required.' });
+      }
+      const result = UserStorageManager.createUser({
+        username,
+        name,
+        email,
+        password,
+        role: role as Role,
+        department: department || 'Operations',
+        avatarUrl,
+      });
+      if (!result.success || !result.user) {
+        return res.status(400).json({ success: false, error: result.error });
+      }
+      erpStore.addAuditLog({
+        action: 'USER_CREATED',
+        entity: 'UserManagement',
+        entityId: result.user.id,
+        performedBy: 'Super Administrator',
+        userRole: 'Super Admin',
+        details: `Created user @${result.user.username} (${result.user.name}) with role ${result.user.role}`,
+      });
+      const { password: _, ...safeUser } = result.user;
+      return res.status(201).json({ success: true, user: safeUser });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  server.patch('/api/auth/users', (req: Request, res: Response) => {
+    try {
+      const { id, username, password, role, department, isActive, name, avatarUrl } = req.body;
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'User ID is required.' });
+      }
+      const result = UserStorageManager.updateUser(id, {
+        ...(username && { username }),
+        ...(password && { password }),
+        ...(role && { role: role as Role }),
+        ...(department && { department }),
+        ...(isActive !== undefined && { isActive }),
+        ...(name && { name }),
+        ...(avatarUrl && { avatarUrl }),
+      });
+      if (!result.success || !result.user) {
+        return res.status(400).json({ success: false, error: result.error });
+      }
+      erpStore.addAuditLog({
+        action: 'USER_UPDATED',
+        entity: 'UserManagement',
+        entityId: id,
+        performedBy: 'Super Administrator',
+        userRole: 'Super Admin',
+        details: `Updated attributes for user @${result.user.username} (${result.user.name})`,
+      });
+      const { password: _, ...safeUser } = result.user;
+      return res.json({ success: true, user: safeUser });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  server.delete('/api/auth/users', (req: Request, res: Response) => {
+    try {
+      const id = req.query.id as string;
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'User ID is required.' });
+      }
+      const result = UserStorageManager.deleteUser(id);
+      if (!result.success) {
+        return res.status(400).json({ success: false, error: result.error });
+      }
+      erpStore.addAuditLog({
+        action: 'USER_DELETED',
+        entity: 'UserManagement',
+        entityId: id,
+        performedBy: 'Super Administrator',
+        userRole: 'Super Admin',
+        details: `Deleted user ${id}`,
+      });
+      return res.json({ success: true, message: 'User deleted successfully.' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 3a. Roles & Permissions Matrix
+  server.get('/api/auth/roles', (_req: Request, res: Response) => {
+    return res.json({
+      success: true,
+      roles: RoleStorageManager.getRoles(),
+    });
+  });
+
+  server.post('/api/auth/roles', (req: Request, res: Response) => {
+    try {
+      const result = RoleStorageManager.saveRole(req.body);
+      if (!result.success || !result.role) {
+        return res.status(400).json({ success: false, error: result.error });
+      }
+      erpStore.addAuditLog({
+        action: 'ROLE_UPSERTED',
+        entity: 'RBAC',
+        entityId: result.role.id,
+        performedBy: 'Super Administrator',
+        userRole: 'Super Admin',
+        details: `Saved role "${result.role.name}" with permissions matrix`,
+      });
+      return res.json({ success: true, role: result.role });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  server.delete('/api/auth/roles', (req: Request, res: Response) => {
+    try {
+      const id = req.query.id as string;
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'Role ID is required' });
+      }
+      const result = RoleStorageManager.deleteRole(id);
+      if (!result.success) {
+        return res.status(400).json({ success: false, error: result.error });
+      }
+      erpStore.addAuditLog({
+        action: 'ROLE_DELETED',
+        entity: 'RBAC',
+        entityId: id,
+        performedBy: 'Super Administrator',
+        userRole: 'Super Admin',
+        details: `Deleted role ${id}`,
+      });
+      return res.json({ success: true, message: 'Role deleted successfully.' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // 3b. Auth: User Profile Update
@@ -750,6 +894,33 @@ app.prepare().then(() => {
       });
     } catch (err: any) {
       return res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  server.delete('/api/production-records', authenticateToken, (req: AuthRequest, res: Response) => {
+    try {
+      const id = String(req.query.id || '');
+      if (!id) return res.status(400).json({ success: false, error: 'Record ID is required' });
+      const deleted = erpStore.deleteProductionRecord(id, req.user);
+      return res.json({ success: deleted, id, isMysqlConnected: mysqlManager.getConnectedStatus() });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 19. Database Reset / Factory Purge
+  server.post('/api/database/reset', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const mode = (req.body.mode || 'blank') as 'blank' | 'defaults';
+      const result = await erpStore.resetDatabase(mode, req.user);
+      return res.json({
+        success: result.success,
+        message: result.message,
+        mode,
+        isMysqlConnected: erpStore.isMysqlActive(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
     }
   });
 

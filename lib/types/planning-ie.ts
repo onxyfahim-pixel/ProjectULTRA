@@ -102,6 +102,7 @@ export interface MachineMasterItem {
   utilizationPercent: number;
   machineEfficiency: number;
   lastMaintenanceDate: string;
+  breakdownCountMonth: number;
 }
 
 export interface OperatorMasterItem {
@@ -120,6 +121,10 @@ export interface OperatorMasterItem {
   efficiencyRate: number;
   performanceRating: number;
   multiSkillCount: number;
+  skillGrade: string;
+  avgEfficiencyPercent: number;
+  dhuPercent: number;
+  attendancePercent: number;
 }
 
 export interface SkillMatrixItem {
@@ -132,6 +137,8 @@ export interface SkillMatrixItem {
   skillLevel: SkillLevelGrade; // 0 to 4
   trainingNeeded: boolean;
   certifiedDate?: string;
+  cycleTimeSec: number;
+  efficiencyPercent: number;
 }
 
 export interface OperationMasterItem {
@@ -176,6 +183,15 @@ export interface ProductionOrderPlan {
   status: ProductionOrderStatus;
   remarks?: string;
   createdAt: string;
+  // Commercial ERP & Cross-Module Sync Fields
+  buyerOrderId?: string;
+  fabricStatus?: string;
+  cuttingStatus?: string;
+  smv?: number;
+  fobPrice?: number;
+  syncSource?: string;
+  isSyncedWithBuyerOrder?: boolean;
+  fabricReadinessPercent?: number;
 }
 
 // 03. Production Planning & Scheduling
@@ -204,6 +220,12 @@ export interface ProductionPlanSchedule {
   notes?: string;
   actualProducedQty?: number;
   planVsActualPercent?: number;
+  // Commercial PPC Fields
+  buyerOrderId?: string;
+  fabricStatus?: string;
+  targetEfficiency?: number;
+  pitchTimeSec?: number;
+  dailyRampUpPcs?: { day1: number; day2: number; day3: number; day4: number };
 }
 
 // 04. Capacity Planning
@@ -504,6 +526,9 @@ export interface ProductionQualityLink {
   rejectionPercent: number;
   linkedNcrId?: string;
   linkedCapaId?: string;
+  unitName?: string;
+  qualityController?: string;
+  lineChief?: string;
 }
 
 export interface ProductionReworkRecord {

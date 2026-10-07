@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { CapaItem, CapaStatus, CapaEvidenceImage } from '@/lib/types/modules';
 import { DeleteCapaModal } from './DeleteCapaModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface CapaDetailsPageProps {
   capa: CapaItem;
@@ -51,6 +52,7 @@ export function CapaDetailsPage({
   onUpdateCapa,
   showToast,
 }: CapaDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('capa');
   const [activeTab, setActiveTab] = useState<'overview' | 'rca' | 'evidence' | 'signoff'>('overview');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -199,20 +201,34 @@ export function CapaDetailsPage({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Quick status transition dropdown */}
-          <select
-            value={capa.status}
-            onChange={(e) => handleQuickStatusChange(e.target.value as CapaStatus)}
-            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
-            title="Quick update CAPA lifecycle stage"
-          >
-            <option value="OPEN">Status: OPEN</option>
-            <option value="IN_PROGRESS">Status: IN PROGRESS</option>
-            <option value="VERIFICATION_PENDING">Status: VERIFICATION PENDING</option>
-            <option value="CLOSED">Status: CLOSED & VERIFIED</option>
-          </select>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+              title="Print / Export 8D CAPA Report"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span>Export Report</span>
+            </button>
+          )}
 
-          {onDelete && (
+          {/* Quick status transition dropdown */}
+          {canEdit && (
+            <select
+              value={capa.status}
+              onChange={(e) => handleQuickStatusChange(e.target.value as CapaStatus)}
+              className="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
+              title="Quick update CAPA lifecycle stage"
+            >
+              <option value="OPEN">Status: OPEN</option>
+              <option value="IN_PROGRESS">Status: IN PROGRESS</option>
+              <option value="VERIFICATION_PENDING">Status: VERIFICATION PENDING</option>
+              <option value="CLOSED">Status: CLOSED & VERIFIED</option>
+            </select>
+          )}
+
+          {onDelete && canDelete && (
             <button
               type="button"
               onClick={() => setIsDeleteModalOpen(true)}
@@ -224,15 +240,17 @@ export function CapaDetailsPage({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => onEdit(capa)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
-            title="Edit CAPA Resolution Plan"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Plan</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(capa)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
+              title="Edit CAPA Resolution Plan"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Plan</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -14,6 +14,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { FactoryCertificate, CertificateAttachment } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { DeleteCertificateModal } from './DeleteCertificateModal';
 import { CertificatePdfPreviewModal } from './CertificatePdfPreviewModal';
 
@@ -33,6 +34,7 @@ export function CertificateDetailsPage({
   onDelete,
   showToast,
 }: CertificateDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('certificate');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<CertificateAttachment | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -122,16 +124,18 @@ export function CertificateDetailsPage({
 
         {/* Action Buttons: Edit and Delete only */}
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-          <button
-            type="button"
-            onClick={() => onEdit(cert)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Certificate</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(cert)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Certificate</span>
+            </button>
+          )}
 
-          {onDelete && (
+          {canDelete && onDelete && (
             <button
               type="button"
               onClick={() => setIsDeleteModalOpen(true)}
@@ -316,14 +320,16 @@ export function CertificateDetailsPage({
               <Eye className="w-3.5 h-3.5" />
               <span>Preview Master Certificate</span>
             </button>
-            <button
-              type="button"
-              onClick={() => handleDownloadAttachment(cert.attachments?.[0] || null)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download Master PDF</span>
-            </button>
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => handleDownloadAttachment(cert.attachments?.[0] || null)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download Master PDF</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -371,15 +377,17 @@ export function CertificateDetailsPage({
                   <Eye className="w-3.5 h-3.5" />
                   <span className="font-medium text-xs">Preview</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadAttachment(att)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer shadow-2xs"
-                  title="Download File"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span className="font-medium text-xs">Download</span>
-                </button>
+                {canExport && (
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAttachment(att)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer shadow-2xs"
+                    title="Download File"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="font-medium text-xs">Download</span>
+                  </button>
+                )}
               </div>
             </div>
           ))}

@@ -3,7 +3,12 @@ export type Role =
   | 'QA_MANAGER' 
   | 'WAREHOUSE_INSPECTOR' 
   | 'PRODUCTION_HEAD' 
-  | 'OPERATOR';
+  | 'OPERATOR'
+  | 'Super Admin'
+  | 'QC Manager'
+  | 'Inspector'
+  | 'Viewer'
+  | (string & {});
 
 export type QualityGrade = 'GRADE_A' | 'GRADE_B' | 'REJECTED' | 'ON_HOLD';
 
@@ -383,6 +388,46 @@ export const ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
     canExportData: false,
     canAccessApi: false,
   },
+  'Super Admin': {
+    canViewDashboard: true,
+    canEditInventory: true,
+    canApproveQualityGrade: true,
+    canPerformInspection: true,
+    canDeleteRecords: true,
+    canManageUsers: true,
+    canExportData: true,
+    canAccessApi: true,
+  },
+  'QC Manager': {
+    canViewDashboard: true,
+    canEditInventory: true,
+    canApproveQualityGrade: true,
+    canPerformInspection: true,
+    canDeleteRecords: false,
+    canManageUsers: false,
+    canExportData: true,
+    canAccessApi: true,
+  },
+  Inspector: {
+    canViewDashboard: true,
+    canEditInventory: true,
+    canApproveQualityGrade: false,
+    canPerformInspection: true,
+    canDeleteRecords: false,
+    canManageUsers: false,
+    canExportData: true,
+    canAccessApi: true,
+  },
+  Viewer: {
+    canViewDashboard: true,
+    canEditInventory: false,
+    canApproveQualityGrade: false,
+    canPerformInspection: false,
+    canDeleteRecords: false,
+    canManageUsers: false,
+    canExportData: true,
+    canAccessApi: false,
+  },
 };
 
 export type RealTimeEvent = 
@@ -390,4 +435,10 @@ export type RealTimeEvent =
   | { type: 'BATCH_GRADE_CHANGED'; ids: string[]; grade: QualityGrade; user: string; timestamp: string }
   | { type: 'INSPECTION_RECORDED'; record: InspectionRecord; user: string; timestamp: string }
   | { type: 'INSPECTION_DELETED'; id: string; user: string; timestamp: string }
+  | { type: 'PRODUCTION_RECORD_UPSERTED'; record: ProductionOrder; user: string; timestamp: string }
+  | { type: 'PRODUCTION_RECORD_DELETED'; id: string; orderNumber?: string; user: string; timestamp: string }
+  | { type: 'BUYER_ORDER_UPSERTED'; order: any; user: string; timestamp: string }
+  | { type: 'BUYER_ORDER_DELETED'; id: string; orderNumber?: string; user: string; timestamp: string }
+  | { type: 'MODULE_DATA_UPDATED'; moduleKey: string; data: any; user?: string; timestamp: string }
+  | { type: 'SYSTEM_RESET'; mode: 'blank' | 'defaults'; user: string; timestamp: string }
   | { type: 'WAREHOUSE_ACTIVITY'; message: string; user: string; timestamp: string; location: string };

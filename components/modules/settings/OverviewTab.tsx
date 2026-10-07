@@ -102,11 +102,11 @@ export function OverviewTab({ onNavigateTab }: OverviewTabProps) {
     },
     {
       id: 'database_backup' as SettingsTabId,
-      name: 'Database & Backup',
+      name: 'Database, Backup & Reset',
       icon: Database,
       color: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800',
       badge: isMysqlConnected ? 'MySQL 8.0 Pool' : 'Local Fallback',
-      description: 'Zero-downtime snapshots, JSON import/export, and disaster recovery store',
+      description: 'Zero-downtime snapshots, JSON import/export, and clean slate system reset',
     },
     {
       id: 'export_templates' as SettingsTabId,

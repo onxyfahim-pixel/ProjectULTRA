@@ -41,6 +41,8 @@ import { RiskAssessmentDetailsPage } from '../modules/risk-assessment/RiskAssess
 import { DeleteRiskAssessmentModal } from '../modules/risk-assessment/DeleteRiskAssessmentModal';
 import { getRiskLevel, getRiskLevelBadge } from '../modules/risk-assessment/riskAssessmentData';
 import { RISK_SECTIONS, RISK_SECTION_ORDER } from '../modules/risk-assessment/riskAssessmentSections';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 const MODULE_KEY = 'risk_assessment';
 const STORAGE_KEY = 'project_ultra_risk_assessments_v2';
@@ -52,20 +54,13 @@ type RiskSubView =
   | { type: 'edit'; record: RiskFmeaItem };
 
 export function RiskAssessmentView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('risk_assessment');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
-  const [records, setRecords] = useState<RiskFmeaItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {
-          // fallback
-        }
-      }
-    }
-    return MOCK_RISK_FMEAS;
-  });
+  const [records, setRecords] = useLiveModuleData<RiskFmeaItem[]>(
+    MODULE_KEY,
+    MOCK_RISK_FMEAS,
+    STORAGE_KEY
+  );
 
   // Dedicated Separate Pages (Details, Add, Edit)
   const [subView, setSubView] = useState<RiskSubView>({ type: 'none' });
@@ -78,36 +73,11 @@ export function RiskAssessmentView() {
         setSubView({ type: 'details', record: refreshed });
       }
     }
-  }, [records]);
+  }, [records, subView]);
 
-  // Load from API on mount
-  useEffect(() => {
-    fetch(`/api/modules/${MODULE_KEY}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          setRecords(data.data);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data));
-        }
-      })
-      .catch((err) => {
-        console.warn('Risk assessment api load fallback:', err);
-      });
-  }, []);
-
-  // Save changes to API & localStorage
+  // Save changes via useLiveModuleData
   const persistRecords = (updatedList: RiskFmeaItem[]) => {
     setRecords(updatedList);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
-    }
-    fetch(`/api/modules/${MODULE_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: updatedList }),
-    }).catch((err) => {
-      console.warn('Failed saving risk assessment to API:', err);
-    });
   };
 
   // Modal States
@@ -482,24 +452,28 @@ export function RiskAssessmentView() {
           </button>
 
           {/* Edit Button (Pencil) */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', record: item })}
-            className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Risk Assessment"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', record: item })}
+              className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Risk Assessment"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button (Trash) */}
-          <button
-            type="button"
-            onClick={() => handleDeleteRecord(item)}
-            className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Risk Assessment"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleDeleteRecord(item)}
+              className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Risk Assessment"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -507,17 +481,17 @@ export function RiskAssessmentView() {
 
   // Batch actions
   const batchActions: BatchAction<RiskFmeaItem>[] = [
-    {
+    ...(canDelete ? [{
       label: 'Delete Selected',
-      variant: 'danger',
+      variant: 'danger' as const,
       icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
+      onClick: (selected: RiskFmeaItem[]) => {
         setDeleteModal({
           isOpen: true,
           records: selected,
         });
       },
-    },
+    }] : []),
   ];
 
   // ─── RENDER SUBVIEWS (SEPARATE PAGES) ────────────────────────────────────
@@ -587,14 +561,16 @@ export function RiskAssessmentView() {
           },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'add' })}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Conduct Risk Assessment</span>
-          </button>
+          canCreate ? (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'add' })}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Conduct Risk Assessment</span>
+            </button>
+          ) : undefined
         }
       />
 
@@ -940,6 +916,9 @@ export function RiskAssessmentView() {
               'responsibleLead',
             ]}
             batchActions={batchActions}
+            moduleKey="risk_assessment"
+            canExport={canExport}
+            canDelete={canDelete}
           />
         </div>
       )}

@@ -39,29 +39,17 @@ export function getProductionRecords(): ProductionOrder[] {
   if (typeof window === 'undefined') return INITIAL_PRODUCTION_ORDERS;
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTION_ORDERS);
-    if (!raw) {
+    if (raw === null) {
       localStorage.setItem(STORAGE_KEYS.PRODUCTION_ORDERS, JSON.stringify(INITIAL_PRODUCTION_ORDERS));
       return INITIAL_PRODUCTION_ORDERS;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Ensure any legacy records missing hourlyReports get synced from INITIAL_PRODUCTION_ORDERS
-      const hydrated = parsed.map((item: ProductionOrder) => {
-        if (!item.hourlyReports || item.hourlyReports.length === 0) {
-          const mockMatch = INITIAL_PRODUCTION_ORDERS.find(
-            (m) => m.id === item.id || m.orderNumber === item.orderNumber
-          );
-          if (mockMatch?.hourlyReports && mockMatch.hourlyReports.length > 0) {
-            return { ...item, hourlyReports: mockMatch.hourlyReports };
-          }
-        }
-        return item;
-      });
-      return hydrated;
+    if (Array.isArray(parsed)) {
+      return parsed;
     }
-    return INITIAL_PRODUCTION_ORDERS;
+    return [];
   } catch {
-    return INITIAL_PRODUCTION_ORDERS;
+    return [];
   }
 }
 
@@ -70,8 +58,40 @@ export function saveProductionRecords(orders: ProductionOrder[]): void {
   try {
     localStorage.setItem(STORAGE_KEYS.PRODUCTION_ORDERS, JSON.stringify(orders));
     window.dispatchEvent(new CustomEvent('erp_production_records_updated'));
+
+    // Cross-tab live broadcast
+    if ('BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('garments_erp_sync');
+        bc.postMessage({
+          type: 'PRODUCTION_RECORDS_UPDATED',
+          orders,
+          timestamp: new Date().toISOString(),
+        });
+        bc.close();
+      } catch {}
+    }
+
+    // Dual-sync to Central Host Server
+    fetch('/api/modules/production_records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: orders }),
+    }).catch((err) => console.warn('[Production Store] Server sync warning:', err));
   } catch (err) {
     console.error('Failed to save production records to localStorage:', err);
+  }
+}
+
+export async function deleteProductionRecordFromBackend(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/production-records?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[Production Store] Backend delete error:', err);
+    return false;
   }
 }
 

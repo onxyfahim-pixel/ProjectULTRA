@@ -29,6 +29,8 @@ import { StatCard } from '@/components/ui/StatCard';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { JobDescriptionItem, JobDescriptionStatus } from '@/lib/types/modules';
 import { INITIAL_JOB_DESCRIPTIONS } from '../modules/job-description/job-description-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { JobDescriptionDetailsPage } from '../modules/job-description/JobDescriptionDetailsPage';
 import { JobDescriptionEntryPage } from '../modules/job-description/JobDescriptionEntryPage';
 import { DeleteJobDescriptionModal } from '../modules/job-description/DeleteJobDescriptionModal';
@@ -40,36 +42,14 @@ type JobDescriptionSubView =
   | { type: 'edit'; job: JobDescriptionItem };
 
 export function JobDescriptionView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('job_description');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Load from localStorage or fallback to INITIAL_JOB_DESCRIPTIONS
-  const [jobs, setJobs] = useState<JobDescriptionItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_job_descriptions_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed parsing stored job descriptions:', err);
-      }
-    }
-    return INITIAL_JOB_DESCRIPTIONS;
-  });
-
-  // Sync to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_job_descriptions_v1', JSON.stringify(jobs));
-      } catch (err) {
-        console.warn('Failed saving job descriptions to localStorage:', err);
-      }
-    }
-  }, [jobs]);
+  const [jobs, setJobs] = useLiveModuleData<JobDescriptionItem[]>(
+    'job_descriptions',
+    INITIAL_JOB_DESCRIPTIONS,
+    'erp_job_descriptions_v1'
+  );
 
   // Subview State (Details, Add, Edit)
   const [subView, setSubView] = useState<JobDescriptionSubView>({ type: 'none' });
@@ -295,34 +275,40 @@ export function JobDescriptionView() {
           </button>
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', job: item })}
-            className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
-            title="Edit Role Profile"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', job: item })}
+              className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
+              title="Edit Role Profile"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateJob(item)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate Role Template"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateJob(item)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate Role Template"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, jobs: [item] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Role"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, jobs: [item] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Role"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -445,14 +431,16 @@ export function JobDescriptionView() {
                     <Eye className="w-3.5 h-3.5 text-slate-600" />
                     <span>View QA Director Profile</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Create Job Description</span>
-                  </button>
+                  {canCreate && (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Create Job Description</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -582,34 +570,36 @@ export function JobDescriptionView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Create Job Description</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Create Job Description</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={[
-                  {
+                  ...(canDelete ? [{
                     label: 'Delete Selected',
-                    variant: 'danger',
+                    variant: 'danger' as const,
                     icon: <Trash2 className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
+                    onClick: (selected: JobDescriptionItem[]) => {
                       setDeleteModal({
                         isOpen: true,
                         jobs: selected,
                       });
                     },
-                  },
-                  {
+                  }] : []),
+                  ...(canExport ? [{
                     label: 'Export Register',
                     icon: <Download className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
+                    onClick: (selected: JobDescriptionItem[]) => {
                       showToast(`Exported ${selected.length} job description records`);
                     },
-                  },
+                  }] : []),
                 ]}
               />
             </div>
@@ -627,14 +617,16 @@ export function JobDescriptionView() {
                     Comprehensive cross-functional audit mapping of employee technical capabilities and delegated decision authorities.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSubView({ type: 'add' })}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ New Role</span>
-                </button>
+                {canCreate && (
+                  <button
+                    type="button"
+                    onClick={() => setSubView({ type: 'add' })}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ New Role</span>
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

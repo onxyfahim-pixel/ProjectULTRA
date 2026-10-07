@@ -31,6 +31,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { QualityGoal, GoalPillar, GoalStatus, GoalPriority } from '@/lib/types/modules';
 import { INITIAL_QUALITY_GOALS, GOAL_PILLAR_CONFIG } from '../modules/quality-goals/quality-goals-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { QualityGoalDetailsPage } from '../modules/quality-goals/QualityGoalDetailsPage';
 import { QualityGoalEntryPage } from '../modules/quality-goals/QualityGoalEntryPage';
 import { DeleteGoalModal } from '../modules/quality-goals/DeleteGoalModal';
@@ -46,7 +47,11 @@ type GoalSubView =
 export function QualityGoalsView() {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [subView, setSubView] = useState<GoalSubView>({ type: 'none' });
-  const [goals, setGoals] = useState<QualityGoal[]>(INITIAL_QUALITY_GOALS);
+  const [goals, setGoals] = useLiveModuleData<QualityGoal[]>(
+    'quality_goals',
+    INITIAL_QUALITY_GOALS,
+    'erp_quality_goals_v1'
+  );
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Filters

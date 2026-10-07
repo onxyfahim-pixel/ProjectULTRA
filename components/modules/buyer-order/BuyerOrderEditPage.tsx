@@ -36,6 +36,7 @@ import {
   ArrowRight,
   SlidersHorizontal,
   Info,
+  Paperclip,
 } from 'lucide-react';
 import {
   BuyerOrder,
@@ -54,6 +55,7 @@ import {
 import {
   SEWING_TRACK_UPDATED_EVENT,
 } from '@/lib/db/production-records-store';
+import { OrderAttachmentsUploader } from './OrderAttachmentsUploader';
 
 interface BuyerOrderEditPageProps {
   order: BuyerOrder;
@@ -575,7 +577,7 @@ export function BuyerOrderEditPage({
       <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200 text-xs font-semibold">
         {[
           { id: 'general', label: '1. Commercial & Style Specs', icon: Tag },
-          { id: 'upload', label: '2. Garment Photo & Tech Pack Upload', icon: Upload },
+          { id: 'upload', label: '2. Style Image & Attachments', icon: Paperclip },
           { id: 'stages', label: '3. WIP Record & Pipeline Tracking', icon: Activity },
           { id: 'bom', label: '4. BOM & Material Matrix', icon: Layers },
           { id: 'logistics', label: '5. Logistics & Shipping', icon: Truck },
@@ -901,10 +903,11 @@ export function BuyerOrderEditPage({
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION 2: GARMENT PHOTO & TECH PACK UPLOAD */}
+      {/* SECTION 2: GARMENT PHOTO & ATTACHMENTS UPLOAD */}
       {/* ========================================================================= */}
       {activeSection === 'upload' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Garment Sample Photo Upload Card */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -1078,7 +1081,19 @@ export function BuyerOrderEditPage({
             </div>
           </div>
         </div>
-      )}
+
+        {/* DEDICATED MULTIPLE FILE UPLOADER FOR MEASUREMENT SPEC, TECHNICAL SPEC, TEST RECORD, ETC */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+          <OrderAttachmentsUploader
+            attachments={formData.attachments || []}
+            onChange={(newAtts) => setFormData((prev) => ({ ...prev, attachments: newAtts }))}
+            orderNumber={formData.orderNumber}
+            styleNumber={formData.styleNumber}
+            showToast={showToast}
+          />
+        </div>
+      </div>
+    )}
 
       {/* ========================================================================= */}
       {/* SECTION 3: WIP RECORD (WORK-IN-PROCESS TRACKING & PIPELINE RECORD)        */}

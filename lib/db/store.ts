@@ -11,6 +11,7 @@ import { BuyerOrder } from '../types/modules';
 import { CentralStorageManager, CentralErpData } from './central-storage';
 import { mysqlManager } from './mysql-client';
 import { MOCK_BUYER_ORDERS } from './modules-mock-data';
+import { INITIAL_INVENTORY, INITIAL_INSPECTIONS, INITIAL_PRODUCTION_ORDERS } from './mock-data';
 
 // Persistent repository backed by Host MySQL Database with Local JSON Fallback & Dual-Sync
 class ErpDataStore {
@@ -40,29 +41,18 @@ class ErpDataStore {
     this.auditLogs = central.auditLogs || [];
     this.modulesData = central.modulesData || {};
 
-    // Buyer orders from modulesData or mock fallback (with productionTracking and WIP record backfill)
-    if (this.modulesData.buyer_orders && Array.isArray(this.modulesData.buyer_orders) && this.modulesData.buyer_orders.length > 0) {
-      this.buyerOrders = this.modulesData.buyer_orders.map((bo: BuyerOrder) => {
-        const mockMatch = MOCK_BUYER_ORDERS.find((m) => m.orderNumber === bo.orderNumber || m.id === bo.id);
-        if (mockMatch) {
-          return {
-            ...bo,
-            productionTracking: bo.productionTracking || mockMatch.productionTracking,
-            wipRecord:
-              bo.wipRecord && Object.keys(bo.wipRecord).length > 2 && (bo.wipRecord.cuttingActual || bo.wipRecord.sewingComplete)
-                ? bo.wipRecord
-                : mockMatch.wipRecord,
-          };
-        }
-        return bo;
-      });
-    } else {
+    // Buyer orders from modulesData (respect user deletions even if empty [])
+    if (this.modulesData.buyer_orders && Array.isArray(this.modulesData.buyer_orders)) {
+      this.buyerOrders = this.modulesData.buyer_orders;
+    } else if (this.modulesData.buyer_orders === undefined) {
       this.buyerOrders = [...MOCK_BUYER_ORDERS];
     }
 
-    // Production floor records
+    // Production floor records (respect user deletions even if empty [])
     if (this.modulesData.production_records && Array.isArray(this.modulesData.production_records)) {
       this.productionRecords = this.modulesData.production_records;
+    } else if (this.modulesData.production_records === undefined && this.productionOrders && this.productionOrders.length > 0) {
+      this.productionRecords = this.productionOrders;
     }
 
     console.log(
@@ -238,10 +228,9 @@ class ErpDataStore {
     }
 
     this.broadcast({
-      type: 'WAREHOUSE_ACTIVITY',
-      message: `Buyer Order ${savedOrder.orderNumber} updated with WIP record`,
+      type: 'BUYER_ORDER_UPSERTED',
+      order: savedOrder,
       user: user?.name || 'System',
-      location: 'Buyer & Order',
       timestamp: new Date().toISOString(),
     });
 
@@ -271,6 +260,14 @@ class ErpDataStore {
       });
     }
 
+    this.broadcast({
+      type: 'BUYER_ORDER_DELETED',
+      id: removed.id,
+      orderNumber: removed.orderNumber,
+      user: user?.name || 'System',
+      timestamp: new Date().toISOString(),
+    });
+
     return true;
   }
 
@@ -296,7 +293,48 @@ class ErpDataStore {
       console.error('[MySQL Error] Failed upserting production record:', err);
     });
 
+    this.broadcast({
+      type: 'PRODUCTION_RECORD_UPSERTED',
+      record: saved,
+      user: user?.name || 'System',
+      timestamp: new Date().toISOString(),
+    });
+
     return saved;
+  }
+
+  public deleteProductionRecord(id: string, user?: UserSession): boolean {
+    const index = this.productionRecords.findIndex((r) => r.id === id || r.orderNumber === id);
+    if (index === -1) return false;
+
+    const removed = this.productionRecords[index];
+    this.productionRecords.splice(index, 1);
+    this.persistToDisk();
+
+    mysqlManager.deleteProductionRecord(removed.id).catch((err) => {
+      console.error('[MySQL Error] Failed deleting production record from MySQL:', err);
+    });
+
+    if (user) {
+      this.addAuditLog({
+        action: 'DELETE_PRODUCTION_RECORD',
+        entity: 'ProductionOrder',
+        entityId: removed.id,
+        performedBy: user.name,
+        userRole: user.role,
+        details: `Deleted production record ${removed.orderNumber} (${removed.buyer})`,
+      });
+    }
+
+    this.broadcast({
+      type: 'PRODUCTION_RECORD_DELETED',
+      id: removed.id,
+      orderNumber: removed.orderNumber,
+      user: user?.name || 'System',
+      timestamp: new Date().toISOString(),
+    });
+
+    return true;
   }
 
   // --- Inventory Operations ---
@@ -598,10 +636,10 @@ class ErpDataStore {
     }
 
     this.broadcast({
-      type: 'WAREHOUSE_ACTIVITY',
-      message: `Module data updated: ${moduleKey}`,
+      type: 'MODULE_DATA_UPDATED',
+      moduleKey,
+      data,
       user: user?.name || 'Central System',
-      location: 'Host Database',
       timestamp: new Date().toISOString(),
     });
 
@@ -663,6 +701,81 @@ class ErpDataStore {
       storageFile: this.getStorageFilePath(),
       lastSync: new Date().toISOString(),
     };
+  }
+
+  public async resetDatabase(
+    mode: 'blank' | 'defaults',
+    user?: UserSession
+  ): Promise<{ success: boolean; message: string }> {
+    if (mode === 'blank') {
+      this.inventory = [];
+      this.inspections = [];
+      this.productionOrders = [];
+      this.productionRecords = [];
+      this.buyerOrders = [];
+      this.modulesData = {};
+      this.persistToDisk();
+
+      if (this.isMysqlActive()) {
+        await mysqlManager.resetDatabase('blank');
+      }
+
+      this.addAuditLog({
+        action: 'SYSTEM_RESET_BLANK',
+        entity: 'SystemStore',
+        entityId: 'global',
+        performedBy: user?.name || 'Administrator',
+        userRole: user?.role || 'ADMIN',
+        details: 'ERP purged to clean slate. All records wiped for fresh live operation.',
+      });
+
+      this.broadcast({
+        type: 'SYSTEM_RESET',
+        mode: 'blank',
+        user: user?.name || 'Admin',
+        timestamp: new Date().toISOString(),
+      });
+
+      return { success: true, message: 'ERP completely cleared to a clean slate (0 records).' };
+    } else {
+      this.buyerOrders = [...MOCK_BUYER_ORDERS];
+      this.inventory = [...INITIAL_INVENTORY];
+      this.inspections = [...INITIAL_INSPECTIONS];
+      this.productionOrders = [...INITIAL_PRODUCTION_ORDERS];
+      this.productionRecords = [...INITIAL_PRODUCTION_ORDERS];
+      this.persistToDisk();
+
+      if (this.isMysqlActive()) {
+        await mysqlManager.resetDatabase('defaults');
+        await mysqlManager.seedIfEmpty({
+          buyerOrders: this.buyerOrders,
+          productionRecords: this.productionRecords,
+          inventory: this.inventory,
+          inspections: this.inspections,
+          productionOrders: this.productionOrders,
+          auditLogs: this.auditLogs,
+          modulesData: this.modulesData,
+        });
+      }
+
+      this.addAuditLog({
+        action: 'SYSTEM_RESET_DEFAULTS',
+        entity: 'SystemStore',
+        entityId: 'global',
+        performedBy: user?.name || 'Administrator',
+        userRole: user?.role || 'ADMIN',
+        details: 'ERP restored to factory sample baseline.',
+      });
+
+      this.broadcast({
+        type: 'SYSTEM_RESET',
+        mode: 'defaults',
+        user: user?.name || 'Admin',
+        timestamp: new Date().toISOString(),
+      });
+
+      return { success: true, message: 'ERP reset to factory baseline defaults.' };
+    }
   }
 }
 

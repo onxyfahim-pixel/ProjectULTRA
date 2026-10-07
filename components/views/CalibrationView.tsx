@@ -31,6 +31,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { CalibrationDevice } from '@/lib/types/modules';
 import { MOCK_CALIBRATION_DEVICES } from '@/lib/db/modules-mock-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 
 // Subcomponents
 import { CalibrationDetailsPage } from '../modules/calibration/CalibrationDetailsPage';
@@ -38,6 +39,7 @@ import { CalibrationEntryPage } from '../modules/calibration/CalibrationEntryPag
 import { CalibrationCertificateModal } from '../modules/calibration/CalibrationCertificateModal';
 import { RecordCalibrationModal } from '../modules/calibration/RecordCalibrationModal';
 import { DeleteCalibrationModal } from '../modules/calibration/DeleteCalibrationModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 type CalibrationSubView =
   | { type: 'none' }
@@ -47,7 +49,8 @@ type CalibrationSubView =
 
 export function CalibrationView() {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
-  const [devices, setDevices] = useState<CalibrationDevice[]>(MOCK_CALIBRATION_DEVICES);
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('calibration');
+  const [devices, setDevices] = useLiveModuleData<CalibrationDevice[]>('calibration_devices', MOCK_CALIBRATION_DEVICES);
 
   // Dedicated Separate Pages (Details, Add, Edit)
   const [subView, setSubView] = useState<CalibrationSubView>({ type: 'none' });
@@ -313,44 +316,52 @@ export function CalibrationView() {
           </button>
 
           {/* 2. Edit Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', device: row })}
-            className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Equipment"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', device: row })}
+              className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Equipment"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* 3. Record Calibration Button (ShieldCheck) */}
-          <button
-            type="button"
-            onClick={() => setSelectedDeviceForRecord(row)}
-            className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Record Calibration"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => setSelectedDeviceForRecord(row)}
+              className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Record Calibration"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* 4. Certificate Button (Award) */}
-          <button
-            type="button"
-            onClick={() => setSelectedDeviceForCert(row)}
-            className="p-1 rounded-md text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors cursor-pointer"
-            title="View Certificate"
-          >
-            <Award className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setSelectedDeviceForCert(row)}
+              className="p-1 rounded-md text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors cursor-pointer"
+              title="View Certificate"
+            >
+              <Award className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* 5. Delete Button */}
-          <button
-            type="button"
-            onClick={() => handleDeleteDevice(row)}
-            className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Equipment"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleDeleteDevice(row)}
+              className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Equipment"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -687,15 +698,18 @@ export function CalibrationView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Equipment</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Equipment</span>
+                    </button>
+                  ) : null
                 }
+                moduleKey="calibration"
                 batchActions={batchActions}
               />
             </div>

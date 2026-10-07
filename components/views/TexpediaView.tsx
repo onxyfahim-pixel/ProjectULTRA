@@ -33,25 +33,17 @@ import {
 import { PostCard } from '../modules/texpedia/PostCard';
 import { CreatePostModal } from '../modules/texpedia/CreatePostModal';
 import { PostDetailsModal } from '../modules/texpedia/PostDetailsModal';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 
 const STORAGE_KEY = 'erp_texpedia_posts_v1';
 
 export function TexpediaView() {
   const [activeTab, setActiveTab] = useState<'feed' | 'verified' | 'bookmarks'>('feed');
-  const [posts, setPosts] = useState<TexpediaPost[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (e) {
-        console.error('Failed to load Texpedia posts from localStorage:', e);
-      }
-    }
-    return INITIAL_TEXPEDIA_POSTS;
-  });
+  const [posts, setPosts] = useLiveModuleData<TexpediaPost[]>(
+    'texpedia_posts',
+    INITIAL_TEXPEDIA_POSTS,
+    STORAGE_KEY
+  );
 
   // Modal States
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -68,15 +60,6 @@ export function TexpediaView() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
-
-  // Sync to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
-    } catch (e) {
-      console.error('Failed to save Texpedia posts to localStorage:', e);
-    }
-  }, [posts]);
 
   // Keep selected post details fresh if state updates
   useEffect(() => {

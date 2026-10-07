@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { ProductionOrder, LineStatus, TopDefectSummary } from '@/lib/types/erp';
 import { OutputLogEntry } from './LogOutputModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface ProductionRecordDetailsPageProps {
   order: ProductionOrder;
@@ -52,6 +53,7 @@ export function ProductionRecordDetailsPage({
   onLogOutput,
   showToast,
 }: ProductionRecordDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('production');
   const target = order.targetQuantity || 1;
   const completed = order.completedQuantity || 0;
   const pct = Math.min(Math.round((completed / target) * 100), 100);
@@ -153,7 +155,7 @@ export function ProductionRecordDetailsPage({
         </div>
 
         <div className="flex items-center gap-2">
-          {onExport && (
+          {canExport && onExport && (
             <button
               type="button"
               onClick={() => onExport(order)}
@@ -164,22 +166,26 @@ export function ProductionRecordDetailsPage({
               <span>Export Record</span>
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => onEdit(order)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Record</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(order)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors border border-rose-200 cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(order)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Record</span>
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(order)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors border border-rose-200 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -26,6 +26,7 @@ import {
   Award,
 } from 'lucide-react';
 import { LabTestRecord } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface TestDetailsPageProps {
   test: LabTestRecord;
@@ -68,6 +69,7 @@ export function TestDetailsPage({
   onDelete,
   showToast,
 }: TestDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('testing');
   const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
 
   const verdictConfig = VERDICT_CONFIG[test.verdict] || VERDICT_CONFIG.PENDING;
@@ -118,36 +120,53 @@ export function TestDetailsPage({
 
         {/* Action Buttons - Styled identically to Buyer & Order module */}
         <div className="flex items-center flex-wrap gap-2">
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
+              title="Print Lab Certificate"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span>Print / Export</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => onDuplicate(test)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
-            title="Duplicate as new test report entry"
-          >
-            <Copy className="w-3.5 h-3.5 text-slate-500" />
-            <span>Duplicate</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(test)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
+              title="Duplicate as new test report entry"
+            >
+              <Copy className="w-3.5 h-3.5 text-slate-500" />
+              <span>Duplicate</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => onEdit(test)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
-            title="Edit this lab test record"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Test</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(test)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
+              title="Edit this lab test record"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Test</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => onDelete(test)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
-            title="Delete this lab test record"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete</span>
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(test)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
+              title="Delete this lab test record"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -14,12 +14,31 @@ export class UserStorageManager {
       return [...DEMO_USERS];
     }
 
-    // Ensure Super Admin exists in the list
-    const hasAdmin = stored.some((u) => u.username === 'admin' || u.isSuperAdmin);
-    if (!hasAdmin) {
+    // Ensure Super Admin exists in the list and matches standard profile
+    const adminIndex = stored.findIndex((u) => u.username === 'admin' || u.id === 'usr_admin');
+    if (adminIndex === -1) {
       const merged = [DEMO_USERS[0], ...stored];
       erpStore.saveModuleData(USERS_MODULE_KEY, merged);
       return merged;
+    } else {
+      stored[adminIndex].name = 'Admin User';
+      stored[adminIndex].email = 'admin@example.com';
+      stored[adminIndex].role = 'Super Admin';
+      stored[adminIndex].isSuperAdmin = true;
+    }
+
+    // Normalize demo user roles
+    const qaIndex = stored.findIndex((u) => u.username === 'tania.qa');
+    if (qaIndex !== -1 && (stored[qaIndex].role === 'QA_MANAGER' || !stored[qaIndex].role)) {
+      stored[qaIndex].role = 'QC Manager';
+    }
+    const inspIndex = stored.findIndex((u) => u.username === 'rafiq.wh');
+    if (inspIndex !== -1 && (stored[inspIndex].role === 'WAREHOUSE_INSPECTOR' || !stored[inspIndex].role)) {
+      stored[inspIndex].role = 'Inspector';
+    }
+    const opIndex = stored.findIndex((u) => u.username === 'shirin.op');
+    if (opIndex !== -1 && (stored[opIndex].role === 'OPERATOR' || !stored[opIndex].role)) {
+      stored[opIndex].role = 'Viewer';
     }
 
     return stored;
@@ -114,7 +133,7 @@ export class UserStorageManager {
       department: data.department || 'Operations',
       avatarUrl: data.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
       isActive: true,
-      isSuperAdmin: data.role === 'ADMIN',
+      isSuperAdmin: data.role === 'ADMIN' || data.role === 'Super Admin' || (data.role as string) === 'super_admin',
       createdAt: new Date().toISOString(),
     };
 
@@ -137,7 +156,7 @@ export class UserStorageManager {
       if (updates.isActive === false) {
         return { success: false, error: 'Super Admin account cannot be deactivated.' };
       }
-      if (updates.role && updates.role !== 'ADMIN') {
+      if (updates.role && updates.role !== 'ADMIN' && updates.role !== 'Super Admin') {
         return { success: false, error: 'Super Admin role cannot be changed.' };
       }
     }

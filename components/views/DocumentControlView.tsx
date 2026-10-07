@@ -33,6 +33,8 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { ControlledDocument } from '@/lib/types/modules';
 import { MOCK_CONTROLLED_DOCS } from '@/lib/db/modules-mock-data';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 // Subcomponents matching Certificate module architecture
 import { DocumentControlDetailsPage } from '../modules/document-control/DocumentControlDetailsPage';
@@ -46,36 +48,14 @@ type DocumentSubView =
   | { type: 'edit'; doc: ControlledDocument };
 
 export function DocumentControlView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('document_control');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Load from localStorage or fallback to enriched MOCK_CONTROLLED_DOCS
-  const [docs, setDocs] = useState<ControlledDocument[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_controlled_documents_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed parsing stored controlled documents:', err);
-      }
-    }
-    return MOCK_CONTROLLED_DOCS;
-  });
-
-  // Save to localStorage whenever docs change
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_controlled_documents_v1', JSON.stringify(docs));
-      } catch (err) {
-        console.warn('Failed saving controlled documents to localStorage:', err);
-      }
-    }
-  }, [docs]);
+  const [docs, setDocs] = useLiveModuleData<ControlledDocument[]>(
+    'controlled_documents',
+    MOCK_CONTROLLED_DOCS,
+    'erp_controlled_documents_v1'
+  );
 
   // Subview State (Details, Add, Edit)
   const [subView, setSubView] = useState<DocumentSubView>({ type: 'none' });
@@ -398,34 +378,40 @@ export function DocumentControlView() {
           </button>
 
           {/* Edit Button (Pencil) - Exactly styled like Certificate Module */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', doc: item })}
-            className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Controlled Document"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', doc: item })}
+              className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Controlled Document"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Direct Download Button */}
-          <button
-            type="button"
-            onClick={() => handleDownloadDoc(item)}
-            className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Download Document File"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => handleDownloadDoc(item)}
+              className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Download Document File"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button (Trash) - Exactly styled like Certificate Module */}
-          <button
-            type="button"
-            onClick={() => handleDeleteDoc(item)}
-            className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Controlled Document"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleDeleteDoc(item)}
+              className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Controlled Document"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -433,17 +419,17 @@ export function DocumentControlView() {
 
   // Batch actions matching Certificate module
   const batchActions: BatchAction<ControlledDocument>[] = [
-    {
+    ...(canDelete ? [{
       label: 'Delete Selected',
-      variant: 'danger',
+      variant: 'danger' as const,
       icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
+      onClick: (selected: ControlledDocument[]) => {
         setDeleteModal({
           isOpen: true,
           documents: selected,
         });
       },
-    },
+    }] : []),
   ];
 
   // ─── RENDER SUBVIEWS (SEPARATE PAGES) ────────────────────────────────────
@@ -503,14 +489,16 @@ export function DocumentControlView() {
           },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'add' })}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Register Controlled Document</span>
-          </button>
+          canCreate ? (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'add' })}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Register Controlled Document</span>
+            </button>
+          ) : undefined
         }
       />
 
@@ -786,6 +774,9 @@ export function DocumentControlView() {
             data={filteredDocs}
             columns={columns}
             batchActions={batchActions}
+            moduleKey="document_control"
+            canExport={canExport}
+            canDelete={canDelete}
           />
         </div>
       )}

@@ -28,6 +28,7 @@ import {
   CheckSquare,
 } from 'lucide-react';
 import { DefectDefinition } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface DefectDetailsPageProps {
   defect: DefectDefinition;
@@ -103,6 +104,7 @@ export function DefectDetailsPage({
   onDelete,
   showToast,
 }: DefectDetailsPageProps) {
+  const { canCreate, canEdit, canDelete } = useModulePermission('defects_library');
   const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
 
   const severityConfig = SEVERITY_CONFIG[defect.severity] || SEVERITY_CONFIG.MAJOR;
@@ -157,36 +159,41 @@ export function DefectDetailsPage({
 
         {/* Action Buttons - Styled identically to Buyer & Order module */}
         <div className="flex items-center flex-wrap gap-1.5">
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(defect)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
+              title="Duplicate as new defect entry"
+            >
+              <Copy className="w-3.5 h-3.5 text-slate-500" />
+              <span>Duplicate</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => onDuplicate(defect)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
-            title="Duplicate as new defect entry"
-          >
-            <Copy className="w-3.5 h-3.5 text-slate-500" />
-            <span>Duplicate</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(defect)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
+              title="Edit this defect entry"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Defect</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => onEdit(defect)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
-            title="Edit this defect entry"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Defect</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onDelete(defect)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
-            title="Delete this defect entry"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete</span>
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(defect)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
+              title="Delete this defect entry"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
+          )}
         </div>
       </div>
 

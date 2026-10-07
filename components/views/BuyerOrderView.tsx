@@ -48,6 +48,7 @@ import { ReceiveMaterialModal } from '../modules/inventory/ReceiveMaterialModal'
 import { BuyerOrderExportModal } from '../modules/buyer-order/BuyerOrderExportModal';
 import { BuyerOrderSingleExportModal } from '../modules/buyer-order/BuyerOrderSingleExportModal';
 import { InventoryItem, ReceiveRecord } from '@/lib/types/erp';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { INITIAL_INVENTORY, INITIAL_RECEIVE_REGISTRY } from '@/lib/db/mock-data';
 
 export interface BuyerOrderViewProps {
@@ -76,6 +77,8 @@ export function BuyerOrderView({
   const [inventory, setInventory] = useState<InventoryItem[]>(propInventory && propInventory.length > 0 ? propInventory : INITIAL_INVENTORY);
   const [receiveRecords, setReceiveRecords] = useState<ReceiveRecord[]>(propReceiveRecords && propReceiveRecords.length > 0 ? propReceiveRecords : INITIAL_RECEIVE_REGISTRY);
   const [buyers, setBuyers] = useState<BuyerProfile[]>(MOCK_BUYER_PROFILES);
+
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('buyer_order');
 
   // Sync prop changes
   React.useEffect(() => {
@@ -283,10 +286,21 @@ export function BuyerOrderView({
     });
   };
 
-  const confirmDeleteOrders = () => {
+  const confirmDeleteOrders = async () => {
     if (!orderDeleteModal || orderDeleteModal.orders.length === 0) return;
     const idsToDelete = new Set(orderDeleteModal.orders.map((o) => o.id));
-    setOrders((prev) => prev.filter((o) => !idsToDelete.has(o.id)));
+    const updated = orders.filter((o) => !idsToDelete.has(o.id));
+    setOrders(updated);
+    onUpdateOrders?.(updated);
+
+    // Call server DELETE endpoint to remove from MySQL & Central Host Store
+    for (const ord of orderDeleteModal.orders) {
+      try {
+        await fetch(`/api/buyer-orders?id=${encodeURIComponent(ord.id)}`, { method: 'DELETE' });
+      } catch (err) {
+        console.warn('Failed to delete buyer order from server:', err);
+      }
+    }
 
     if (orderSubView.type === 'details' && idsToDelete.has(orderSubView.order.id)) {
       setOrderSubView({ type: 'none' });
@@ -306,7 +320,17 @@ export function BuyerOrderView({
   const confirmDeleteBuyers = () => {
     if (!buyerDeleteModal || buyerDeleteModal.buyers.length === 0) return;
     const idsToDelete = new Set(buyerDeleteModal.buyers.map((b) => b.id));
-    setBuyers((prev) => prev.filter((b) => !idsToDelete.has(b.id)));
+    const updated = buyers.filter((b) => !idsToDelete.has(b.id));
+    setBuyers(updated);
+
+    try {
+      localStorage.setItem('erp_buyer_profiles_v1', JSON.stringify(updated));
+      fetch('/api/modules/erp_buyers_list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: updated }),
+      }).catch(() => {});
+    } catch {}
 
     const count = buyerDeleteModal.buyers.length;
     showToast(
@@ -527,47 +551,55 @@ export function BuyerOrderView({
           </button>
 
           {/* 2. Edit Button */}
-          <button
-            type="button"
-            onClick={() => setOrderSubView({ type: 'edit', order: row })}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Open Separate Order Edit Page"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setOrderSubView({ type: 'edit', order: row })}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Open Separate Order Edit Page"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* 3. Export Single PO Record Button (PDF or Excel) */}
-          <button
-            type="button"
-            onClick={() => {
-              setOrderForSingleExport(row);
-              setIsSingleExportModalOpen(true);
-            }}
-            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Export PO Record (PDF or Excel)"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setOrderForSingleExport(row);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Export PO Record (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* 4. Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateOrder(row)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate Order"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateOrder(row)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate Order"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* 5. Delete Button */}
-          <button
-            type="button"
-            onClick={() => setOrderDeleteModal({ isOpen: true, orders: [row] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Order"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setOrderDeleteModal({ isOpen: true, orders: [row] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Order"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -722,25 +754,29 @@ export function BuyerOrderView({
       align: 'center',
       cell: (b) => (
         <div className="flex items-center justify-center gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              setBuyerToEdit(b);
-              setIsAddBuyerOpen(true);
-            }}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
-            title="Edit Buyer"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setBuyerDeleteModal({ isOpen: true, buyers: [b] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 cursor-pointer"
-            title="Delete Buyer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setBuyerToEdit(b);
+                setIsAddBuyerOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+              title="Edit Buyer"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setBuyerDeleteModal({ isOpen: true, buyers: [b] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 cursor-pointer"
+              title="Delete Buyer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -781,18 +817,20 @@ export function BuyerOrderView({
             { id: 'buyer', label: 'Buyer List', count: buyers.length },
           ]}
           actions={
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedOrdersForExport([]);
-                setIsGlobalExportModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
-              title="Global Export: Detailed Summary Sheet (PDF or Excel)"
-            >
-              <FileDown className="w-3.5 h-3.5 text-blue-600" />
-              <span>Export Orders</span>
-            </button>
+            canExport ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedOrdersForExport([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
+                title="Global Export: Detailed Summary Sheet (PDF or Excel)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Export Orders</span>
+              </button>
+            ) : null
           }
         />
       )}
@@ -1036,15 +1074,18 @@ export function BuyerOrderView({
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setOrderSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Order</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setOrderSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Order</span>
+                    </button>
+                  ) : null
                 }
+                moduleKey="buyer_order"
                 onExport={(items) => {
                   setSelectedOrdersForExport(items.length < orders.length ? items : []);
                   setIsGlobalExportModalOpen(true);
@@ -1333,18 +1374,21 @@ export function BuyerOrderView({
                     </div>
                   }
                   primaryAction={
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBuyerToEdit(null);
-                        setIsAddBuyerOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Buyer</span>
-                    </button>
+                    canCreate ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBuyerToEdit(null);
+                          setIsAddBuyerOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Buyer</span>
+                      </button>
+                    ) : null
                   }
+                  moduleKey="buyer_order"
                   batchActions={[
                     {
                       label: 'Delete Selected',

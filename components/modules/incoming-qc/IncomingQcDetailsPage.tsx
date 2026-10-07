@@ -25,6 +25,7 @@ import {
 import { IncomingQCLot } from '@/lib/types/modules';
 import { GradeBadge } from '@/components/ui/Badge';
 import { InventoryItem } from '@/lib/types/erp';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface IncomingQcDetailsPageProps {
   lot: IncomingQCLot;
@@ -43,6 +44,7 @@ export function IncomingQcDetailsPage({
   inventoryItem,
   showToast,
 }: IncomingQcDetailsPageProps) {
+  const { canEdit } = useModulePermission('incoming_qc');
   const [activeTab, setActiveTab] = useState<'parameters' | 'defects' | 'traceability'>('parameters');
 
   const isPass = lot.result === 'ACCEPTED';
@@ -90,35 +92,39 @@ export function IncomingQcDetailsPage({
 
         <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
           {/* Quick Action: Release to Cutting or Quarantine */}
-          {lot.result !== 'ACCEPTED' ? (
-            <button
-              type="button"
-              onClick={() => onQuickStatusChange(lot, 'ACCEPTED')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-xs cursor-pointer"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Approve & Release</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onQuickStatusChange(lot, 'REJECTED')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors shadow-xs cursor-pointer"
-            >
-              <XCircle className="w-3.5 h-3.5" />
-              <span>Place on Mill Hold</span>
-            </button>
+          {canEdit && (
+            lot.result !== 'ACCEPTED' ? (
+              <button
+                type="button"
+                onClick={() => onQuickStatusChange(lot, 'ACCEPTED')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-xs cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Approve & Release</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onQuickStatusChange(lot, 'REJECTED')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors shadow-xs cursor-pointer"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Place on Mill Hold</span>
+              </button>
+            )
           )}
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => onEdit(lot)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors cursor-pointer"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(lot)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors cursor-pointer"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit</span>
+            </button>
+          )}
 
         </div>
       </div>

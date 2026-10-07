@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
   Calendar,
@@ -25,11 +25,26 @@ import {
   Search,
   UploadCloud,
   ShieldAlert,
+  MapPin,
+  Phone,
+  Mail,
+  Award,
+  Sparkles,
+  Tag,
+  ExternalLink,
+  UserCheck,
 } from 'lucide-react';
-import { QualityAudit, AuditChecklistItem, AuditPhotoEvidence } from '@/lib/types/modules';
+import {
+  QualityAudit,
+  AuditChecklistItem,
+  AuditPhotoEvidence,
+  SubSupplier,
+} from '@/lib/types/modules';
 import { ISO_9001_DEFAULT_CHECKLIST, calculateAuditScore } from './iso9001ChecklistData';
 import { DeleteAuditModal } from './DeleteAuditModal';
 import { AddQuestionModal } from './AddQuestionModal';
+import { SubSupplierSelectorModal } from './SubSupplierSelectorModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface AuditDetailsPageProps {
   audit: QualityAudit;
@@ -41,13 +56,65 @@ interface AuditDetailsPageProps {
 }
 
 export function AuditDetailsPage({
-  audit,
+  audit: initialAuditProp,
   onBack,
   onEdit,
   onDelete,
   onUpdateAudit,
   showToast,
 }: AuditDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('audit');
+  const [currentAudit, setCurrentAudit] = useState<QualityAudit>(initialAuditProp);
+  const [isSubSupplierModalOpen, setIsSubSupplierModalOpen] = useState(false);
+
+  useEffect(() => {
+    setCurrentAudit(initialAuditProp);
+  }, [initialAuditProp]);
+
+  const audit = currentAudit;
+
+  const handleSelectSubSupplier = (supplier: SubSupplier) => {
+    const updated: QualityAudit = {
+      ...audit,
+      supplierName: supplier.name,
+      supplierCategory:
+        supplier.category === 'FABRIC_MILL'
+          ? 'Fabric Mill (Knits & Woven)'
+          : supplier.category === 'DYEING_HOUSE'
+          ? 'Dyeing & Finishing House'
+          : supplier.category === 'ZIPPERS'
+          ? 'Zippers & Fasteners'
+          : supplier.category === 'TRIMS_BUTTONS'
+          ? 'Trims & Accessories (Zippers, Buttons)'
+          : supplier.category === 'LABELS_PACKAGING'
+          ? 'Labels & Packaging Materials'
+          : 'Thread & Yarn Mill',
+      subSupplierId: supplier.id,
+      subSupplierCode: supplier.code,
+      subSupplierCountry: supplier.country,
+      subSupplierLocation: supplier.facilityLocation || supplier.country,
+      subSupplierContact: supplier.contactPerson,
+      subSupplierEmail: supplier.email,
+      subSupplierPhone: supplier.phone,
+      subSupplierRating: supplier.qualityRating,
+      subSupplierAuditScore: supplier.auditScore,
+      subSupplierLogoUrl: supplier.logoUrl,
+      subSupplierCertifications: supplier.certifications,
+      approvalStatus:
+        supplier.complianceStatus === 'APPROVED'
+          ? 'APPROVED'
+          : supplier.complianceStatus === 'PROVISIONAL'
+          ? 'CONDITIONAL'
+          : 'PENDING',
+    };
+    setCurrentAudit(updated);
+    if (onUpdateAudit) {
+      onUpdateAudit(updated);
+    }
+    setIsSubSupplierModalOpen(false);
+    showToast(`Re-synced Sub-Supplier: ${supplier.name} (${supplier.code})`);
+  };
+
   const [activeTab, setActiveTab] = useState<'feed' | 'findings' | 'files' | 'signoff'>('feed');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [clauseFilter, setClauseFilter] = useState<string>('ALL');
@@ -259,7 +326,19 @@ export function AuditDetailsPage({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
-          {onDelete && (
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+              title="Print Audit Report"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Audit</span>
+            </button>
+          )}
+
+          {onDelete && canDelete && (
             <button
               type="button"
               onClick={() => setIsDeleteModalOpen(true)}
@@ -271,15 +350,17 @@ export function AuditDetailsPage({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => onEdit(audit)}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-            title="Edit Audit Details"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Audit</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(audit)}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+              title="Edit Audit Details"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Audit</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -401,6 +482,162 @@ export function AuditDetailsPage({
         </div>
       </div>
 
+      {/* ─── SUB-SUPPLIER LIVE DIRECTORY PROFILE (EXCLUSIVE FOR SUB-SUPPLIER AUDIT) ─── */}
+      {(category === 'SUB_SUPPLIER' || audit.subSupplierId || audit.supplierName) && (
+        <div className="bg-gradient-to-br from-emerald-500/10 via-white to-slate-50 rounded-2xl p-5 sm:p-6 border border-emerald-500/20 shadow-xs space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-4">
+              {audit.subSupplierLogoUrl ? (
+                <img
+                  src={audit.subSupplierLogoUrl}
+                  alt={audit.supplierName || 'Sub-Supplier'}
+                  className="w-14 h-14 rounded-2xl object-cover border border-emerald-200/80 shadow-xs shrink-0"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+                  <Building2 className="w-7 h-7" />
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    SUB-SUPPLIER DIRECTORY SYNCED
+                  </span>
+                  {audit.subSupplierCode && (
+                    <span className="text-xs font-mono font-bold text-slate-600 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200">
+                      {audit.subSupplierCode}
+                    </span>
+                  )}
+                  {audit.approvalStatus && (
+                    <span
+                      className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                        audit.approvalStatus === 'APPROVED'
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          : audit.approvalStatus === 'CONDITIONAL'
+                          ? 'bg-amber-100 text-amber-800 border-amber-300'
+                          : audit.approvalStatus === 'REJECTED'
+                          ? 'bg-rose-100 text-rose-800 border-rose-300'
+                          : 'bg-slate-100 text-slate-800 border-slate-300'
+                      }`}
+                    >
+                      Status: {audit.approvalStatus}
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="text-lg font-bold text-slate-900 leading-tight">
+                  {audit.supplierName || 'Unnamed Sub-Supplier'}
+                </h3>
+
+                <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                  {audit.supplierCategory && (
+                    <span className="font-semibold text-slate-700">
+                      {audit.supplierCategory}
+                    </span>
+                  )}
+                  {(audit.subSupplierLocation || audit.subSupplierCountry) && (
+                    <span className="flex items-center gap-1 text-slate-500">
+                      <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>
+                        {audit.subSupplierLocation || audit.subSupplierCountry}
+                        {audit.subSupplierLocation && audit.subSupplierCountry && audit.subSupplierLocation !== audit.subSupplierCountry ? `, ${audit.subSupplierCountry}` : ''}
+                      </span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Action: Re-sync / Select Sub-Supplier from SubSupplier Module */}
+            <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsSubSupplierModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 hover:border-emerald-400 transition-all shadow-xs cursor-pointer"
+                title="Choose or link different vendor from SubSupplier module"
+              >
+                <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Change / Re-sync Sub-Supplier</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Key Supplier Meta Details */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-slate-200/80 text-xs">
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1">
+              <div className="text-[11px] font-semibold text-slate-500">Contact Person</div>
+              <div className="font-bold text-slate-800 truncate">
+                {audit.subSupplierContact || audit.leadAuditee || 'Not Specified'}
+              </div>
+              {audit.subSupplierEmail && (
+                <a
+                  href={`mailto:${audit.subSupplierEmail}`}
+                  className="text-[11px] text-blue-600 hover:underline flex items-center gap-1 truncate"
+                >
+                  <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className="truncate">{audit.subSupplierEmail}</span>
+                </a>
+              )}
+              {audit.subSupplierPhone && (
+                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                  <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span>{audit.subSupplierPhone}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1">
+              <div className="text-[11px] font-semibold text-slate-500">Vendor Quality Grade</div>
+              <div className="flex items-center gap-2">
+                <span className="text-base font-black font-mono text-emerald-700 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200">
+                  Grade {audit.subSupplierRating || 'A+'}
+                </span>
+                {audit.subSupplierAuditScore !== undefined && (
+                  <span className="text-xs font-mono text-slate-500">
+                    Module Score: <span className="font-bold text-slate-800">{audit.subSupplierAuditScore}%</span>
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Synced from SubSupplier live metrics
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1">
+              <div className="text-[11px] font-semibold text-slate-500">Audited Facility Location</div>
+              <div className="font-bold text-slate-800 truncate">
+                {audit.subSupplierLocation || audit.auditeeDepartment || 'Headquarters'}
+              </div>
+              <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                <span>{audit.subSupplierCountry || 'Country Verified'}</span>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1">
+              <div className="text-[11px] font-semibold text-slate-500">Certifications & Compliance</div>
+              <div className="flex flex-wrap gap-1">
+                {audit.subSupplierCertifications && audit.subSupplierCertifications.length > 0 ? (
+                  audit.subSupplierCertifications.slice(0, 3).map((cert, cIdx) => (
+                    <span
+                      key={cIdx}
+                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    >
+                      {cert}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-slate-500 italic">
+                    ISO 9001:2015, OEKO-TEX Standard 100
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── TABS NAVIGATION ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold">
         <button
@@ -413,7 +650,13 @@ export function AuditDetailsPage({
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>ISO 9001:2015 Question Records</span>
+          <span>
+            {category === 'SUB_SUPPLIER'
+              ? 'Sub-Supplier Evaluation Questions'
+              : category === 'SAFETY'
+              ? 'Safety & EHS Question Records'
+              : 'ISO 9001:2015 Question Records'}
+          </span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500/40 text-white font-mono">
             {checklist.length}
           </span>
@@ -500,26 +743,28 @@ export function AuditDetailsPage({
               </div>
 
               {/* Action Buttons: Add Custom Question, Bulk Import */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddQuestionModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Add Question</span>
-                </button>
+              {(canEdit || canCreate) && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddQuestionModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add Question</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setIsAddQuestionModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
-                  title="Upload / Paste questions from list"
-                >
-                  <UploadCloud className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Import Questions</span>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddQuestionModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Upload / Paste questions from list"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Import Questions</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Clause Navigation Pills */}
@@ -705,6 +950,26 @@ export function AuditDetailsPage({
                 </div>
               );
             })}
+
+            {filteredChecklist.length === 0 && (
+              <div className="bg-white rounded-2xl p-8 border border-dashed border-slate-200 text-center space-y-3">
+                <div className="p-3 rounded-full bg-slate-100 text-slate-400 w-fit mx-auto">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-slate-800">
+                    {category === 'SUB_SUPPLIER'
+                      ? 'Report & Documentation based Sub-Supplier Evaluation'
+                      : 'No audit checklist questions found matching criteria.'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                    {category === 'SUB_SUPPLIER'
+                      ? 'Vendor credentials, compliance rating, attached verification reports, and findings are registered in the overview card and tabs.'
+                      : 'You can add custom questions or import them using the toolbar buttons above.'}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -952,6 +1217,15 @@ export function AuditDetailsPage({
         onAddQuestion={handleAddQuestion}
         onImportQuestions={handleImportQuestions}
         showToast={showToast}
+      />
+
+      {/* Sub-Supplier Selector Modal (Exclusive for Sub-Supplier Audit) */}
+      <SubSupplierSelectorModal
+        isOpen={isSubSupplierModalOpen}
+        onClose={() => setIsSubSupplierModalOpen(false)}
+        onSelectSupplier={handleSelectSubSupplier}
+        selectedSupplierId={audit.subSupplierId}
+        selectedSupplierName={audit.supplierName}
       />
       </div>
     </div>

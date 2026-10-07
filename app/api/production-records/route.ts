@@ -53,3 +53,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: err.message }, { status: 400 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = getUserFromRequest(req);
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id') || '';
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Record ID is required for deletion.' },
+        { status: 400 }
+      );
+    }
+
+    const deleted = erpStore.deleteProductionRecord(id, user);
+
+    return NextResponse.json({
+      success: deleted,
+      id,
+      isMysqlConnected: mysqlManager.getConnectedStatus(),
+    });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}

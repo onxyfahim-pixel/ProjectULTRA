@@ -31,6 +31,7 @@ import { CalibrationDevice } from '@/lib/types/modules';
 import { CalibrationCertificateModal } from './CalibrationCertificateModal';
 import { RecordCalibrationModal } from './RecordCalibrationModal';
 import { DeleteCalibrationModal } from './DeleteCalibrationModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface CalibrationDetailsPageProps {
   device: CalibrationDevice;
@@ -49,6 +50,7 @@ export function CalibrationDetailsPage({
   onUpdateDevice,
   showToast,
 }: CalibrationDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('calibration');
   const [isCertModalOpen, setIsCertModalOpen] = useState(false);
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -114,40 +116,46 @@ export function CalibrationDetailsPage({
         {/* Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* 1. Record New Calibration */}
-          <button
-            type="button"
-            onClick={() => setIsRecordModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-xs cursor-pointer"
-            title="Log new calibration event"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Record Calibration</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => setIsRecordModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-xs cursor-pointer"
+              title="Log new calibration event"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Record Calibration</span>
+            </button>
+          )}
 
           {/* 2. View Certificate */}
-          <button
-            type="button"
-            onClick={() => setIsCertModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors border border-indigo-200 cursor-pointer"
-            title="View Third-Party Calibration Certificate"
-          >
-            <Award className="w-3.5 h-3.5" />
-            <span>Certificate</span>
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsCertModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors border border-indigo-200 cursor-pointer"
+              title="View Third-Party Calibration Certificate"
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>Certificate</span>
+            </button>
+          )}
 
           {/* 3. Edit Equipment */}
-          <button
-            type="button"
-            onClick={() => onEdit(device)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-            title="Edit equipment specifications"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(device)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+              title="Edit equipment specifications"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit</span>
+            </button>
+          )}
 
           {/* 4. Delete */}
-          {onDelete && (
+          {canDelete && onDelete && (
             <button
               type="button"
               onClick={() => setIsDeleteModalOpen(true)}

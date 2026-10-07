@@ -29,6 +29,8 @@ export async function GET(req: NextRequest) {
         inventory: erpStore.getInventory(),
         inspections: erpStore.getInspections(),
         productionOrders: erpStore.getProductionOrders(),
+        productionRecords: erpStore.getProductionRecords(),
+        buyerOrders: erpStore.getBuyerOrders(),
         auditLogs: erpStore.getAuditLogs(),
         modulesData: (erpStore as any).modulesData || {},
       };
@@ -83,6 +85,8 @@ export async function POST() {
       inventory: erpStore.getInventory(),
       inspections: erpStore.getInspections(),
       productionOrders: erpStore.getProductionOrders(),
+      productionRecords: erpStore.getProductionRecords(),
+      buyerOrders: erpStore.getBuyerOrders(),
       auditLogs: erpStore.getAuditLogs(),
       modulesData: (erpStore as any).modulesData || {},
       stats: erpStore.getDashboardStats(),

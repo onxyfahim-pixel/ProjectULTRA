@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppearance } from '@/hooks/use-appearance';
 import {
   ShieldCheck,
+  Shield,
   ChevronDown,
   Menu,
   X,
@@ -24,6 +25,7 @@ import {
   Moon,
   ArrowRight,
   Database,
+  Palette,
 } from 'lucide-react';
 import { useErpAuth } from '@/hooks/use-erp-auth';
 
@@ -130,7 +132,7 @@ export function ErpHeader({
   onNavigateTab,
   activeTab,
 }: ErpHeaderProps) {
-  const { user, logout } = useErpAuth();
+  const { user, logout, can } = useErpAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -224,10 +226,13 @@ export function ErpHeader({
   };
 
   const matchedModules = globalSearch.trim()
-    ? SEARCHABLE_MODULES.filter((m) =>
-        m.label.toLowerCase().includes(globalSearch.toLowerCase()) ||
-        m.category.toLowerCase().includes(globalSearch.toLowerCase())
-      )
+    ? SEARCHABLE_MODULES.filter((m) => {
+        if (!can(m.id, 'view')) return false;
+        return (
+          m.label.toLowerCase().includes(globalSearch.toLowerCase()) ||
+          m.category.toLowerCase().includes(globalSearch.toLowerCase())
+        );
+      })
     : [];
 
   const { appearance, updateAppearance } = useAppearance();
@@ -521,8 +526,11 @@ export function ErpHeader({
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                      {user.name}
+                    <div className="font-bold text-xs text-slate-900 dark:text-white truncate flex items-center justify-between">
+                      <span>{user.name}</span>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                        {user.role || 'Super Admin'}
+                      </span>
                     </div>
                     <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                       {user.designation || (user.role === 'ADMIN' ? 'QMS Executive' : (user.role as string).replace('_', ' '))}
@@ -533,7 +541,7 @@ export function ErpHeader({
                   </div>
                 </div>
 
-                {/* ONLY 2 Actions: User Profile & Logout */}
+                {/* Actions: User Profile, Appearance Setting, Users & Roles (Super Admin Only), Logout */}
                 <div className="space-y-1">
                   <button
                     type="button"
@@ -561,6 +569,62 @@ export function ErpHeader({
                     </div>
                     <ArrowRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
                   </button>
+
+                  <button
+                    type="button"
+                    id="header-appearance-btn"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('settings_active_tab', 'appearance');
+                        window.dispatchEvent(new CustomEvent('navigate-settings-subtab', { detail: 'appearance' }));
+                      }
+                      if (onNavigateTab) {
+                        onNavigateTab('settings');
+                      }
+                      setIsUserMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-all cursor-pointer group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform border border-purple-200/60 dark:border-purple-900/60 shrink-0">
+                      <Palette className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="font-bold text-xs leading-tight">Appearance Setting</div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal leading-tight truncate">
+                        Visual themes, colors &amp; display styles
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-purple-500 group-hover:translate-x-0.5 transition-all" />
+                  </button>
+
+                  {(user?.isSuperAdmin || user?.role === 'Super Admin' || user?.role === 'ADMIN') && (
+                    <button
+                      type="button"
+                      id="header-users-rbac-btn"
+                      onClick={() => {
+                        if (typeof window !== 'undefined') {
+                          localStorage.setItem('settings_active_tab', 'users_rbac');
+                          window.dispatchEvent(new CustomEvent('navigate-settings-subtab', { detail: 'users_rbac' }));
+                        }
+                        if (onNavigateTab) {
+                          onNavigateTab('settings');
+                        }
+                        setIsUserMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-all cursor-pointer group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform border border-indigo-200/60 dark:border-indigo-900/60 shrink-0">
+                        <Shield className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 text-left min-w-0">
+                        <div className="font-bold text-xs leading-tight">Users &amp; Roles</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal leading-tight truncate">
+                          RBAC permissions &amp; access control matrix
+                        </div>
+                      </div>
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all" />
+                    </button>
+                  )}
 
                   <button
                     type="button"

@@ -104,6 +104,24 @@ export interface BuyerOrderWIPRecord {
   lastSyncedAt?: string;
 }
 
+export type OrderAttachmentCategory =
+  | 'MEASUREMENT_SPEC'
+  | 'TECHNICAL_SPEC'
+  | 'TEST_RECORD'
+  | 'ETC';
+
+export interface OrderAttachment {
+  id: string;
+  category: OrderAttachmentCategory;
+  fileName: string;
+  fileSize?: number; // Size in bytes
+  fileType?: string; // MIME type or extension like 'application/pdf', 'image/png'
+  fileData?: string; // Base64 data URL
+  uploadedAt: string;
+  uploadedBy?: string;
+  notes?: string;
+}
+
 export interface BuyerOrder {
   id: string;
   orderNumber: string;
@@ -134,6 +152,7 @@ export interface BuyerOrder {
   wipRecord?: BuyerOrderWIPRecord;
   bomItems?: BOMItem[];
   logistics?: LogisticsDetail;
+  attachments?: OrderAttachment[];
 }
 
 export interface BuyerProfile {
@@ -553,7 +572,14 @@ export interface QualityGoal {
 }
 
 // 10. Audit Record
-export type AuditCategory = 'INTERNAL' | 'EXTERNAL' | 'SUB_SUPPLIER';
+export type AuditCategory =
+  | 'INTERNAL'
+  | 'EXTERNAL'
+  | 'SUB_SUPPLIER'
+  | 'SAFETY'
+  | 'COMPLIANCE'
+  | 'CUSTOM'
+  | string;
 
 export type AuditQuestionStatus =
   | 'CONFORMITY'
@@ -597,6 +623,46 @@ export interface AuditUploadedFile {
   fileUrl?: string;
 }
 
+export interface AuditTypeDefinition {
+  id: string;
+  code: string;
+  name: string;
+  category: AuditCategory;
+  standard: string;
+  description: string;
+  defaultAuditorOrg?: string;
+  defaultDepartment?: string;
+  badgeColor?: string;
+  icon?: string;
+  totalAvailableMarks: number;
+  passMarksThreshold: number;
+  criticalNcFailsAudit: boolean;
+  scoringScheme?: {
+    conformityRate: number;
+    minorNcRate: number;
+    majorNcRate: number;
+    criticalNcRate: number;
+  };
+  isSystemDefault?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManagedAuditQuestion {
+  id: string;
+  auditTypeId: string;
+  clause: string;
+  clauseNumber: string;
+  subClauseTitle: string;
+  question: string;
+  guidance?: string;
+  maxMarks: number;
+  severityOnFailure?: 'MINOR' | 'MAJOR' | 'CRITICAL';
+  status?: AuditQuestionStatus;
+  tags?: string[];
+  sortOrder?: number;
+}
+
 export interface QualityAudit {
   id: string;
   auditCode: string;
@@ -608,7 +674,10 @@ export interface QualityAudit {
     | 'BUYER_TECHNICAL'
     | 'SOCIAL_COMPLIANCE'
     | 'SECURITY_CTPAT'
-    | 'SUSTAINABILITY';
+    | 'SUSTAINABILITY'
+    | 'SAFETY'
+    | '5S'
+    | string;
   auditCategory?: AuditCategory;
   standard: string; // e.g. ISO 9001:2015, HIGG FEM, WRAP, SMETA 4-PILLAR, Buyer QMS
   auditorName: string;
@@ -616,6 +685,18 @@ export interface QualityAudit {
   auditeeDepartment?: string;
   supplierName?: string;
   supplierCategory?: string;
+  // Sub-Supplier Module Synced Fields (Only for Sub Supplier Audit)
+  subSupplierId?: string;
+  subSupplierCode?: string;
+  subSupplierCountry?: string;
+  subSupplierLocation?: string;
+  subSupplierContact?: string;
+  subSupplierEmail?: string;
+  subSupplierPhone?: string;
+  subSupplierRating?: string;
+  subSupplierAuditScore?: number;
+  subSupplierLogoUrl?: string;
+  subSupplierCertifications?: string[];
   auditDate: string;
   totalMarks?: number; // Usually 100
   obtainedMarks?: number; // Marks earned out of 100
@@ -886,6 +967,35 @@ export interface TraceabilityDestructionPhoto {
   timestamp?: string;
 }
 
+export type TraceabilityStageKey =
+  | 'RAW_MATERIAL'
+  | 'FABRIC'
+  | 'CUTTING'
+  | 'SEWING'
+  | 'FINISHING'
+  | 'PACKING'
+  | 'SHIPMENT';
+
+export interface TraceabilityStageRecord {
+  id: string;
+  stageKey: TraceabilityStageKey;
+  stageName: string;
+  receiveDate: string;
+  issueDate: string;
+  receivedQty: number;
+  issuedQty: number;
+  excessShortQty: number;
+  excessShortType: 'EXCESS' | 'SHORT' | 'BALANCED';
+  unit: string;
+  challanNumber?: string;
+  challanDate?: string;
+  challanImageUrl?: string;
+  challanImageName?: string;
+  stationOrSupplier?: string;
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'PENDING';
+  remarks?: string;
+}
+
 export interface TraceabilityChain {
   id: string;
   cartonBarcode: string;
@@ -899,6 +1009,8 @@ export interface TraceabilityChain {
   yarnLot: string;
   cottonOrigin: string;
   passedFinalDate: string;
+  // End-to-End 7 Lifecycle Stages Tracking (Raw Material, Fabric, Cutting, Sewing, Finishing, Packing, Shipment)
+  lifecycleStages?: TraceabilityStageRecord[];
   // Enhanced buyer order & custody attributes
   poNumber?: string;
   orderNumber?: string;

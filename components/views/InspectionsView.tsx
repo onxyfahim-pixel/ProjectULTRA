@@ -48,6 +48,7 @@ import { BuyerOrder } from '@/lib/types/modules';
 import { INITIAL_INSPECTIONS } from '@/lib/db/mock-data';
 import { MOCK_BUYER_ORDERS } from '@/lib/db/modules-mock-data';
 import { useErpAuth } from '@/hooks/use-erp-auth';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { calculateQuantityVariance } from '@/lib/aql';
 import { InspectionDetailsPage } from '../modules/inspection/InspectionDetailsPage';
 import { InspectionEntryPage } from '../modules/inspection/InspectionEntryPage';
@@ -118,6 +119,7 @@ export function InspectionsView({
     propRecords && propRecords.length > 0 ? propRecords : INITIAL_INSPECTIONS
   );
   const { user, permissions } = useErpAuth();
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('inspections');
 
   // Sync prop records
   useEffect(() => {
@@ -867,47 +869,55 @@ export function InspectionsView({
           </button>
 
           {/* Individual Export Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setRecordForSingleExport(r);
-              setIsSingleExportModalOpen(true);
-            }}
-            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-            title="Export AQL Certificate (PDF or Excel)"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setRecordForSingleExport(r);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Export AQL Certificate (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', record: r })}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit audit record"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', record: r })}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit audit record"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateInspection(r)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate audit record"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateInspection(r)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate audit record"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, records: [r] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete audit record"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, records: [r] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete audit record"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -961,18 +971,20 @@ export function InspectionsView({
             { id: 'stages', label: '3-Stage Pipeline' },
           ]}
           actions={
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedRecordsForExport([]);
-                setIsGlobalExportModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
-              title="Global Export: Inspection Register (PDF or Excel)"
-            >
-              <FileDown className="w-3.5 h-3.5 text-blue-600" />
-              <span>Export Audits</span>
-            </button>
+            canExport ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRecordsForExport([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
+                title="Global Export: Inspection Register (PDF or Excel)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Export Audits</span>
+              </button>
+            ) : null
           }
         />
       )}
@@ -1911,16 +1923,18 @@ export function InspectionsView({
               </div>
 
               {/* Bottom Action */}
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => setSubView({ type: 'add' })}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-sm cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  Log New Quality Inspection
-                </button>
-              </div>
+              {canCreate && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setSubView({ type: 'add' })}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-sm cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Log New Quality Inspection
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1983,15 +1997,18 @@ export function InspectionsView({
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Inspection</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Inspection</span>
+                    </button>
+                  ) : null
                 }
+                moduleKey="inspections"
                 onExport={(exportRecords) => {
                   setSelectedRecordsForExport(exportRecords.length < records.length ? exportRecords : []);
                   setIsGlobalExportModalOpen(true);

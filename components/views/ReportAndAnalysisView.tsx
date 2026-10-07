@@ -68,6 +68,7 @@ import {
   printReportPdf,
   PrintableReportConfig,
 } from '../modules/reports/reports-export-utils';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
 
 type ReportSubView =
   | { type: 'none' }
@@ -79,7 +80,11 @@ type MainNavigationTab = 'hub' | 'summary' | 'ledger';
 export function ReportAndAnalysisView() {
   const [activeTab, setActiveTab] = useState<MainNavigationTab>('hub');
   const [subView, setSubView] = useState<ReportSubView>({ type: 'none' });
-  const [reports, setReports] = useState<ReportRecord[]>(INITIAL_REPORTS);
+  const [reports, setReports] = useLiveModuleData<ReportRecord[]>(
+    'reports_analysis',
+    INITIAL_REPORTS,
+    'erp_reports_analysis_v1'
+  );
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 

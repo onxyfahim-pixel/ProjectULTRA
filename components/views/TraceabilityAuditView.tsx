@@ -29,6 +29,8 @@ import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { MOCK_TRACEABILITY_RECORDS } from '@/lib/db/modules-mock-data';
 import { TraceabilityChain } from '@/lib/types/modules';
+import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 // Subcomponents
 import { TraceabilityDetailsPage } from '../modules/traceability/TraceabilityDetailsPage';
@@ -42,36 +44,14 @@ type TraceabilitySubView =
   | { type: 'edit'; record: TraceabilityChain };
 
 export function TraceabilityAuditView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('traceability');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
-  // Load from localStorage or fallback to MOCK_TRACEABILITY_RECORDS
-  const [records, setRecords] = useState<TraceabilityChain[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('erp_traceability_records_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed parsing stored traceability records:', err);
-      }
-    }
-    return MOCK_TRACEABILITY_RECORDS;
-  });
-
-  // Save to localStorage whenever records change
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('erp_traceability_records_v1', JSON.stringify(records));
-      } catch (err) {
-        console.warn('Failed saving traceability records to localStorage:', err);
-      }
-    }
-  }, [records]);
+  const [records, setRecords] = useLiveModuleData<TraceabilityChain[]>(
+    'traceability_records',
+    MOCK_TRACEABILITY_RECORDS,
+    'erp_traceability_records_v1'
+  );
 
   // Dedicated Separate Pages (Details, Add, Edit)
   const [subView, setSubView] = useState<TraceabilitySubView>({ type: 'none' });
@@ -274,26 +254,42 @@ export function TraceabilityAuditView() {
       ),
     },
     {
-      key: 'yarnLot',
-      header: 'Yarn Lot & Dye Batch',
-      sortable: true,
-      width: '16%',
-      render: (item) => (
-        <div className="min-w-0 font-mono">
-          <div className="text-xs text-blue-900 font-bold truncate">
-            {item.yarnLot}
+      key: 'lifecycleStages',
+      header: '7-Stage Lifecycle',
+      sortable: false,
+      width: '18%',
+      render: (item) => {
+        const stages = item.lifecycleStages || [];
+        const completedCount = stages.filter((s) => s.status === 'COMPLETED').length;
+        const total = stages.length || 7;
+        const isAllDone = completedCount === total;
+
+        return (
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded border ${
+                isAllDone
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-blue-50 text-blue-800 border-blue-200'
+              }`}>
+                {completedCount || 7}/{total} Stages
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 font-mono">
+                {isAllDone ? '✓ Shipped' : 'Active'}
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono mt-0.5 truncate" title="Raw Material -> Fabric -> Cutting -> Sewing -> Finishing -> Packing -> Shipment">
+              RM &rarr; Fab &rarr; Cut &rarr; Sew &rarr; Fin &rarr; Pck &rarr; Shp
+            </div>
           </div>
-          <div className="text-[10px] text-slate-500 truncate">
-            Batch: {item.dyeingBatch}
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: 'sewingLine',
       header: 'Sewing Line & Seal',
       sortable: true,
-      width: '12%',
+      width: '14%',
       render: (item) => (
         <div className="min-w-0">
           <span className="font-mono text-[11px] font-semibold text-slate-800 block truncate">
@@ -323,24 +319,28 @@ export function TraceabilityAuditView() {
           </button>
 
           {/* Edit Button (Pencil) */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', record: item })}
-            className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Traceability Record"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', record: item })}
+              className="p-1 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Traceability Record"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button (Trash) */}
-          <button
-            type="button"
-            onClick={() => handleDeleteRecord(item)}
-            className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Record"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleDeleteRecord(item)}
+              className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Record"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -348,17 +348,21 @@ export function TraceabilityAuditView() {
 
   // Batch actions
   const batchActions: BatchAction<TraceabilityChain>[] = [
-    {
-      label: 'Delete Selected',
-      variant: 'danger',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setDeleteModal({
-          isOpen: true,
-          records: selected,
-        });
-      },
-    },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            variant: 'danger' as const,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            onClick: (selected: TraceabilityChain[]) => {
+              setDeleteModal({
+                isOpen: true,
+                records: selected,
+              });
+            },
+          },
+        ]
+      : []),
   ];
 
   // ─── RENDER SUBVIEWS (SEPARATE PAGES) ────────────────────────────────────
@@ -420,14 +424,16 @@ export function TraceabilityAuditView() {
           },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'add' })}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Traceability Entry</span>
-          </button>
+          canCreate ? (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'add' })}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Traceability Entry</span>
+            </button>
+          ) : undefined
         }
       />
 
@@ -685,6 +691,9 @@ export function TraceabilityAuditView() {
             data={filteredRecords}
             columns={columns}
             batchActions={batchActions}
+            moduleKey="traceability"
+            canExport={canExport}
+            canDelete={canDelete}
           />
         </div>
       )}

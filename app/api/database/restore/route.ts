@@ -17,8 +17,13 @@ export async function POST(req: NextRequest) {
     const inventory = Array.isArray(body.inventory) ? body.inventory : [];
     const inspections = Array.isArray(body.inspections) ? body.inspections : [];
     const productionOrders = Array.isArray(body.productionOrders) ? body.productionOrders : [];
+    const productionRecords = Array.isArray(body.productionRecords) ? body.productionRecords : [];
+    const buyerOrders = Array.isArray(body.buyerOrders) ? body.buyerOrders : [];
     const auditLogs = Array.isArray(body.auditLogs) ? body.auditLogs : [];
-    const modulesData = body.modulesData && typeof body.modulesData === 'object' ? body.modulesData : {};
+    const modulesData = body.modulesData && typeof body.modulesData === 'object' ? { ...body.modulesData } : {};
+
+    if (buyerOrders.length > 0) modulesData.buyer_orders = buyerOrders;
+    if (productionRecords.length > 0) modulesData.production_records = productionRecords;
 
     // 1. Save to local central storage
     CentralStorageManager.saveCentralData({
@@ -42,6 +47,12 @@ export async function POST(req: NextRequest) {
       }
       for (const insp of inspections) {
         await mysqlManager.insertInspection(insp);
+      }
+      for (const pr of productionRecords) {
+        await mysqlManager.upsertProductionRecord(pr);
+      }
+      for (const bo of buyerOrders) {
+        await mysqlManager.upsertBuyerOrder(bo);
       }
       for (const [key, data] of Object.entries(modulesData)) {
         await mysqlManager.saveModuleData(key, data);

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { ShieldAlert } from 'lucide-react';
 import { ErpAuthProvider, useErpAuth } from '@/hooks/use-erp-auth';
 import { AppearanceProvider } from '@/hooks/use-appearance';
 import { useLiveSync } from '@/hooks/use-live-sync';
@@ -65,9 +66,10 @@ import {
 } from '@/lib/db/mock-data';
 import { BuyerOrder } from '@/lib/types/modules';
 import { MOCK_BUYER_ORDERS } from '@/lib/db/modules-mock-data';
+import { getProductionRecords, saveProductionRecords } from '@/lib/db/production-records-store';
 
 function ErpAppContent() {
-  const { token } = useErpAuth();
+  const { token, can, user } = useErpAuth();
 
   // Navigation State & Responsive Sidebar Collapse
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
@@ -89,9 +91,21 @@ function ErpAppContent() {
   // Core Data State
   const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
   const [inspections, setInspections] = useState<InspectionRecord[]>(INITIAL_INSPECTIONS);
-  const [productionOrders, setProductionOrders] =
-    useState<ProductionOrder[]>(INITIAL_PRODUCTION_ORDERS);
-  const [orders, setOrders] = useState<BuyerOrder[]>(MOCK_BUYER_ORDERS);
+  const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>(() => {
+    return getProductionRecords();
+  });
+  const [orders, setOrders] = useState<BuyerOrder[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('erp_buyer_orders_v1') || localStorage.getItem('erp_buyer_orders');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return MOCK_BUYER_ORDERS;
+  });
   const [receiveRecords, setReceiveRecords] = useState<ReceiveRecord[]>(INITIAL_RECEIVE_REGISTRY);
 
   // Modal States
@@ -234,42 +248,49 @@ function ErpAppContent() {
     let isMounted = true;
     async function loadInitialData() {
       try {
-        const [invRes, qmsRes, statsRes, boRes] = await Promise.all([
+        const [invRes, qmsRes, statsRes, boRes, prodRes] = await Promise.all([
           fetch('/api/inventory'),
           fetch('/api/qms/inspections'),
           fetch('/api/dashboard/stats'),
           fetch('/api/buyer-orders'),
+          fetch('/api/production-records'),
         ]);
 
         if (invRes.ok) {
           const invData = await invRes.json();
-          if (isMounted && Array.isArray(invData.items) && invData.items.length > 0) {
+          if (isMounted && Array.isArray(invData.items)) {
             setInventory(invData.items);
           }
         }
 
         if (qmsRes.ok) {
           const qmsData = await qmsRes.json();
-          if (isMounted && Array.isArray(qmsData.records) && qmsData.records.length > 0) {
+          if (isMounted && Array.isArray(qmsData.records)) {
             setInspections(qmsData.records);
           }
         }
 
         if (boRes && boRes.ok) {
           const boData = await boRes.json();
-          if (isMounted && Array.isArray(boData.orders) && boData.orders.length > 0) {
+          if (isMounted && Array.isArray(boData.orders)) {
             setOrders(boData.orders);
+            try {
+              localStorage.setItem('erp_buyer_orders_v1', JSON.stringify(boData.orders));
+            } catch {}
           }
         }
 
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          if (isMounted && Array.isArray(statsData.productionOrders)) {
-            setProductionOrders(statsData.productionOrders);
+        if (prodRes && prodRes.ok) {
+          const prodData = await prodRes.json();
+          if (isMounted && Array.isArray(prodData.records)) {
+            setProductionOrders(prodData.records);
+            try {
+              localStorage.setItem('erp_production_orders_v1', JSON.stringify(prodData.records));
+            } catch {}
           }
         }
       } catch (err) {
-        console.warn('Initial REST fetch fallback to in-memory store:', err);
+        console.warn('Initial REST fetch fallback to persistent store:', err);
       }
     }
 
@@ -282,8 +303,8 @@ function ErpAppContent() {
 
   // Handle live WebSocket/SSE events
   const handleLiveEvent = useCallback((event: any) => {
-    if (event.type === 'INVENTORY_UPDATE' || event.type === 'STOCK_ADJUSTED') {
-      const updatedItem = event.payload?.item;
+    if (event.type === 'INVENTORY_UPDATE' || event.type === 'STOCK_ADJUSTED' || event.type === 'STOCK_UPDATED') {
+      const updatedItem = event.item || event.payload?.item;
       if (updatedItem && updatedItem.id) {
         setInventory((prev) => {
           const index = prev.findIndex((i) => i.id === updatedItem.id);
@@ -295,8 +316,8 @@ function ErpAppContent() {
           return [updatedItem, ...prev];
         });
       }
-    } else if (event.type === 'BATCH_GRADE_UPDATED') {
-      const { ids, grade } = event.payload || {};
+    } else if (event.type === 'BATCH_GRADE_UPDATED' || event.type === 'BATCH_GRADE_CHANGED') {
+      const { ids, grade } = event.payload || event;
       if (Array.isArray(ids) && grade) {
         setInventory((prev) =>
           prev.map((item) =>
@@ -305,16 +326,90 @@ function ErpAppContent() {
                 ...item,
                 qualityGrade: grade,
                 lastUpdatedAt: new Date().toISOString(),
-                updatedBy: event.payload?.updatedBy || 'Live WS',
+                updatedBy: event.payload?.updatedBy || event.user || 'Live WS',
               }
               : item
           )
         );
       }
-    } else if (event.type === 'AQL_INSPECTION_SUBMITTED') {
-      const record = event.payload?.record;
+    } else if (event.type === 'AQL_INSPECTION_SUBMITTED' || event.type === 'INSPECTION_RECORDED') {
+      const record = event.record || event.payload?.record;
       if (record && record.id) {
-        setInspections((prev) => [record, ...prev]);
+        setInspections((prev) => {
+          const idx = prev.findIndex((r) => r.id === record.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = record;
+            return next;
+          }
+          return [record, ...prev];
+        });
+      }
+    } else if (event.type === 'INSPECTION_DELETED') {
+      const id = event.id || event.payload?.id;
+      if (id) {
+        setInspections((prev) => prev.filter((r) => r.id !== id));
+      }
+    } else if (event.type === 'PRODUCTION_RECORD_UPSERTED') {
+      const rec = event.record || event.payload?.record;
+      if (rec && rec.id) {
+        setProductionOrders((prev) => {
+          const idx = prev.findIndex((p) => p.id === rec.id || p.orderNumber === rec.orderNumber);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...rec };
+            return next;
+          }
+          return [rec, ...prev];
+        });
+      }
+    } else if (event.type === 'PRODUCTION_RECORD_DELETED') {
+      const delId = event.id || event.payload?.id;
+      const delNum = event.orderNumber || event.payload?.orderNumber;
+      if (delId || delNum) {
+        setProductionOrders((prev) => prev.filter((p) => p.id !== delId && p.orderNumber !== delNum));
+        try {
+          const cur = getProductionRecords();
+          saveProductionRecords(cur.filter((p) => p.id !== delId && p.orderNumber !== delNum));
+        } catch {}
+      }
+    } else if (event.type === 'BUYER_ORDER_UPSERTED') {
+      const bo = event.order || event.payload?.order;
+      if (bo && bo.id) {
+        setOrders((prev) => {
+          const idx = prev.findIndex((o) => o.id === bo.id || o.orderNumber === bo.orderNumber);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...bo };
+            return next;
+          }
+          return [bo, ...prev];
+        });
+      }
+    } else if (event.type === 'BUYER_ORDER_DELETED') {
+      const boDelId = event.id || event.payload?.id;
+      const boDelNum = event.orderNumber || event.payload?.orderNumber;
+      if (boDelId || boDelNum) {
+        setOrders((prev) => prev.filter((o) => o.id !== boDelId && o.orderNumber !== boDelNum));
+        try {
+          const raw = localStorage.getItem('erp_buyer_orders_v1');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              const filtered = parsed.filter((o: any) => o.id !== boDelId && o.orderNumber !== boDelNum);
+              localStorage.setItem('erp_buyer_orders_v1', JSON.stringify(filtered));
+            }
+          }
+        } catch {}
+      }
+    } else if (event.type === 'SYSTEM_RESET') {
+      if (event.mode === 'blank') {
+        setProductionOrders([]);
+        setOrders([]);
+        setInventory([]);
+        setInspections([]);
+      } else {
+        window.location.reload();
       }
     }
   }, []);
@@ -539,90 +634,128 @@ function ErpAppContent() {
               />
             )}
 
-            {/* 30 QMS ERP Modules */}
-            {activeTab === 'buyer_order' && (
-              <BuyerOrderView
-                orders={orders}
-                onUpdateOrders={handleUpdateOrders}
-                inventory={inventory}
-                receiveRecords={receiveRecords}
-                onReceiveMaterial={handleReceiveMaterialLinkedToOrder}
-              />
-            )}
-            {activeTab === 'sub_supplier' && <SubSupplierView />}
-            {activeTab === 'customer_complaint' && <CustomerComplaintView />}
+            {/* Real-time Role-Based Access Control Module Gate */}
+            {activeTab !== 'dashboard' && !can(activeTab, 'view') ? (
+              <div className="flex flex-col items-center justify-center min-h-[460px] p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs animate-in fade-in duration-200">
+                <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-4 border border-rose-200 dark:border-rose-900/50">
+                  <ShieldAlert className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                  Access Restricted
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mt-2 leading-relaxed">
+                  Your current role <span className="font-bold text-slate-800 dark:text-slate-200">"{user?.role || 'Viewer'}"</span> does not have View permission for this module ({activeTab.replace(/_/g, ' ')}).
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                  Contact your Super Administrator to adjust module permissions in Users &amp; Roles.
+                </p>
+                <div className="flex items-center gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('dashboard')}
+                    className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+                  >
+                    Return to Dashboard
+                  </button>
+                  {can('settings', 'view') && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('settings')}
+                      className="px-4 py-2 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
+                    >
+                      Users &amp; Roles Settings
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* 30 QMS ERP Modules */}
+                {activeTab === 'buyer_order' && (
+                  <BuyerOrderView
+                    orders={orders}
+                    onUpdateOrders={handleUpdateOrders}
+                    inventory={inventory}
+                    receiveRecords={receiveRecords}
+                    onReceiveMaterial={handleReceiveMaterialLinkedToOrder}
+                  />
+                )}
+                {activeTab === 'sub_supplier' && <SubSupplierView />}
+                {activeTab === 'customer_complaint' && <CustomerComplaintView />}
 
-            {activeTab === 'inventory' && (
-              <InventoryView
-                items={inventory}
-                orders={orders}
-                onOpenStockAdjust={(item) => {
-                  setStockAdjustItem(item);
-                  setIsStockAdjustOpen(true);
-                }}
-                onBatchGradeUpdate={handleBatchGradeUpdate}
-                onAddNewItem={() => setIsInwardModalOpen(true)}
-                onReceiveRecord={handleReceiveMaterialLinkedToOrder}
-              />
-            )}
+                {activeTab === 'inventory' && (
+                  <InventoryView
+                    items={inventory}
+                    orders={orders}
+                    onOpenStockAdjust={(item) => {
+                      setStockAdjustItem(item);
+                      setIsStockAdjustOpen(true);
+                    }}
+                    onBatchGradeUpdate={handleBatchGradeUpdate}
+                    onAddNewItem={() => setIsInwardModalOpen(true)}
+                    onReceiveRecord={handleReceiveMaterialLinkedToOrder}
+                  />
+                )}
 
-            {activeTab === 'incoming_qc' && (
-              <IncomingQcView
-                inventoryItems={inventory}
-                onUpdateInventoryItem={(updated) => {
-                  setInventory((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-                }}
-              />
-            )}
-            {activeTab === 'planning_ie' && (
-              <PlanningAndIeView
-                orders={orders}
-                productionOrders={productionOrders}
-              />
-            )}
-            {activeTab === 'production' && (
-              <ProductionView
-                orders={productionOrders}
-                onUpdateOrders={handleUpdateProductionOrders}
-              />
-            )}
+                {activeTab === 'incoming_qc' && (
+                  <IncomingQcView
+                    inventoryItems={inventory}
+                    onUpdateInventoryItem={(updated) => {
+                      setInventory((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+                    }}
+                  />
+                )}
+                {activeTab === 'planning_ie' && (
+                  <PlanningAndIeView
+                    orders={orders}
+                    productionOrders={productionOrders}
+                  />
+                )}
+                {activeTab === 'production' && (
+                  <ProductionView
+                    orders={productionOrders}
+                    onUpdateOrders={handleUpdateProductionOrders}
+                  />
+                )}
 
-            {activeTab === 'inspections' && (
-              <InspectionsView
-                records={inspections}
-                onUpdateRecords={setInspections}
-                onOpenNewInspection={() => setIsNewInspectionOpen(true)}
-                orders={orders}
-              />
+                {activeTab === 'inspections' && (
+                  <InspectionsView
+                    records={inspections}
+                    onUpdateRecords={setInspections}
+                    onOpenNewInspection={() => setIsNewInspectionOpen(true)}
+                    orders={orders}
+                  />
+                )}
+
+                {activeTab === 'defects_library' && <DefectsLibraryView />}
+                {activeTab === 'testing' && <TestingView />}
+                {activeTab === 'calibration' && <CalibrationView />}
+                {activeTab === 'kpi_management' && <KpiManagementView />}
+                {activeTab === 'quality_goals' && <QualityGoalsView />}
+                {activeTab === 'audit' && <AuditView />}
+                {activeTab === 'capa' && <CapaView />}
+                {activeTab === 'root_cause' && <RootCauseAnalysisView />}
+                {activeTab === 'risk_assessment' && <RiskAssessmentView />}
+                {activeTab === 'traceability' && <TraceabilityAuditView />}
+                {activeTab === 'certificate' && <CertificateView />}
+                {activeTab === 'document_control' && <DocumentControlView />}
+                {activeTab === 'sop_management' && <SopManagementView />}
+                {activeTab === 'quality_manual' && <QualityManualView />}
+                {activeTab === 'procedure' && <ProcedureView />}
+                {activeTab === 'process_flow' && <ProcessFlowView />}
+                {activeTab === 'organogram' && <OrganogramView />}
+                {activeTab === 'job_description' && <JobDescriptionView />}
+                {activeTab === 'training' && <TrainingView />}
+                {activeTab === 'meeting_minutes' && <MeetingMinutesView />}
+                {activeTab === 'events' && <EventsView />}
+                {activeTab === 'communication' && <CommunicationPortalView />}
+                {activeTab === 'texpedia' && <TexpediaView />}
+                {activeTab === 'settings' && <SettingsView />}
+
+                {/* Report And Analysis */}
+                {activeTab === 'report_analysis' && <ReportAndAnalysisView />}
+              </>
             )}
-
-            {activeTab === 'defects_library' && <DefectsLibraryView />}
-            {activeTab === 'testing' && <TestingView />}
-            {activeTab === 'calibration' && <CalibrationView />}
-            {activeTab === 'kpi_management' && <KpiManagementView />}
-            {activeTab === 'quality_goals' && <QualityGoalsView />}
-            {activeTab === 'audit' && <AuditView />}
-            {activeTab === 'capa' && <CapaView />}
-            {activeTab === 'root_cause' && <RootCauseAnalysisView />}
-            {activeTab === 'risk_assessment' && <RiskAssessmentView />}
-            {activeTab === 'traceability' && <TraceabilityAuditView />}
-            {activeTab === 'certificate' && <CertificateView />}
-            {activeTab === 'document_control' && <DocumentControlView />}
-            {activeTab === 'sop_management' && <SopManagementView />}
-            {activeTab === 'quality_manual' && <QualityManualView />}
-            {activeTab === 'procedure' && <ProcedureView />}
-            {activeTab === 'process_flow' && <ProcessFlowView />}
-            {activeTab === 'organogram' && <OrganogramView />}
-            {activeTab === 'job_description' && <JobDescriptionView />}
-            {activeTab === 'training' && <TrainingView />}
-            {activeTab === 'meeting_minutes' && <MeetingMinutesView />}
-            {activeTab === 'events' && <EventsView />}
-            {activeTab === 'communication' && <CommunicationPortalView />}
-            {activeTab === 'texpedia' && <TexpediaView />}
-            {activeTab === 'settings' && <SettingsView />}
-
-            {/* Report And Analysis */}
-            {activeTab === 'report_analysis' && <ReportAndAnalysisView />}
           </div>
         </main>
       </div>
