@@ -23,6 +23,7 @@ import {
   Check,
   Shield,
   HelpCircle,
+  FileDown,
 } from 'lucide-react';
 import { StatCard } from '@/components/ui/StatCard';
 import { DataTable, ColumnDef } from '@/components/ui/DataTable';
@@ -33,6 +34,9 @@ import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { QualityManualDetailsPage } from '../modules/quality-manual/QualityManualDetailsPage';
 import { QualityManualEntryPage } from '../modules/quality-manual/QualityManualEntryPage';
 import { DeleteQualityManualModal } from '../modules/quality-manual/DeleteQualityManualModal';
+import { QualityManualExportModal } from '../modules/quality-manual/QualityManualExportModal';
+import { QualityManualSingleExportModal } from '../modules/quality-manual/QualityManualSingleExportModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 type QualityManualSubView =
   | { type: 'none' }
@@ -41,6 +45,7 @@ type QualityManualSubView =
   | { type: 'edit'; section: QualityManualSection };
 
 export function QualityManualView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('quality_manual');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
   const [sections, setSections] = useLiveModuleData<QualityManualSection[]>(
@@ -72,6 +77,11 @@ export function QualityManualView() {
     isOpen: boolean;
     sections: QualityManualSection[];
   } | null>(null);
+
+  // Export Modals State
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [selectedForExport, setSelectedForExport] = useState<QualityManualSection[]>([]);
+  const [singleExportSection, setSingleExportSection] = useState<QualityManualSection | null>(null);
 
   // Filters
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
@@ -257,34 +267,52 @@ export function QualityManualView() {
           </button>
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', section: item })}
-            className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
-            title="Edit Chapter"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', section: item })}
+              className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
+              title="Edit Chapter"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateSection(item)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate Chapter"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateSection(item)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate Chapter"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Export Dossier Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setSingleExportSection(item)}
+              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors cursor-pointer"
+              title="Export Chapter Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, sections: [item] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Chapter"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, sections: [item] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Chapter"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -396,6 +424,19 @@ export function QualityManualView() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {canExport && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedForExport([]);
+                        setIsExportModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
+                    >
+                      <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Export Register</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -579,38 +620,68 @@ export function QualityManualView() {
                       <option value="UNDER_REVIEW">Under Review</option>
                       <option value="DRAFT">Draft</option>
                     </select>
+
+                    {/* Export Register Button */}
+                    {canExport && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedForExport([]);
+                          setIsExportModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-xs cursor-pointer"
+                        title="Export Quality Manual Master Register"
+                      >
+                        <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Export Register</span>
+                      </button>
+                    )}
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Create Quality Manual Chapter</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Create Quality Manual Chapter</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={[
-                  {
-                    label: 'Delete Selected',
-                    variant: 'danger',
-                    icon: <Trash2 className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
-                      setDeleteModal({
-                        isOpen: true,
-                        sections: selected,
-                      });
-                    },
-                  },
-                  {
-                    label: 'Export Index',
-                    icon: <Download className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
-                      showToast(`Exported ${selected.length} quality manual records`);
-                    },
-                  },
+                  ...(canDelete
+                    ? [
+                        {
+                          label: 'Delete Selected',
+                          variant: 'danger' as const,
+                          icon: <Trash2 className="w-3.5 h-3.5" />,
+                          onClick: (selected: QualityManualSection[]) => {
+                            setDeleteModal({
+                              isOpen: true,
+                              sections: selected,
+                            });
+                          },
+                        },
+                      ]
+                    : []),
+                  ...(canExport
+                    ? [
+                        {
+                          label: 'Export Selected',
+                          icon: <FileDown className="w-3.5 h-3.5" />,
+                          onClick: (selected: QualityManualSection[]) => {
+                            setSelectedForExport(selected);
+                            setIsExportModalOpen(true);
+                          },
+                        },
+                      ]
+                    : []),
                 ]}
+                moduleKey="quality_manual"
+                canExport={canExport}
+                canDelete={canDelete}
               />
             </div>
           )}
@@ -691,6 +762,21 @@ export function QualityManualView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* GLOBAL REGISTER EXPORT MODAL */}
+      <QualityManualExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        allSections={sections}
+        selectedSections={selectedForExport}
+      />
+
+      {/* SINGLE CHAPTER DOSSIER EXPORT MODAL */}
+      <QualityManualSingleExportModal
+        isOpen={Boolean(singleExportSection)}
+        onClose={() => setSingleExportSection(null)}
+        section={singleExportSection}
+      />
     </div>
   );
 }

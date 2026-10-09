@@ -28,6 +28,7 @@ import {
   ChevronRight,
   Maximize2,
   Image as ImageIcon,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -39,6 +40,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { TestDetailsPage } from '../modules/testing/TestDetailsPage';
 import { TestEntryPage } from '../modules/testing/TestEntryPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
+import { TestingExportModal } from '../modules/testing/TestingExportModal';
+import { TestingSingleExportModal } from '../modules/testing/TestingSingleExportModal';
 
 type TestSubView =
   | { type: 'none' }
@@ -56,6 +59,12 @@ export function TestingView() {
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('testing');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [tests, setTests] = useLiveModuleData<LabTestRecord[]>('testing_records', MOCK_LAB_TESTS);
+
+  // Export Modals State
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedTestsForExport, setSelectedTestsForExport] = useState<LabTestRecord[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [testForSingleExport, setTestForSingleExport] = useState<LabTestRecord | null>(null);
 
   // Dedicated Separate Sub-Pages State (Matching Buyer & Order module)
   const [subView, setSubView] = useState<TestSubView>({ type: 'none' });
@@ -189,11 +198,12 @@ export function TestingView() {
     ...(canExport
       ? [
           {
-            label: 'Export Certificates',
-            icon: <Award className="w-3.5 h-3.5" />,
+            label: 'Export Selected (PDF/Excel)',
+            icon: <FileDown className="w-3.5 h-3.5" />,
             variant: 'default' as const,
             onClick: (selected: LabTestRecord[]) => {
-              showToast(`Exported ${selected.length} accredited test certificates (PDF)`);
+              setSelectedTestsForExport(selected);
+              setIsGlobalExportModalOpen(true);
             },
           },
         ]
@@ -368,6 +378,21 @@ export function TestingView() {
             <span>View</span>
           </button>
 
+          {/* Export Individual Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setTestForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1 rounded-lg hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
+              title="Export Test Certificate (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Edit Icon Button */}
           {canEdit && (
             <button
@@ -450,16 +475,32 @@ export function TestingView() {
             { id: 'standards', label: 'ISO Test Standards', count: GARMENT_ISO_TEST_METHODS.length },
           ]}
           actions={
-            canCreate ? (
-              <button
-                type="button"
-                onClick={() => setSubView({ type: 'add' })}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Test</span>
-              </button>
-            ) : undefined
+            <div className="flex items-center gap-2">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTestsForExport(tests);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                  title="Export Laboratory Testing Master Register (PDF / Excel / CSV)"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Export Register</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'add' })}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Test</span>
+                </button>
+              )}
+            </div>
           }
         />
       )}
@@ -1158,6 +1199,24 @@ export function TestingView() {
           )}
         </>
       )}
+
+      {/* GLOBAL EXPORT MODAL */}
+      <TestingExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allTests={tests}
+        selectedTests={selectedTestsForExport}
+      />
+
+      {/* INDIVIDUAL EXPORT MODAL */}
+      <TestingSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setTestForSingleExport(null);
+        }}
+        test={testForSingleExport}
+      />
     </div>
   );
 }

@@ -2,11 +2,18 @@
 
 import { BuyerOrder } from '@/lib/types/modules';
 import { InventoryItem, ReceiveRecord } from '@/lib/types/erp';
-import { loadPdfHeaderSettings, renderPdfHeaderHtml } from '@/lib/pdf/pdf-header-store';
+import { loadPdfHeaderSettings, renderPdfHeaderHtml, getModuleExportConfig } from '@/lib/pdf/pdf-header-store';
 import {
   computeWIPRecordForPO,
   calculateWIPPipelineMetrics,
 } from '@/lib/db/wip-record-store';
+import {
+  ensureColorSizeBreakdown,
+  getAllUniqueSizes,
+  calculateSizeTotals,
+  calculateBreakdownTotal,
+  formatBreakdownSummary,
+} from './order-breakdown-utils';
 
 /**
  * Universal Export Utilities for Buyer & Order Management Module
@@ -123,12 +130,13 @@ export function exportBuyerOrdersSummaryPdf(
 
     const today = new Date().toISOString().split('T')[0];
     const pdfSettings = loadPdfHeaderSettings();
+    const exportConfig = getModuleExportConfig(pdfSettings, 'buyer_order', 'register');
     const dynamicHeaderHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'BUYER PURCHASE ORDER REGISTER & PRODUCTION PIPELINE SUMMARY',
-      `PO-REG-${today.replace(/-/g, '')}`,
+      exportConfig.title,
+      exportConfig.fullDocCode,
       today,
-      'Global Merchandising, Planning & Technical Compliance Division'
+      exportConfig.department
     );
 
     const kpis = computeBuyerOrderKpis(orders);
@@ -161,6 +169,9 @@ export function exportBuyerOrdersSummaryPdf(
               </div>
             </td>
             <td style="font-size: 9px; color: #475569;">${ord.season || '-'}</td>
+            <td style="font-size: 8px; color: #475569; max-width: 150px; line-height: 1.25;">
+              ${formatBreakdownSummary(ord.colorSizeBreakdown)}
+            </td>
             <td style="text-align: right; font-family: monospace; font-weight: 700; color: #0f172a;">
               ${ord.orderQuantity.toLocaleString()} pcs
             </td>
@@ -470,6 +481,7 @@ export function exportBuyerOrdersSummaryPdf(
                 <th style="width: 120px;">Buyer / Brand</th>
                 <th style="width: 160px;">Style & Description</th>
                 <th style="width: 70px;">Season</th>
+                <th style="width: 130px;">Color & Size Breakdown</th>
                 <th style="width: 75px; text-align: right;">Order Qty</th>
                 <th style="width: 65px; text-align: right;">FOB Price</th>
                 <th style="width: 90px; text-align: right;">Total FOB ($)</th>
@@ -483,7 +495,7 @@ export function exportBuyerOrdersSummaryPdf(
               ${tableRowsHtml}
               <!-- Totals Row -->
               <tr class="totals-row">
-                <td colspan="5" style="text-align: right; text-transform: uppercase;">
+                <td colspan="6" style="text-align: right; text-transform: uppercase;">
                   GRAND TOTAL SUMMARY (${orders.length} PURCHASE ORDERS):
                 </td>
                 <td style="text-align: right; font-family: monospace;">
@@ -565,6 +577,7 @@ export function exportBuyerOrdersSummaryExcel(
             <td style="font-weight: bold; border: 1px solid #cbd5e1; padding: 6px;">${ord.styleNumber}</td>
             <td style="border: 1px solid #cbd5e1; padding: 6px;">${ord.styleDescription || '-'}</td>
             <td style="border: 1px solid #cbd5e1; padding: 6px;">${ord.season || '-'}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 6px; font-size: 9pt;">${formatBreakdownSummary(ord.colorSizeBreakdown)}</td>
             <td style="text-align: right; font-weight: bold; border: 1px solid #cbd5e1; padding: 6px;">${ord.orderQuantity}</td>
             <td style="text-align: right; border: 1px solid #cbd5e1; padding: 6px;">${ord.fobPrice.toFixed(2)}</td>
             <td style="text-align: right; font-weight: bold; color: #047857; border: 1px solid #cbd5e1; padding: 6px;">${val.toFixed(2)}</td>
@@ -659,6 +672,7 @@ export function exportBuyerOrdersSummaryExcel(
                 <th>Style Number</th>
                 <th>Style Description</th>
                 <th>Season</th>
+                <th>Color & Size Breakdown</th>
                 <th style="text-align: right;">Order Qty (pcs)</th>
                 <th style="text-align: right;">FOB Price ($)</th>
                 <th style="text-align: right;">Total FOB Value ($)</th>
@@ -675,7 +689,7 @@ export function exportBuyerOrdersSummaryExcel(
               ${tableRowsHtml}
               <!-- Grand Totals Row -->
               <tr class="totals-row">
-                <td colspan="7" style="text-align: right; font-weight: bold;">
+                <td colspan="8" style="text-align: right; font-weight: bold;">
                   GRAND TOTAL SUMMARY (${orders.length} PURCHASE ORDERS):
                 </td>
                 <td style="text-align: right; font-weight: bold;">${kpis.totalQuantity}</td>
@@ -727,15 +741,80 @@ export function exportSingleBuyerOrderPdf(
 
     const today = new Date().toISOString().split('T')[0];
     const pdfSettings = loadPdfHeaderSettings();
+    const exportConfig = getModuleExportConfig(pdfSettings, 'buyer_order', 'single', order.orderNumber);
     const dynamicHeaderHtml = renderPdfHeaderHtml(
       pdfSettings,
-      `PURCHASE ORDER SPECIFICATION & TECH PACK: PO ${order.orderNumber}`,
-      `PO-SPEC-${order.orderNumber}`,
+      `${exportConfig.title}: PO ${order.orderNumber}`,
+      exportConfig.fullDocCode,
       today,
-      'Apparel Merchandising, Production Control & Quality Assurance'
+      `${exportConfig.department} • Buyer: ${order.buyerName}`
     );
 
     const totalValue = order.orderQuantity * order.fobPrice;
+
+    // Garment Colorway & Size Breakdown Calculation
+    const breakdownList = ensureColorSizeBreakdown(order);
+    const breakdownSizes = getAllUniqueSizes(breakdownList);
+    const breakdownSizeTotals = calculateSizeTotals(breakdownList, breakdownSizes);
+    const breakdownGrandTotal = calculateBreakdownTotal(breakdownList);
+
+    const colorBreakdownRowsHtml = breakdownList
+      .map((item, idx) => {
+        const rowPct = breakdownGrandTotal > 0 ? (item.totalQuantity / breakdownGrandTotal) * 100 : 0;
+        const rowVal = item.totalQuantity * order.fobPrice;
+        const ratioMap: Record<string, number> = {};
+        (item.sizeBreakdown || []).forEach((r) => {
+          ratioMap[r.size] = r.quantity;
+        });
+
+        const sizeCells = breakdownSizes
+          .map((sz) => {
+            const q = ratioMap[sz] || 0;
+            return `<td style="text-align: center; font-family: monospace; font-weight: ${
+              q > 0 ? '700' : '400'
+            }; color: ${q > 0 ? '#0f172a' : '#94a3b8'};">${q > 0 ? q.toLocaleString() : '-'}</td>`;
+          })
+          .join('');
+
+        return `
+          <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+            <td style="text-align: center; color: #64748b;">${idx + 1}</td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${
+                  item.colorHex || '#475569'
+                }; border: 1px solid #cbd5e1;"></span>
+                <strong style="color: #0f172a;">${item.colorName}</strong>
+              </div>
+            </td>
+            <td style="font-family: monospace; font-size: 8px; color: #475569;">${item.colorCode || '-'}</td>
+            ${sizeCells}
+            <td style="text-align: right; font-family: monospace; font-weight: 700; color: #6b21a8; background-color: #faf5ff;">
+              ${item.totalQuantity.toLocaleString()} pcs
+            </td>
+            <td style="text-align: right; font-family: monospace; font-size: 8.5px; color: #475569;">
+              ${rowPct.toFixed(1)}%
+            </td>
+            <td style="text-align: right; font-family: monospace; font-weight: 700; color: #047857;">
+              $${rowVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const sizeFooterCells = breakdownSizes
+      .map((sz) => {
+        const sTot = breakdownSizeTotals[sz] || 0;
+        const sPct = breakdownGrandTotal > 0 ? (sTot / breakdownGrandTotal) * 100 : 0;
+        return `
+          <td style="text-align: center; font-family: monospace; font-weight: 800; background-color: #f1f5f9;">
+            <div>${sTot.toLocaleString()}</div>
+            <div style="font-size: 7.5px; color: #64748b; font-weight: normal;">${sPct.toFixed(0)}%</div>
+          </td>
+        `;
+      })
+      .join('');
 
     // BOM Table Rows
     const bomItems = order.bomItems || [];
@@ -1255,6 +1334,41 @@ export function exportSingleBuyerOrderPdf(
             </tbody>
           </table>
 
+          <!-- Garment Colorway & Size Breakdown Specification Matrix -->
+          <div class="section-title">
+            <span>Garment Colorway &amp; Size Breakdown Specification Matrix</span>
+            <span style="font-size: 8.5px; font-weight: 600; color: #64748b;">
+              ${breakdownList.length} Colorway${breakdownList.length === 1 ? '' : 's'} • ${breakdownSizes.length} Sizes (${breakdownSizes.join(', ')}) • Total: ${breakdownGrandTotal.toLocaleString()} pcs
+            </span>
+          </div>
+          <table class="detail-table" style="margin-bottom: 12px;">
+            <thead>
+              <tr>
+                <th style="width: 25px; text-align: center;">#</th>
+                <th style="width: 140px;">Colorway Name</th>
+                <th style="width: 110px;">Color / Pantone Code</th>
+                ${breakdownSizes.map((sz) => `<th style="text-align: center; font-family: monospace; width: 45px;">${sz}</th>`).join('')}
+                <th style="width: 80px; text-align: right; background-color: #faf5ff; color: #6b21a8;">Total Pcs</th>
+                <th style="width: 55px; text-align: right;">Ratio %</th>
+                <th style="width: 80px; text-align: right;">FOB Value ($)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${colorBreakdownRowsHtml}
+              <tr style="background-color: #f1f5f9; font-weight: bold; border-top: 2px solid #0f172a;">
+                <td colspan="3" style="text-align: right; text-transform: uppercase; font-size: 8px;">Total per Size:</td>
+                ${sizeFooterCells}
+                <td style="text-align: right; font-family: monospace; font-weight: 900; color: #6b21a8; background-color: #faf5ff;">
+                  ${breakdownGrandTotal.toLocaleString()} pcs
+                </td>
+                <td style="text-align: right; font-family: monospace;">100%</td>
+                <td style="text-align: right; font-family: monospace; font-weight: 700; color: #047857;">
+                  $${(breakdownGrandTotal * order.fobPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
           <!-- Bill of Materials (BOM) Matrix -->
           <div class="section-title">
             <span>Bill of Materials (BOM) Requirements & Inwarding Status</span>
@@ -1356,6 +1470,63 @@ export function exportSingleBuyerOrderExcel(
             order.styleNumber
           );
     const wipMetrics = calculateWIPPipelineMetrics(wip, order.orderQuantity);
+
+    // Color & Size Breakdown Matrix for Excel
+    const breakdownList = ensureColorSizeBreakdown(order);
+    const breakdownSizes = getAllUniqueSizes(breakdownList);
+    const breakdownSizeTotals = calculateSizeTotals(breakdownList, breakdownSizes);
+    const breakdownGrandTotal = calculateBreakdownTotal(breakdownList);
+
+    const colorSizeExcelHeader = `
+      <tr>
+        <th style="width: 35px; text-align: center;">#</th>
+        <th style="width: 180px;">Colorway Name</th>
+        <th style="width: 120px;">Color / Pantone Code</th>
+        ${breakdownSizes.map((sz) => `<th style="text-align: center; width: 60px;">${sz}</th>`).join('')}
+        <th style="text-align: right; width: 85px;">Total Pcs</th>
+        <th style="text-align: right; width: 65px;">Ratio %</th>
+        <th style="text-align: right; width: 100px;">FOB Value ($)</th>
+      </tr>
+    `;
+
+    const colorSizeExcelRows = breakdownList
+      .map((b, idx) => {
+        const rowPct = breakdownGrandTotal > 0 ? (b.totalQuantity / breakdownGrandTotal) * 100 : 0;
+        const rowVal = b.totalQuantity * order.fobPrice;
+        const ratioMap: Record<string, number> = {};
+        (b.sizeBreakdown || []).forEach((r) => {
+          ratioMap[r.size] = r.quantity;
+        });
+
+        const cells = breakdownSizes
+          .map((sz) => {
+            const q = ratioMap[sz] || 0;
+            return `<td style="text-align: center; border: 1px solid #cbd5e1; padding: 5px;">${q}</td>`;
+          })
+          .join('');
+
+        return `
+          <tr>
+            <td style="text-align: center; border: 1px solid #cbd5e1; padding: 5px;">${idx + 1}</td>
+            <td style="font-weight: bold; border: 1px solid #cbd5e1; padding: 5px;">${b.colorName}</td>
+            <td style="font-family: monospace; border: 1px solid #cbd5e1; padding: 5px;">${b.colorCode || '-'}</td>
+            ${cells}
+            <td style="text-align: right; font-weight: bold; color: #581c87; border: 1px solid #cbd5e1; padding: 5px;">${b.totalQuantity}</td>
+            <td style="text-align: right; border: 1px solid #cbd5e1; padding: 5px;">${rowPct.toFixed(1)}%</td>
+            <td style="text-align: right; font-weight: bold; color: #047857; border: 1px solid #cbd5e1; padding: 5px;">${rowVal.toFixed(2)}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const colorSizeFooterCells = breakdownSizes
+      .map(
+        (sz) =>
+          `<td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1; padding: 5px;">${
+            breakdownSizeTotals[sz] || 0
+          }</td>`
+      )
+      .join('');
 
     // BOM rows
     const bomRowsHtml = (order.bomItems || [])
@@ -1504,6 +1675,26 @@ export function exportSingleBuyerOrderExcel(
                 $${totalVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${order.currency || 'USD'}
               </td>
             </tr>
+          </table>
+
+          <!-- Color & Size Breakdown Matrix Table -->
+          <table>
+            <tr>
+              <td colspan="${4 + breakdownSizes.length}" class="section-header">SECTION 2B: COLOR &amp; SIZE BREAKDOWN SPECIFICATION MATRIX</td>
+            </tr>
+            <thead>
+              ${colorSizeExcelHeader}
+            </thead>
+            <tbody>
+              ${colorSizeExcelRows}
+              <tr style="background-color: #f1f5f9; font-weight: bold;">
+                <td colspan="3" style="text-align: right; font-weight: bold; border: 1px solid #cbd5e1; padding: 5px;">Total Quantity per Size:</td>
+                ${colorSizeFooterCells}
+                <td style="text-align: right; font-weight: bold; color: #581c87; border: 1px solid #cbd5e1; padding: 5px;">${breakdownGrandTotal}</td>
+                <td style="text-align: right; font-weight: bold; border: 1px solid #cbd5e1; padding: 5px;">100%</td>
+                <td style="text-align: right; font-weight: bold; color: #047857; border: 1px solid #cbd5e1; padding: 5px;">${(breakdownGrandTotal * order.fobPrice).toFixed(2)}</td>
+              </tr>
+            </tbody>
           </table>
 
           <!-- Production WIP Tracking Matrix -->

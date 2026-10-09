@@ -19,6 +19,11 @@ import {
   Lock,
   Unlock,
   Key,
+  Eye,
+  EyeOff,
+  Copy,
+  Image as ImageIcon,
+  Sparkles,
   LogIn,
   RefreshCw,
   Info,
@@ -116,6 +121,9 @@ export function UsersRbacTab() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
+  const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
+  const [showModalPassword, setShowModalPassword] = useState(false);
 
   // Add / Edit User Modal State
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
@@ -127,6 +135,7 @@ export function UsersRbacTab() {
     password: '',
     role: 'Inspector',
     department: 'Quality Inspection',
+    avatarUrl: '',
     isActive: true,
   });
 
@@ -358,15 +367,31 @@ export function UsersRbacTab() {
   // -------------------------------------------------------------
   // User Management Actions
   // -------------------------------------------------------------
+  const togglePasswordReveal = (userId: string) => {
+    setRevealedPasswords((prev) => ({
+      ...prev,
+      [userId]: !prev[userId],
+    }));
+  };
+
+  const copyPassword = (userId: string, pass?: string) => {
+    if (!pass) return;
+    navigator.clipboard.writeText(pass);
+    setCopiedUserId(userId);
+    setTimeout(() => setCopiedUserId(null), 2000);
+  };
+
   const handleOpenAddUser = () => {
     setEditingUser(null);
+    setShowModalPassword(true);
     setUserForm({
       username: '',
       name: '',
       email: '',
       password: '',
-      role: roles[1]?.name || 'QC Manager',
-      department: 'Quality Assurance',
+      role: 'Inspector',
+      department: 'Quality Inspection',
+      avatarUrl: `https://images.unsplash.com/photo-${['1535713875002-d1d0cf377fde', '1494790108377-be9c29b29330', '1507003211169-0a1dd7228f2d', '1534528741775-53994a69daeb', '1580489944761-15a19d654956'][Math.floor(Math.random() * 5)]}?w=150&h=150&fit=crop&crop=face`,
       isActive: true,
     });
     setIsAddUserModalOpen(true);
@@ -374,13 +399,15 @@ export function UsersRbacTab() {
 
   const handleOpenEditUser = (user: AppUser) => {
     setEditingUser(user);
+    setShowModalPassword(false);
     setUserForm({
       username: user.username || user.email.split('@')[0],
       name: user.name,
       email: user.email,
-      password: '',
+      password: user.password || '',
       role: user.role || 'Inspector',
       department: user.department || 'Operations',
+      avatarUrl: user.avatarUrl || '',
       isActive: user.isActive !== false,
     });
     setIsAddUserModalOpen(true);
@@ -391,16 +418,20 @@ export function UsersRbacTab() {
     setIsSaving(true);
 
     try {
+      const isSuper = userForm.role === 'Super Admin' || userForm.role === 'ADMIN' || (userForm.role as string) === 'super_admin';
+
       if (editingUser) {
         // Update user
         const payload: any = {
           id: editingUser.id,
-          name: userForm.name,
-          username: userForm.username,
-          email: userForm.email,
+          name: userForm.name.trim(),
+          username: userForm.username.trim(),
+          email: userForm.email.trim(),
           role: userForm.role,
-          department: userForm.department,
+          department: userForm.department.trim(),
           isActive: userForm.isActive,
+          isSuperAdmin: isSuper,
+          avatarUrl: userForm.avatarUrl.trim() || undefined,
         };
         if (userForm.password.trim()) {
           payload.password = userForm.password.trim();
@@ -423,10 +454,20 @@ export function UsersRbacTab() {
         }
       } else {
         // Create user
+        const payload = {
+          ...userForm,
+          username: userForm.username.trim(),
+          name: userForm.name.trim(),
+          email: userForm.email.trim(),
+          department: userForm.department.trim(),
+          isSuperAdmin: isSuper,
+          avatarUrl: userForm.avatarUrl.trim() || undefined,
+        };
+
         const res = await fetch('/api/auth/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(userForm),
+          body: JSON.stringify(payload),
         });
 
         const data = await res.json();
@@ -435,7 +476,7 @@ export function UsersRbacTab() {
           fetchUsers();
           setNotification({
             type: 'success',
-            text: `User "${data.user.name}" (@${data.user.username}) created successfully!`,
+            text: `User "${data.user.name}" (@${data.user.username}) created successfully${isSuper ? ' as Super Administrator' : ''}!`,
           });
           setTimeout(() => setNotification(null), 4000);
         } else {
@@ -450,8 +491,8 @@ export function UsersRbacTab() {
   };
 
   const handleDeleteUser = async (user: AppUser) => {
-    if (user.id === 'usr_admin' || user.isSuperAdmin) {
-      alert('The primary Super Admin account cannot be deleted.');
+    if (user.id === 'usr_admin') {
+      alert('The primary root Super Admin account cannot be deleted.');
       return;
     }
 
@@ -681,13 +722,14 @@ export function UsersRbacTab() {
             </button>
           </div>
 
-          {/* Users Table matching Image 3 */}
+          {/* Users Table matching Image 3 with Profile Photo & Password Visibility */}
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                   <th className="py-3 px-4">User</th>
                   <th className="py-3 px-4">Role</th>
+                  <th className="py-3 px-4">Password</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Last Active</th>
                   <th className="py-3 px-4 text-right">Actions</th>
@@ -696,7 +738,7 @@ export function UsersRbacTab() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-400">
+                    <td colSpan={6} className="py-12 text-center text-slate-400">
                       {loadingUsers ? 'Loading users...' : 'No users found.'}
                     </td>
                   </tr>
@@ -704,25 +746,43 @@ export function UsersRbacTab() {
                   filteredUsers.map((u) => {
                     const initial = (u.name || u.username || 'U').charAt(0).toUpperCase();
                     const isCurrentUser = currentUser?.id === u.id;
-                    const isSuperAdminAccount = u.id === 'usr_admin' || u.isSuperAdmin;
+                    const isSuperAdminAccount = u.id === 'usr_admin' || u.isSuperAdmin || u.role === 'Super Admin' || u.role === 'ADMIN';
 
                     return (
                       <tr
                         key={u.id}
                         className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors group"
                       >
-                        {/* User: Avatar + Name + @username • email */}
+                        {/* User: Avatar Photo + Name + @username • email */}
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center text-xs shrink-0 border border-indigo-200 dark:border-indigo-800">
-                              {initial}
+                            <div className="relative w-9 h-9 rounded-full overflow-hidden bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center text-xs shrink-0 border border-indigo-200 dark:border-indigo-800 shadow-2xs">
+                              {u.avatarUrl ? (
+                                <img
+                                  src={u.avatarUrl}
+                                  alt={u.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : null}
+                              <span className="absolute inset-0 flex items-center justify-center -z-10 select-none">
+                                {initial}
+                              </span>
                             </div>
                             <div>
-                              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                                 <span>{u.name}</span>
                                 {isCurrentUser && (
                                   <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200">
                                     You
+                                  </span>
+                                )}
+                                {isSuperAdminAccount && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                    <ShieldCheck className="w-2.5 h-2.5" />
+                                    Super Admin
                                   </span>
                                 )}
                               </div>
@@ -735,10 +795,43 @@ export function UsersRbacTab() {
 
                         {/* Role: Pill with Shield outline + Role Name */}
                         <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-slate-200/90 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-medium text-xs">
-                            <Shield className="w-3.5 h-3.5 text-slate-400" />
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border font-medium text-xs ${
+                            isSuperAdminAccount
+                              ? 'border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300'
+                              : 'border-slate-200/90 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                          }`}>
+                            <Shield className={`w-3.5 h-3.5 ${isSuperAdminAccount ? 'text-indigo-500' : 'text-slate-400'}`} />
                             {u.role || 'Viewer'}
                           </span>
+                        </td>
+
+                        {/* Password: Super Admin Viewable with Toggle Eye & Copy */}
+                        <td className="py-3.5 px-4 font-mono text-xs">
+                          <div className="inline-flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 px-2.5 py-1 rounded-lg">
+                            <span className="font-mono text-xs tracking-wider text-slate-800 dark:text-slate-200 select-all min-w-[70px]">
+                              {revealedPasswords[u.id] ? (u.password || '••••••••') : '••••••••'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => togglePasswordReveal(u.id)}
+                              className="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                              title={revealedPasswords[u.id] ? "Hide password" : "Show password"}
+                            >
+                              {revealedPasswords[u.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyPassword(u.id, u.password)}
+                              className="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer relative"
+                              title="Copy password to clipboard"
+                            >
+                              {copiedUserId === u.id ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
                         </td>
 
                         {/* Status: Pill with green dot + Active */}
@@ -787,7 +880,7 @@ export function UsersRbacTab() {
                             </button>
 
                             {/* Delete user */}
-                            {!isSuperAdminAccount && (
+                            {u.id !== 'usr_admin' && (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteUser(u)}
@@ -1078,11 +1171,11 @@ export function UsersRbacTab() {
       {/* ========================================================================= */}
       {isAddUserModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-6 space-y-4 my-auto animate-in zoom-in-95 duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg p-6 space-y-4 my-auto animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-600" />
-                {editingUser ? `Edit User: ${editingUser.name}` : 'Add New User'}
+                {editingUser ? `Edit User & Credentials: ${editingUser.name}` : 'Add New User'}
               </h3>
               <button
                 type="button"
@@ -1093,7 +1186,61 @@ export function UsersRbacTab() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveUser} className="space-y-3.5">
+            <form onSubmit={handleSaveUser} className="space-y-4">
+              {/* Profile Photo / Avatar URL with Live Preview */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 flex items-center gap-3.5">
+                <div className="relative w-14 h-14 rounded-full overflow-hidden bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center text-lg shrink-0 border-2 border-indigo-200 dark:border-indigo-800 shadow-sm">
+                  {userForm.avatarUrl ? (
+                    <img
+                      src={userForm.avatarUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : null}
+                  <span className="absolute inset-0 flex items-center justify-center -z-10 select-none">
+                    {(userForm.name || userForm.username || 'U').charAt(0).toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Profile Photo URL
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const randomAvatars = [
+                          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+                          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+                          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+                          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
+                          'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop&crop=face',
+                          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+                        ];
+                        const pick = randomAvatars[Math.floor(Math.random() * randomAvatars.length)];
+                        setUserForm({ ...userForm, avatarUrl: pick });
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      Random Photo
+                    </button>
+                  </div>
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/photo-..."
+                    value={userForm.avatarUrl}
+                    onChange={(e) => setUserForm({ ...userForm, avatarUrl: e.target.value })}
+                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Username & Password */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -1110,48 +1257,71 @@ export function UsersRbacTab() {
                 </div>
 
                 <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {editingUser ? 'Password' : 'Password'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowModalPassword((prev) => !prev)}
+                      className="text-[11px] font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 cursor-pointer"
+                    >
+                      {showModalPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      <span>{showModalPassword ? 'Hide' : 'Show'}</span>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showModalPassword ? 'text' : 'password'}
+                      placeholder={editingUser ? 'Password' : 'Set password'}
+                      value={userForm.password}
+                      onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                      className="w-full px-3 py-2 pr-9 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono outline-none focus:ring-2 focus:ring-indigo-500"
+                      required={!editingUser}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowModalPassword((prev) => !prev)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      {showModalPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Display Name & Email */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {editingUser ? 'Reset Password' : 'Password'}
+                    Full Display Name
                   </label>
                   <input
-                    type="password"
-                    placeholder={editingUser ? 'Leave blank to keep' : 'Set password'}
-                    value={userForm.password}
-                    onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                    type="text"
+                    placeholder="e.g. Javed Hossain"
+                    value={userForm.name}
+                    onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
                     className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
-                    required={!editingUser}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="user@garmentserp.com"
+                    value={userForm.email}
+                    onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Full Display Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Javed Hossain"
-                  value={userForm.name}
-                  onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  placeholder="user@garmentserp.com"
-                  value={userForm.email}
-                  onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
+              {/* Role & Department */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -1163,9 +1333,13 @@ export function UsersRbacTab() {
                     disabled={editingUser?.id === 'usr_admin'}
                     className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
                   >
+                    {/* Ensure Super Admin is always selectable by Super Admin */}
+                    {!roles.some((r) => r.name === 'Super Admin' || r.id === 'super_admin') && (
+                      <option value="Super Admin">Super Admin</option>
+                    )}
                     {roles.map((r) => (
                       <option key={r.id} value={r.name}>
-                        {r.name}
+                        {r.name === 'Super Admin' || r.id === 'super_admin' ? '👑 Super Admin' : r.name}
                       </option>
                     ))}
                   </select>
@@ -1184,6 +1358,16 @@ export function UsersRbacTab() {
                   />
                 </div>
               </div>
+
+              {/* Super Admin Special Callout */}
+              {(userForm.role === 'Super Admin' || userForm.role === 'ADMIN') && (
+                <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/70 flex items-start gap-2.5 text-amber-900 dark:text-amber-200 text-xs animate-in fade-in">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed text-[11px]">
+                    <span className="font-bold">Super Administrator Account:</span> This user will have unrestricted permissions across all modules, security matrix policies, user management, and system settings.
+                  </div>
+                </div>
+              )}
 
               {editingUser && editingUser.id !== 'usr_admin' && (
                 <div className="flex items-center gap-2 pt-1">
@@ -1213,7 +1397,7 @@ export function UsersRbacTab() {
                   disabled={isSaving}
                   className="px-4 py-2 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
                 >
-                  {isSaving ? 'Saving...' : editingUser ? 'Update User' : 'Save & Register User'}
+                  {isSaving ? 'Saving...' : editingUser ? 'Update User & Password' : 'Save & Register User'}
                 </button>
               </div>
             </form>

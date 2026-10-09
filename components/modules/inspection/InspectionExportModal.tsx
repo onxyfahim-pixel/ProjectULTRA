@@ -241,7 +241,7 @@ export function InspectionExportModal({
                     PDF Register Sheet
                   </h4>
                   <p className="text-[11px] text-slate-500">
-                    Quality inspection master sheet with AQL results &amp; defect counts.
+                    Quality inspection master sheet with AQL results, Size breakdown &amp; defect counts.
                   </p>
                 </div>
                 <button
@@ -269,7 +269,7 @@ export function InspectionExportModal({
                     Excel Spreadsheet
                   </h4>
                   <p className="text-[11px] text-slate-500">
-                    Comprehensive spreadsheet with sample sizes, defects &amp; pass rates.
+                    Comprehensive spreadsheet with Size breakdowns, sample sizes, defects &amp; pass rates.
                   </p>
                 </div>
                 <button

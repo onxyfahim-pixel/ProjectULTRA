@@ -37,6 +37,8 @@ import { InspectionRecord, InspectionType, InspectionStatus, InspectionStage } f
 import { calculateAqlInspection, calculateQuantityVariance } from '@/lib/aql';
 import { syncRecordCheckpoints } from './inspection-checkpoints';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { InspectionSizeBreakdownSection } from './InspectionSizeBreakdownSection';
+import { deriveSizeBreakdownFromBuyerOrder } from './inspection-size-utils';
 
 interface InspectionDetailsPageProps {
   record: InspectionRecord;
@@ -124,9 +126,20 @@ export function InspectionDetailsPage({
   showToast,
 }: InspectionDetailsPageProps) {
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('inspections');
-  const [activeTab, setActiveTab] = useState<'overview' | 'defects' | 'checkpoints'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sizes' | 'defects' | 'checkpoints'>('overview');
   const syncedCheckpoints = syncRecordCheckpoints(record.checkpoints);
   const checkpointsPassedCount = syncedCheckpoints.filter((c) => c.status === 'PASS').length;
+
+  const sizeBreakdown = React.useMemo(() => {
+    if (record.sizeBreakdown && record.sizeBreakdown.length > 0) {
+      return record.sizeBreakdown;
+    }
+    return deriveSizeBreakdownFromBuyerOrder(
+      null,
+      record.lotQuantity || record.orderQuantity || 10000,
+      record.sampleSize || 315
+    );
+  }, [record]);
 
   const inspectionType: InspectionType =
     record.inspectionType ||
@@ -493,6 +506,7 @@ export function InspectionDetailsPage({
       <div className="flex items-center gap-1 border-b border-slate-200">
         {[
           { id: 'overview', label: 'Audit Overview' },
+          { id: 'sizes', label: `Size Breakdown (${sizeBreakdown.length} Sizes)` },
           { id: 'defects', label: `Defect Breakdown (${record.defects?.length || 0})` },
           { id: 'checkpoints', label: `Inspection Checkpoints (${checkpointsPassedCount}/${syncedCheckpoints.length} ✓)` },
         ].map((tab) => (
@@ -695,6 +709,13 @@ export function InspectionDetailsPage({
                   </div>
                 </div>
               )}
+
+              {/* SIZE BREAKDOWN & SAMPLE PICKUP SPECIFICATION */}
+              <InspectionSizeBreakdownSection
+                items={sizeBreakdown}
+                totalSampleSize={record.sampleSize || 315}
+                readOnly={true}
+              />
 
               {/* Remarks & Corrective Action (CAPA) */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
@@ -909,6 +930,17 @@ export function InspectionDetailsPage({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB CONTENT: SIZES MATRIX */}
+      {activeTab === 'sizes' && (
+        <div className="space-y-4">
+          <InspectionSizeBreakdownSection
+            items={sizeBreakdown}
+            totalSampleSize={record.sampleSize || 315}
+            readOnly={true}
+          />
         </div>
       )}
 

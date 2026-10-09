@@ -1,5 +1,9 @@
 import { KpiMetric } from '@/lib/types/modules';
-import { loadPdfHeaderSettings, renderPdfHeaderHtml } from '@/lib/pdf/pdf-header-store';
+import {
+  loadPdfHeaderSettings,
+  renderPdfHeaderHtml,
+  getModuleExportConfig,
+} from '@/lib/pdf/pdf-header-store';
 
 export type FooterSignatureMode = 'dual' | 'single' | 'none';
 
@@ -70,13 +74,13 @@ export function exportKpiSummaryPdf(
       day: 'numeric',
     });
 
-    const today = new Date().toISOString().split('T')[0];
+    const config = getModuleExportConfig(pdfSettings, 'kpi_management', 'register');
     const headerHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'KEY PERFORMANCE INDICATOR (KPI) SCORECARD',
-      `KPI-REP-${today.replace(/-/g, '')}`,
+      config.title,
+      config.fullDocCode,
       dateStr,
-      'Factory Performance, Quality Metrics & Remediation Register'
+      config.department
     );
 
     const rowsHtml = kpis
@@ -525,12 +529,13 @@ export function exportSingleKpiPdf(kpi: KpiMetric): void {
       day: 'numeric',
     });
 
+    const config = getModuleExportConfig(pdfSettings, 'kpi_management', 'single', kpi.kpiCode);
     const headerHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'PERFORMANCE METRIC DOSSIER',
-      kpi.kpiCode || 'KPI-MOD-01',
+      config.title,
+      config.fullDocCode,
       dateStr,
-      'Individual Key Performance Indicator Audit & Trend Report'
+      config.department
     );
 
     const badge = getStatusBadgeStyle(kpi.status);

@@ -93,6 +93,7 @@ model InspectionRecord {
   buyer           String
   inspector       User             @relation(fields: [inspectorId], references: [id])
   defects         DefectLog[]
+  sizeBreakdown   Json?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -169,6 +170,7 @@ model BuyerOrder {
   wipRecord          Json?
   bomItems           Json?
   logistics          Json?
+  colorSizeBreakdown Json?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

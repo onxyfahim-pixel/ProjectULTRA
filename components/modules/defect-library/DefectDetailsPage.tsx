@@ -26,9 +26,11 @@ import {
   Activity,
   Maximize2,
   CheckSquare,
+  FileDown,
 } from 'lucide-react';
 import { DefectDefinition } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { DefectSingleExportModal } from './DefectSingleExportModal';
 
 interface DefectDetailsPageProps {
   defect: DefectDefinition;
@@ -104,8 +106,9 @@ export function DefectDetailsPage({
   onDelete,
   showToast,
 }: DefectDetailsPageProps) {
-  const { canCreate, canEdit, canDelete } = useModulePermission('defects_library');
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('defects_library');
   const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const severityConfig = SEVERITY_CONFIG[defect.severity] || SEVERITY_CONFIG.MAJOR;
   const zoneConfig = ZONE_LABELS[defect.zone] || ZONE_LABELS.ZONE_A_VISIBLE;
@@ -159,6 +162,19 @@ export function DefectDetailsPage({
 
         {/* Action Buttons - Styled identically to Buyer & Order module */}
         <div className="flex items-center flex-wrap gap-1.5">
+          {/* Export Spec Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 transition-colors border border-rose-200 cursor-pointer"
+              title="Export Defect Specification (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-rose-600" />
+              <span>Export Spec</span>
+            </button>
+          )}
+
           {canCreate && (
             <button
               type="button"
@@ -478,6 +494,13 @@ export function DefectDetailsPage({
           </p>
         </div>
       </div>
+
+      {/* Individual Defect Export Modal */}
+      <DefectSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        defect={defect}
+      />
       </div>
     </div>
   );

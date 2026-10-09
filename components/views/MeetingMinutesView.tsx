@@ -22,6 +22,7 @@ import {
   FileText,
   ListTodo,
   Check,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -34,6 +35,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { MeetingMinutesDetailsPage } from '../modules/meeting-minutes/MeetingMinutesDetailsPage';
 import { MeetingMinutesEntryPage } from '../modules/meeting-minutes/MeetingMinutesEntryPage';
 import { DeleteMeetingModal } from '../modules/meeting-minutes/DeleteMeetingModal';
+import { MeetingExportModal } from '../modules/meeting-minutes/MeetingExportModal';
+import { MeetingSingleExportModal } from '../modules/meeting-minutes/MeetingSingleExportModal';
 
 type MeetingSubView =
   | { type: 'none' }
@@ -69,6 +72,12 @@ export function MeetingMinutesView() {
     isOpen: false,
     meetings: [],
   });
+
+  // Export Modals State
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedMeetingsForExport, setSelectedMeetingsForExport] = useState<MeetingMinutesItem[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [meetingForSingleExport, setMeetingForSingleExport] = useState<MeetingMinutesItem | null>(null);
 
   const saveMeetings = (updated: MeetingMinutesItem[]) => {
     setMeetings(updated);
@@ -331,6 +340,19 @@ export function MeetingMinutesView() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setMeetingForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-teal-600 hover:bg-teal-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Export Meeting Dossier"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
           {canEdit && (
             <button
               type="button"
@@ -380,9 +402,11 @@ export function MeetingMinutesView() {
       },
     }] : []),
     ...(canExport ? [{
-      label: 'Export Selected',
+      label: 'Export MOM Register',
+      icon: <FileDown className="w-4 h-4" />,
       onClick: (selected: MeetingMinutesItem[]) => {
-        showToast(`Exported ${selected.length} meeting records`);
+        setSelectedMeetingsForExport(selected);
+        setIsGlobalExportModalOpen(true);
       },
     }] : []),
   ];
@@ -431,6 +455,34 @@ export function MeetingMinutesView() {
             { id: 'list', label: 'Meeting Minutes', count: meetings.length },
             { id: 'actions', label: 'Action Tracker', count: pendingActions },
           ]}
+          actions={
+            <div className="flex items-center gap-2">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMeetingsForExport([]);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
+                  title="Export Meeting Minutes Master Register"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-teal-600" />
+                  <span className="hidden sm:inline">Export Register</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'add' })}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-teal-600 hover:bg-teal-700 text-white transition-colors shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New Minutes</span>
+                </button>
+              )}
+            </div>
+          }
         />
       )}
 
@@ -855,6 +907,24 @@ export function MeetingMinutesView() {
         meetings={deleteModalState.meetings}
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteModalState({ isOpen: false, meetings: [] })}
+      />
+
+      {/* Global Meeting Minutes Export Modal */}
+      <MeetingExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allMeetings={meetings}
+        selectedMeetings={selectedMeetingsForExport}
+      />
+
+      {/* Single Meeting Dossier Export Modal */}
+      <MeetingSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setMeetingForSingleExport(null);
+        }}
+        meeting={meetingForSingleExport}
       />
     </div>
   );

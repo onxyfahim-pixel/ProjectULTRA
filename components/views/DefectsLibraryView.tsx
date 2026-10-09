@@ -26,6 +26,7 @@ import {
   LayoutGrid,
   List,
   X,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -37,6 +38,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { DefectDetailsPage } from '../modules/defect-library/DefectDetailsPage';
 import { DefectEntryPage } from '../modules/defect-library/DefectEntryPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
+import { DefectExportModal } from '../modules/defect-library/DefectExportModal';
+import { DefectSingleExportModal } from '../modules/defect-library/DefectSingleExportModal';
 
 type DefectSubView =
   | { type: 'none' }
@@ -89,6 +92,12 @@ export function DefectsLibraryView() {
     isOpen: boolean;
     defects: DefectDefinition[];
   } | null>(null);
+
+  // Export Modal States
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedDefectsForExport, setSelectedDefectsForExport] = useState<DefectDefinition[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [defectForSingleExport, setDefectForSingleExport] = useState<DefectDefinition | null>(null);
 
   // View Layout Mode: Table vs Visual Card Grid
   const [layoutMode, setLayoutMode] = useState<'table' | 'grid'>('table');
@@ -191,9 +200,10 @@ export function DefectsLibraryView() {
           {
             label: 'Export Selected',
             variant: 'default' as const,
-            icon: <Download className="w-3.5 h-3.5" />,
+            icon: <FileDown className="w-3.5 h-3.5" />,
             onClick: (selected: DefectDefinition[]) => {
-              showToast(`Exported ${selected.length} defect specification sheets (PDF/Excel)`);
+              setSelectedDefectsForExport(selected);
+              setIsGlobalExportModalOpen(true);
             },
           },
         ]
@@ -365,6 +375,21 @@ export function DefectsLibraryView() {
             </button>
           )}
 
+          {/* Export Defect Spec (FileDown) */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setDefectForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Export Defect Specification (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Delete Button */}
           {canDelete && (
             <button
@@ -428,6 +453,22 @@ export function DefectsLibraryView() {
             { id: 'list', label: 'Defect Catalog', count: defects.length },
             { id: 'zones', label: 'Quality Zones & Standards' },
           ]}
+          actions={
+            canExport ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDefectsForExport(defects);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                title="Export Defect Catalog Register (PDF / Excel / CSV)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-rose-600" />
+                <span>Export Catalog</span>
+              </button>
+            ) : undefined
+          }
         />
       )}
 
@@ -1064,6 +1105,24 @@ export function DefectsLibraryView() {
           )}
         </>
       )}
+
+      {/* Global & Batch Defect Export Modal */}
+      <DefectExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allDefects={defects}
+        selectedDefects={selectedDefectsForExport}
+      />
+
+      {/* Individual Defect Export Modal */}
+      <DefectSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setDefectForSingleExport(null);
+        }}
+        defect={defectForSingleExport}
+      />
     </div>
   );
 }

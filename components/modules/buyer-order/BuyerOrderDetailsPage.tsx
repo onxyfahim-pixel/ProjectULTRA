@@ -40,6 +40,7 @@ import { OrderProductionTracking } from './OrderProductionTracking';
 import { OrderLogisticsSection } from './OrderLogisticsSection';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { OrderAttachmentsSection } from './OrderAttachmentsSection';
+import { OrderColorSizeSection } from './OrderColorSizeSection';
 import {
   exportSingleBuyerOrderPdf,
   exportSingleBuyerOrderExcel,
@@ -78,6 +79,7 @@ export function BuyerOrderDetailsPage({
   receiveRecords = INITIAL_RECEIVE_REGISTRY,
   onOpenReceiveModalForOrder,
 }: BuyerOrderDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('buyer_order');
   const totalValue = order.orderQuantity * order.fobPrice;
 
   // Filter linked GRN records and inventory items for this specific purchase order and style
@@ -437,6 +439,14 @@ export function BuyerOrderDetailsPage({
           order={order}
           showToast={showToast}
           onEdit={onEdit}
+        />
+
+        {/* DEDICATED COLOR & SIZE BREAKDOWN MATRIX SECTION */}
+        <OrderColorSizeSection
+          breakdown={order.colorSizeBreakdown}
+          orderQuantity={order.orderQuantity}
+          fobPrice={order.fobPrice}
+          readOnly={true}
         />
 
         {/* Bill of Materials (BOM) Section (Read-Only with Live Received Qty & Status) */}

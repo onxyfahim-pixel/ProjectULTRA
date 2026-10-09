@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Search,
   Download,
+  FileDown,
   Calendar,
   Sparkles,
   ArrowRight,
@@ -33,6 +34,9 @@ import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { ProcessFlowDetailsPage } from '../modules/process-flow/ProcessFlowDetailsPage';
 import { ProcessFlowEntryPage } from '../modules/process-flow/ProcessFlowEntryPage';
 import { DeleteProcessFlowModal } from '../modules/process-flow/DeleteProcessFlowModal';
+import { ProcessFlowExportModal } from '../modules/process-flow/ProcessFlowExportModal';
+import { ProcessFlowSingleExportModal } from '../modules/process-flow/ProcessFlowSingleExportModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 type ProcessFlowSubView =
   | { type: 'none' }
@@ -41,6 +45,7 @@ type ProcessFlowSubView =
   | { type: 'edit'; flow: ProcessFlowChart };
 
 export function ProcessFlowView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('process_flow');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
   const [flows, setFlows] = useLiveModuleData<ProcessFlowChart[]>(
@@ -67,6 +72,12 @@ export function ProcessFlowView() {
     isOpen: boolean;
     flows: ProcessFlowChart[];
   } | null>(null);
+
+  // Global & Individual Export States
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedFlowsForExport, setSelectedFlowsForExport] = useState<ProcessFlowChart[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [flowForSingleExport, setFlowForSingleExport] = useState<ProcessFlowChart | null>(null);
 
   // Filters & Search
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -269,35 +280,56 @@ export function ProcessFlowView() {
             <Eye className="w-3.5 h-3.5" />
           </button>
 
+          {/* Individual Export Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setFlowForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Export Process Flow Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', flow: item })}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Open Separate Flowchart Edit Page"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', flow: item })}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Open Separate Flowchart Edit Page"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateFlow(item)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate Flowchart"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateFlow(item)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate Flowchart"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, flows: [item] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Flowchart"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, flows: [item] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Flowchart"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -328,6 +360,34 @@ export function ProcessFlowView() {
             { id: 'list', label: 'Flow Register', count: flows.length },
             { id: 'pipeline', label: 'Master Pipeline Flowchart' },
           ]}
+          actions={
+            <div className="flex items-center gap-2">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFlowsForExport(flows);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer border border-slate-200"
+                  title="Export Process Flow Register (PDF / Excel / CSV)"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Export Register</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'add' })}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Flow Chart</span>
+                </button>
+              )}
+            </div>
+          }
         />
       )}
 
@@ -594,35 +654,57 @@ export function ProcessFlowView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Create Flow Chart</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Create Flow Chart</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={[
-                  {
-                    label: 'Delete Selected',
-                    variant: 'danger',
-                    icon: <Trash2 className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
-                      setDeleteModal({
-                        isOpen: true,
-                        flows: selected,
-                      });
-                    },
-                  },
-                  {
-                    label: 'Export Selected',
-                    icon: <Download className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
-                      showToast(`Exported ${selected.length} process flow records`);
-                    },
-                  },
+                  ...(canExport
+                    ? [
+                        {
+                          label: 'Export Selected (PDF/Excel)',
+                          icon: <FileDown className="w-3.5 h-3.5" />,
+                          onClick: (selected: ProcessFlowChart[]) => {
+                            setSelectedFlowsForExport(selected);
+                            setIsGlobalExportModalOpen(true);
+                          },
+                        },
+                      ]
+                    : []),
+                  ...(canDelete
+                    ? [
+                        {
+                          label: 'Delete Selected',
+                          variant: 'danger' as const,
+                          icon: <Trash2 className="w-3.5 h-3.5" />,
+                          onClick: (selected: ProcessFlowChart[]) => {
+                            setDeleteModal({
+                              isOpen: true,
+                              flows: selected,
+                            });
+                          },
+                        },
+                      ]
+                    : []),
                 ]}
+                moduleKey="process_flow"
+                canExport={canExport}
+                canDelete={canDelete}
+                onExport={
+                  canExport
+                    ? (items) => {
+                        setSelectedFlowsForExport(items.length < flows.length ? items : []);
+                        setIsGlobalExportModalOpen(true);
+                      }
+                    : undefined
+                }
               />
             </div>
           )}
@@ -706,6 +788,27 @@ export function ProcessFlowView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global & Batch Process Flow Register Export Modal */}
+      <ProcessFlowExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => {
+          setIsGlobalExportModalOpen(false);
+          setSelectedFlowsForExport([]);
+        }}
+        allFlows={flows}
+        selectedFlows={selectedFlowsForExport}
+      />
+
+      {/* Individual Process Flow Dossier Export Modal */}
+      <ProcessFlowSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setFlowForSingleExport(null);
+        }}
+        flow={flowForSingleExport}
+      />
     </div>
   );
 }

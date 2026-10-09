@@ -13,6 +13,7 @@ import {
   Building2,
   Image as ImageIcon,
   Download,
+  FileDown,
   Check,
   X,
   Layers,
@@ -44,6 +45,7 @@ import { ISO_9001_DEFAULT_CHECKLIST, calculateAuditScore } from './iso9001Checkl
 import { DeleteAuditModal } from './DeleteAuditModal';
 import { AddQuestionModal } from './AddQuestionModal';
 import { SubSupplierSelectorModal } from './SubSupplierSelectorModal';
+import { AuditSingleExportModal } from './AuditSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface AuditDetailsPageProps {
@@ -52,6 +54,7 @@ interface AuditDetailsPageProps {
   onEdit: (audit: QualityAudit) => void;
   onDelete?: (audit: QualityAudit) => void;
   onUpdateAudit?: (audit: QualityAudit) => void;
+  onExportAudit?: (audit: QualityAudit) => void;
   showToast: (msg: string) => void;
 }
 
@@ -61,11 +64,13 @@ export function AuditDetailsPage({
   onEdit,
   onDelete,
   onUpdateAudit,
+  onExportAudit,
   showToast,
 }: AuditDetailsPageProps) {
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('audit');
   const [currentAudit, setCurrentAudit] = useState<QualityAudit>(initialAuditProp);
   const [isSubSupplierModalOpen, setIsSubSupplierModalOpen] = useState(false);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
 
   useEffect(() => {
     setCurrentAudit(initialAuditProp);
@@ -329,11 +334,17 @@ export function AuditDetailsPage({
           {canExport && (
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => {
+                if (onExportAudit) {
+                  onExportAudit(currentAudit);
+                } else {
+                  setIsSingleExportModalOpen(true);
+                }
+              }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
-              title="Print Audit Report"
+              title="Export Audit Report (PDF or Excel)"
             >
-              <Download className="w-3.5 h-3.5" />
+              <FileDown className="w-3.5 h-3.5 text-blue-600" />
               <span>Export Audit</span>
             </button>
           )}
@@ -1226,6 +1237,13 @@ export function AuditDetailsPage({
         onSelectSupplier={handleSelectSubSupplier}
         selectedSupplierId={audit.subSupplierId}
         selectedSupplierName={audit.supplierName}
+      />
+
+      {/* Single Audit Export Modal */}
+      <AuditSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => setIsSingleExportModalOpen(false)}
+        audit={currentAudit}
       />
       </div>
     </div>

@@ -122,6 +122,21 @@ export interface OrderAttachment {
   notes?: string;
 }
 
+export interface OrderSizeRatio {
+  size: string; // e.g. 'XS', 'S', 'M', 'L', 'XL', '2XL', '32', etc.
+  quantity: number;
+}
+
+export interface OrderColorSizeBreakdown {
+  id: string;
+  colorName: string; // e.g. 'Navy Blue', 'Heather Grey', 'Optic White'
+  colorCode?: string; // e.g. 'PANTONE 19-3923' or 'NVY-01'
+  colorHex?: string; // Optional hex swatch e.g. '#1e3a8a'
+  sizeBreakdown: OrderSizeRatio[]; // Quantities per size
+  totalQuantity: number; // Sum of sizeBreakdown quantities for this color
+  unitFobPrice?: number; // Optional color-specific FOB override
+}
+
 export interface BuyerOrder {
   id: string;
   orderNumber: string;
@@ -144,6 +159,7 @@ export interface BuyerOrder {
   smv?: number; // Standard Minute Value (SMV / SAM in minutes, e.g. 18.5)
   productionTarget?: number; // Planned Daily or Hourly Production Target (linked to IE & Production)
   dailyTarget?: number; // Planned Daily Output Target (pcs/day)
+  colorSizeBreakdown?: OrderColorSizeBreakdown[]; // Size-wise and color-wise order breakdown matrix
   productionTracking?: {
     currentStage: 'PLANNED' | 'CUTTING' | 'SEWING' | 'PACKING' | 'READY_AUDIT' | 'SHIPPED';
     stages: ProductionStageDetail[];

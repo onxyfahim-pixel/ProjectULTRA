@@ -1,5 +1,9 @@
 import { ProductionOrder, HourlyReportEntry } from '@/lib/types/erp';
-import { loadPdfHeaderSettings, renderPdfHeaderHtml } from '@/lib/pdf/pdf-header-store';
+import {
+  loadPdfHeaderSettings,
+  renderPdfHeaderHtml,
+  getModuleExportConfig,
+} from '@/lib/pdf/pdf-header-store';
 import { INITIAL_PRODUCTION_ORDERS } from '@/lib/db/mock-data';
 
 export type FooterSignatureMode = 'dual' | 'single' | 'none';
@@ -148,6 +152,7 @@ export function exportProductionSummaryPdf(
 ): void {
   try {
     const pdfSettings = loadPdfHeaderSettings();
+    const config = getModuleExportConfig(pdfSettings, 'production', 'register');
     const kpis = computeProductionKpis(orders);
     const dateStr = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
@@ -155,13 +160,12 @@ export function exportProductionSummaryPdf(
       day: 'numeric',
     });
 
-    const today = new Date().toISOString().split('T')[0];
     const headerHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'PRODUCTION & FLOOR OPERATIONS REGISTER',
-      `PRD-REG-${today.replace(/-/g, '')}`,
+      config.title,
+      config.fullDocCode,
       dateStr,
-      'Garment Manufacturing & Floor Production Control'
+      config.department
     );
 
     const rowsHtml = orders
@@ -704,12 +708,19 @@ export function exportSingleProductionOrderPdf(
       day: 'numeric',
     });
 
+    const config = getModuleExportConfig(
+      pdfSettings,
+      'production',
+      'single',
+      order.orderNumber || order.id || 'DOC'
+    );
+
     const headerHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'DAILY PRODUCTION & QUALITY INSPECTION REPORT',
-      `PRD-${order.orderNumber || order.id || 'DOC'}`,
+      config.title,
+      config.fullDocCode,
       dateStr,
-      'Garment Manufacturing & Floor Production Control'
+      config.department
     );
 
     const variance = (order.completedQuantity || 0) - (order.targetQuantity || 0);

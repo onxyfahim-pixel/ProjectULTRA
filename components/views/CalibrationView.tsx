@@ -24,6 +24,7 @@ import {
   Download,
   Calendar,
   Check,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -39,6 +40,8 @@ import { CalibrationEntryPage } from '../modules/calibration/CalibrationEntryPag
 import { CalibrationCertificateModal } from '../modules/calibration/CalibrationCertificateModal';
 import { RecordCalibrationModal } from '../modules/calibration/RecordCalibrationModal';
 import { DeleteCalibrationModal } from '../modules/calibration/DeleteCalibrationModal';
+import { CalibrationExportModal } from '../modules/calibration/CalibrationExportModal';
+import { CalibrationSingleExportModal } from '../modules/calibration/CalibrationSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
 
 type CalibrationSubView =
@@ -72,6 +75,10 @@ export function CalibrationView() {
     isOpen: boolean;
     devices: CalibrationDevice[];
   } | null>(null);
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedDevicesForExport, setSelectedDevicesForExport] = useState<CalibrationDevice[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [deviceForSingleExport, setDeviceForSingleExport] = useState<CalibrationDevice | null>(null);
 
   // Filters & Search
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -351,6 +358,21 @@ export function CalibrationView() {
             </button>
           )}
 
+          {/* Export Certificate (FileDown) */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setDeviceForSingleExport(row);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1 rounded-md text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
+              title="Export Calibration Certificate (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* 5. Delete Button */}
           {canDelete && (
             <button
@@ -396,9 +418,10 @@ export function CalibrationView() {
     },
     {
       label: 'Export Registry',
-      icon: <Download className="w-3.5 h-3.5" />,
+      icon: <FileDown className="w-3.5 h-3.5" />,
       onClick: (selected) => {
-        showToast(`Exported ${selected.length} equipment calibration certificates`);
+        setSelectedDevicesForExport(selected);
+        setIsGlobalExportModalOpen(true);
       },
     },
     {
@@ -439,6 +462,22 @@ export function CalibrationView() {
             { id: 'list', label: 'Equipment Registry', count: devices.length },
             { id: 'entry', label: 'Entry & Calibration' },
           ]}
+          actions={
+            canExport ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDevicesForExport(devices);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                title="Export Calibration Register (PDF / Excel / CSV)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-amber-600" />
+                <span>Export Register</span>
+              </button>
+            ) : undefined
+          }
         />
       )}
 
@@ -758,6 +797,24 @@ export function CalibrationView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global & Batch Calibration Export Modal */}
+      <CalibrationExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allDevices={devices}
+        selectedDevices={selectedDevicesForExport}
+      />
+
+      {/* Single Calibration Export Modal */}
+      <CalibrationSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setDeviceForSingleExport(null);
+        }}
+        device={deviceForSingleExport}
+      />
     </div>
   );
 }

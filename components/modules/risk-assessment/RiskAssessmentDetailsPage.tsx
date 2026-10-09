@@ -30,6 +30,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  FileDown,
 } from 'lucide-react';
 import {
   RiskFmeaItem,
@@ -50,6 +51,8 @@ import {
   RISK_SECTION_ORDER,
   computeSectionRiskStats,
 } from './riskAssessmentSections';
+import { useModulePermission } from '@/hooks/use-module-permission';
+import { RiskAssessmentSingleExportModal } from './RiskAssessmentSingleExportModal';
 
 interface RiskAssessmentDetailsPageProps {
   record: RiskFmeaItem;
@@ -68,9 +71,11 @@ export function RiskAssessmentDetailsPage({
   onUpdateStatus,
   showToast,
 }: RiskAssessmentDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('risk_assessment');
   const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string } | null>(
     null
   );
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Active section tab for multi-risk viewing
   const [activeSectionFilter, setActiveSectionFilter] = useState<RiskSectionType | 'ALL'>(
@@ -215,6 +220,17 @@ export function RiskAssessmentDetailsPage({
 
         {/* Topbar Actions */}
         <div className="flex items-center gap-2 shrink-0">
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs"
+              title="Export FMEA Report (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export FMEA Report</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -790,6 +806,12 @@ export function RiskAssessmentDetailsPage({
         </div>
       )}
       </div>
+
+      <RiskAssessmentSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        record={record}
+      />
     </div>
   );
 }

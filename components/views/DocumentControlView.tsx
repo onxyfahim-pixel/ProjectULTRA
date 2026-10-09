@@ -23,9 +23,9 @@ import {
   Building2,
   ClipboardList,
   Filter,
-  Lock,
   Search,
   Award,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -40,6 +40,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { DocumentControlDetailsPage } from '../modules/document-control/DocumentControlDetailsPage';
 import { DocumentControlEntryPage } from '../modules/document-control/DocumentControlEntryPage';
 import { DeleteDocumentModal } from '../modules/document-control/DeleteDocumentModal';
+import { DocumentControlExportModal } from '../modules/document-control/DocumentControlExportModal';
+import { DocumentControlSingleExportModal } from '../modules/document-control/DocumentControlSingleExportModal';
 
 type DocumentSubView =
   | { type: 'none' }
@@ -75,6 +77,12 @@ export function DocumentControlView() {
     isOpen: boolean;
     documents: ControlledDocument[];
   } | null>(null);
+
+  // Export Modal States
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedDocsForExport, setSelectedDocsForExport] = useState<ControlledDocument[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [docForSingleExport, setDocForSingleExport] = useState<ControlledDocument | null>(null);
 
   const handleDownloadDoc = (doc: ControlledDocument) => {
     const firstAttachment = doc.attachments && doc.attachments.length > 0 ? doc.attachments[0] : null;
@@ -401,6 +409,21 @@ export function DocumentControlView() {
             </button>
           )}
 
+          {/* Export Document Dossier (FileDown) */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setDocForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1 rounded-md text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors cursor-pointer"
+              title="Export Document Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Delete Button (Trash) - Exactly styled like Certificate Module */}
           {canDelete && (
             <button
@@ -419,6 +442,14 @@ export function DocumentControlView() {
 
   // Batch actions matching Certificate module
   const batchActions: BatchAction<ControlledDocument>[] = [
+    ...(canExport ? [{
+      label: 'Export Master Register',
+      icon: <FileDown className="w-3.5 h-3.5" />,
+      onClick: (selected: ControlledDocument[]) => {
+        setSelectedDocsForExport(selected);
+        setIsGlobalExportModalOpen(true);
+      },
+    }] : []),
     ...(canDelete ? [{
       label: 'Delete Selected',
       variant: 'danger' as const,
@@ -489,16 +520,32 @@ export function DocumentControlView() {
           },
         ]}
         actions={
-          canCreate ? (
-            <button
-              type="button"
-              onClick={() => setSubView({ type: 'add' })}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Register Controlled Document</span>
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDocsForExport(docs);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition-colors shadow-2xs cursor-pointer shrink-0"
+                title="Export Master Document Register (PDF / Excel / CSV)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Export Register</span>
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => setSubView({ type: 'add' })}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Register Controlled Document</span>
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -790,6 +837,24 @@ export function DocumentControlView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global & Batch Document Control Export Modal */}
+      <DocumentControlExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allDocs={docs}
+        selectedDocs={selectedDocsForExport}
+      />
+
+      {/* Individual Controlled Document Export Modal */}
+      <DocumentControlSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setDocForSingleExport(null);
+        }}
+        doc={docForSingleExport}
+      />
     </div>
   );
 }

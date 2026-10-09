@@ -26,13 +26,21 @@ import {
   Layout,
   ExternalLink,
   ChevronDown,
+  Search,
+  RotateCcw,
+  FileText,
+  Tag,
+  Filter,
 } from 'lucide-react';
 import {
   PdfHeaderSettings,
   DEFAULT_PDF_HEADER_SETTINGS,
+  DEFAULT_MODULE_HEADER_CONFIGS,
+  ModuleHeaderDefinition,
   loadPdfHeaderSettings,
   savePdfHeaderSettings,
   getGeneralSettingsFromStorage,
+  getModuleExportConfig,
   renderPdfHeaderHtml,
 } from '@/lib/pdf/pdf-header-store';
 
@@ -84,44 +92,13 @@ const LAYOUT_PRESETS: {
   },
 ];
 
-const SAMPLE_DOCS = [
-  {
-    title: 'PURCHASE ORDER & PRODUCTION STAGES REPORT',
-    code: 'PO-HM-99201',
-    dept: 'Buyer & Merchandising Division',
-    module: 'Buyer & Order Module',
-  },
-  {
-    title: 'FINAL QUALITY AUDIT & AQL 2.5 INSPECTION REPORT',
-    code: 'QMS-2026-FINAL-482',
-    dept: 'Quality Assurance & Quality Control',
-    module: 'QMS Inspection Module',
-  },
-  {
-    title: 'DAILY SEWING & CUTTING LINE PERFORMANCE REGISTER',
-    code: 'PROD-LINE-04-DAILY',
-    dept: 'Factory Floor Operations & IE',
-    module: 'Production Module',
-  },
-  {
-    title: 'CAPA 8D CORRECTIVE & PREVENTIVE ACTION REPORT',
-    code: 'CAPA-2026-089-R1',
-    dept: 'Compliance & Technical Auditing',
-    module: 'CAPA Module',
-  },
-  {
-    title: 'RAW MATERIAL FABRIC 4-POINT INWARD TEST CERTIFICATE',
-    code: 'MAT-QC-ROLL-8820',
-    dept: 'Incoming Raw Material Laboratory',
-    module: 'Incoming QC Module',
-  },
-];
-
 export function ExportTemplatesTab() {
   const [settings, setSettings] = useState<PdfHeaderSettings>(DEFAULT_PDF_HEADER_SETTINGS);
   const [selectedSampleDoc, setSelectedSampleDoc] = useState(0);
   const [canvasViewMode, setCanvasViewMode] = useState<'portrait' | 'landscape'>('landscape');
   const [saving, setSaving] = useState(false);
+  const [moduleSearchQuery, setModuleSearchQuery] = useState('');
+  const [selectedModuleCategory, setSelectedModuleCategory] = useState<string>('ALL');
   const [statusMessage, setStatusMessage] = useState<{
     type: 'success' | 'error' | 'info';
     text: string;
@@ -218,9 +195,29 @@ export function ExportTemplatesTab() {
     }
   };
 
+  // Dynamic sample docs for all 31 modules reflecting live customizations
+  const dynamicSampleDocs = DEFAULT_MODULE_HEADER_CONFIGS.map((mod) => {
+    const config = getModuleExportConfig(settings, mod.key, 'register');
+    return {
+      key: mod.key,
+      module: mod.name,
+      title: config.title,
+      code: config.fullDocCode,
+      dept: config.department,
+    };
+  });
+
+  const sample = dynamicSampleDocs[selectedSampleDoc] || dynamicSampleDocs[0];
+  const liveHeaderHtml = renderPdfHeaderHtml(
+    settings,
+    sample.title,
+    sample.code,
+    new Date().toISOString().split('T')[0],
+    sample.dept
+  );
+
   // Open real print window preview
   const handleTestPrint = () => {
-    const sample = SAMPLE_DOCS[selectedSampleDoc];
     const headerHtml = renderPdfHeaderHtml(
       settings,
       sample.title,
@@ -276,15 +273,6 @@ export function ExportTemplatesTab() {
     `);
     printWin.document.close();
   };
-
-  const sample = SAMPLE_DOCS[selectedSampleDoc];
-  const liveHeaderHtml = renderPdfHeaderHtml(
-    settings,
-    sample.title,
-    sample.code,
-    new Date().toISOString().split('T')[0],
-    sample.dept
-  );
 
   return (
     <div className="space-y-6">
@@ -719,231 +707,399 @@ export function ExportTemplatesTab() {
           </div>
 
           {/* Card 3: Document Code Configuration by Record Type & Page Orientation */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
-            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
-                <Sliders className="w-4 h-4" />
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    Module-Wise Record Name &amp; Document Code Configuration
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Customize the official printed record title and reference code for every ERP operational module (All 31 Modules)
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Reset all 31 modules to standard ISO QMS Record Names and Document Codes?')) {
+                    setSettings((prev) => ({
+                      ...prev,
+                      moduleWiseConfigs: {},
+                    }));
+                    setStatusMessage({
+                      type: 'info',
+                      text: 'All 31 modules reset to ISO 9001 standard default titles and codes.',
+                    });
+                    setTimeout(() => setStatusMessage(null), 4000);
+                  }
+                }}
+                className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
+                title="Reset all modules to defaults"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset All Defaults</span>
+              </button>
+            </div>
+
+            {/* Document Code Prefix & Page Orientation Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50/70 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700/60">
+              {/* Document Code Global Prefix */}
               <div>
-                <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                  Document Code Prefix &amp; Default Page Orientation
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Configure custom document reference codes for different record types and default export orientation
-                </p>
-              </div>
-            </div>
-
-            {/* Default Page Orientation Option */}
-            <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">
-                Default PDF Export Page Orientation
-              </label>
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSettings({ ...settings, defaultOrientation: 'landscape' });
-                    setCanvasViewMode('landscape');
-                  }}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                    (settings.defaultOrientation || 'landscape') === 'landscape'
-                      ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 ring-1 ring-blue-600/30'
-                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/30'
-                  }`}
-                >
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-white">Landscape Mode</div>
-                    <div className="text-[10px] text-slate-500">A4 Landscape • Best for multi-column summary tables</div>
-                  </div>
-                  <span
-                    className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                      (settings.defaultOrientation || 'landscape') === 'landscape'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    A4 Horizontal
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSettings({ ...settings, defaultOrientation: 'portrait' });
-                    setCanvasViewMode('portrait');
-                  }}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                    settings.defaultOrientation === 'portrait'
-                      ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 ring-1 ring-blue-600/30'
-                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/30'
-                  }`}
-                >
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 dark:text-white">Portrait Mode</div>
-                    <div className="text-[10px] text-slate-500">A4 Portrait • Best for tech packs and single record specs</div>
-                  </div>
-                  <span
-                    className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                      settings.defaultOrientation === 'portrait'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    A4 Vertical
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* Document Codes per Record */}
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Record-Specific Document Code Prefixes
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                  <span>Global Document Code Prefix</span>
+                  <span className="text-[10px] font-mono text-slate-400">Default: VAL-QMS</span>
                 </label>
-                <span className="text-[10px] text-slate-400">Used on PDF headers &amp; document refs</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 1. Buyer Order Summary */}
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                    <span>Buyer Orders Summary Sheet</span>
-                    <span className="text-[10px] font-mono text-slate-400">e.g. PO-REG</span>
-                  </label>
+                <div className="relative">
                   <input
                     type="text"
-                    value={settings.recordDocCodes?.buyerOrderSummary ?? 'PO-REG'}
+                    value={settings.docCodePrefix ?? 'VAL-QMS'}
                     onChange={(e) =>
                       setSettings({
                         ...settings,
-                        recordDocCodes: {
-                          ...(settings.recordDocCodes || {}),
-                          buyerOrderSummary: e.target.value.toUpperCase(),
-                        },
+                        docCodePrefix: e.target.value.toUpperCase(),
                       })
                     }
-                    placeholder="PO-REG"
-                    className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    placeholder="VAL-QMS"
+                    className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 uppercase"
                   />
-                </div>
-
-                {/* 2. Individual PO Spec */}
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                    <span>Individual PO Tech Pack / Spec</span>
-                    <span className="text-[10px] font-mono text-slate-400">e.g. PO-SPEC</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.recordDocCodes?.buyerOrderSingle ?? 'PO-SPEC'}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        recordDocCodes: {
-                          ...(settings.recordDocCodes || {}),
-                          buyerOrderSingle: e.target.value.toUpperCase(),
-                        },
-                      })
-                    }
-                    placeholder="PO-SPEC"
-                    className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* 3. Inspection Report */}
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                    <span>Quality Inspection Report</span>
-                    <span className="text-[10px] font-mono text-slate-400">e.g. QC-INSP</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.recordDocCodes?.inspectionReport ?? 'QC-INSP'}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        recordDocCodes: {
-                          ...(settings.recordDocCodes || {}),
-                          inspectionReport: e.target.value.toUpperCase(),
-                        },
-                      })
-                    }
-                    placeholder="QC-INSP"
-                    className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* 4. CAPA Record */}
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                    <span>Corrective Action Plan (CAPA)</span>
-                    <span className="text-[10px] font-mono text-slate-400">e.g. CAPA-ACT</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.recordDocCodes?.capaRecord ?? 'CAPA-ACT'}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        recordDocCodes: {
-                          ...(settings.recordDocCodes || {}),
-                          capaRecord: e.target.value.toUpperCase(),
-                        },
-                      })
-                    }
-                    placeholder="CAPA-ACT"
-                    className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* 5. Audit Report */}
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                    <span>Internal / Buyer Audit</span>
-                    <span className="text-[10px] font-mono text-slate-400">e.g. AUD-INT</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.recordDocCodes?.auditReport ?? 'AUD-INT'}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        recordDocCodes: {
-                          ...(settings.recordDocCodes || {}),
-                          auditReport: e.target.value.toUpperCase(),
-                        },
-                      })
-                    }
-                    placeholder="AUD-INT"
-                    className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* 6. Material Inwarding GRN */}
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                    <span>Goods Received Note (GRN)</span>
-                    <span className="text-[10px] font-mono text-slate-400">e.g. GRN-REC</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.recordDocCodes?.inventoryGrn ?? 'GRN-REC'}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        recordDocCodes: {
-                          ...(settings.recordDocCodes || {}),
-                          inventoryGrn: e.target.value.toUpperCase(),
-                        },
-                      })
-                    }
-                    placeholder="GRN-REC"
-                    className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400">
+                    PREFIX
+                  </span>
                 </div>
               </div>
+
+              {/* Default Page Orientation */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 block">
+                  Default PDF Orientation
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettings({ ...settings, defaultOrientation: 'landscape' });
+                      setCanvasViewMode('landscape');
+                    }}
+                    className={`py-1.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
+                      (settings.defaultOrientation || 'landscape') === 'landscape'
+                        ? 'border-blue-600 bg-blue-600 text-white shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    Landscape
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettings({ ...settings, defaultOrientation: 'portrait' });
+                      setCanvasViewMode('portrait');
+                    }}
+                    className={`py-1.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
+                      settings.defaultOrientation === 'portrait'
+                        ? 'border-blue-600 bg-blue-600 text-white shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    Portrait
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Search & Category Filter Toolbar */}
+            <div className="space-y-2 pt-1">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={moduleSearchQuery}
+                    onChange={(e) => setModuleSearchQuery(e.target.value)}
+                    placeholder="Search 31 modules by name, code or department..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                  {moduleSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setModuleSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div className="text-[11px] font-bold text-slate-400 shrink-0 self-center">
+                  Showing {
+                    DEFAULT_MODULE_HEADER_CONFIGS.filter((m) => {
+                      const matchCat =
+                        selectedModuleCategory === 'ALL' || m.category === selectedModuleCategory;
+                      const q = moduleSearchQuery.toLowerCase();
+                      const matchQuery =
+                        !q ||
+                        m.name.toLowerCase().includes(q) ||
+                        m.key.toLowerCase().includes(q) ||
+                        m.defaultRegisterTitle.toLowerCase().includes(q) ||
+                        m.defaultRegisterDocCode.toLowerCase().includes(q) ||
+                        (settings.moduleWiseConfigs?.[m.key]?.registerTitle || '')
+                          .toLowerCase()
+                          .includes(q) ||
+                        (settings.moduleWiseConfigs?.[m.key]?.registerDocCode || '')
+                          .toLowerCase()
+                          .includes(q);
+                      return matchCat && matchQuery;
+                    }).length
+                  } of 31 Modules
+                </div>
+              </div>
+
+              {/* Category Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] font-bold">
+                {[
+                  'ALL',
+                  'Manufacturing & Operations',
+                  'Quality Management',
+                  'Audits & Compliance',
+                  'Standards & Engineering',
+                  'Organization & Workforce',
+                  'Supply Chain & Inventory',
+                  'Executive & Reporting',
+                ].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedModuleCategory(cat)}
+                    className={`px-2.5 py-1 rounded-lg shrink-0 transition-colors cursor-pointer ${
+                      selectedModuleCategory === cat
+                        ? 'bg-blue-600 text-white shadow-2xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {cat === 'ALL' ? 'All (31)' : cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Module Configuration Cards List */}
+            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+              {DEFAULT_MODULE_HEADER_CONFIGS.filter((m) => {
+                const matchCat =
+                  selectedModuleCategory === 'ALL' || m.category === selectedModuleCategory;
+                const q = moduleSearchQuery.toLowerCase();
+                const matchQuery =
+                  !q ||
+                  m.name.toLowerCase().includes(q) ||
+                  m.key.toLowerCase().includes(q) ||
+                  m.defaultRegisterTitle.toLowerCase().includes(q) ||
+                  m.defaultRegisterDocCode.toLowerCase().includes(q) ||
+                  (settings.moduleWiseConfigs?.[m.key]?.registerTitle || '')
+                    .toLowerCase()
+                    .includes(q) ||
+                  (settings.moduleWiseConfigs?.[m.key]?.registerDocCode || '')
+                    .toLowerCase()
+                    .includes(q);
+                return matchCat && matchQuery;
+              }).map((mod) => {
+                const custom = settings.moduleWiseConfigs?.[mod.key];
+                const isCustomized =
+                  Boolean(custom?.registerTitle) ||
+                  Boolean(custom?.registerDocCode) ||
+                  Boolean(custom?.singleTitle) ||
+                  Boolean(custom?.singleDocCode);
+
+                const currentRegisterTitle = custom?.registerTitle ?? mod.defaultRegisterTitle;
+                const currentRegisterDocCode = custom?.registerDocCode ?? mod.defaultRegisterDocCode;
+                const currentSingleTitle = custom?.singleTitle ?? mod.defaultSingleTitle;
+                const currentSingleDocCode = custom?.singleDocCode ?? mod.defaultSingleDocCode;
+                const prefix = settings.docCodePrefix || 'VAL-QMS';
+
+                return (
+                  <div
+                    key={mod.key}
+                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs hover:border-blue-300 dark:hover:border-blue-800 transition-colors space-y-3"
+                  >
+                    {/* Module Header Bar */}
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/80">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-900 dark:text-white">
+                          {mod.name}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono">
+                          {mod.key}
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold border border-blue-200/60 dark:border-blue-800">
+                          {mod.category}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {isCustomized ? (
+                          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            Customized
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-slate-400">
+                            Default ISO
+                          </span>
+                        )}
+
+                        {isCustomized && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSettings((prev) => {
+                                const copy = { ...(prev.moduleWiseConfigs || {}) };
+                                delete copy[mod.key];
+                                return {
+                                  ...prev,
+                                  moduleWiseConfigs: copy,
+                                };
+                              });
+                            }}
+                            className="text-[10px] text-slate-400 hover:text-rose-600 font-bold underline cursor-pointer"
+                            title="Reset this module to default"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Dual Form: Global Register & Single Dossier */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      {/* Left: Global Register Config */}
+                      <div className="p-2.5 rounded-lg bg-slate-50/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase text-blue-700 dark:text-blue-400 flex items-center gap-1">
+                            <Layers className="w-3 h-3" /> Global Register Export
+                          </span>
+                          <span className="text-[9.5px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                            {prefix}-{currentRegisterDocCode}
+                          </span>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 block">
+                            Register Record Name (PDF Title):
+                          </label>
+                          <input
+                            type="text"
+                            value={currentRegisterTitle}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSettings((prev) => ({
+                                ...prev,
+                                moduleWiseConfigs: {
+                                  ...(prev.moduleWiseConfigs || {}),
+                                  [mod.key]: {
+                                    ...(prev.moduleWiseConfigs?.[mod.key] || {}),
+                                    registerTitle: val,
+                                  },
+                                },
+                              }));
+                            }}
+                            placeholder={mod.defaultRegisterTitle}
+                            className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 block">
+                            Register Document Code:
+                          </label>
+                          <input
+                            type="text"
+                            value={currentRegisterDocCode}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase();
+                              setSettings((prev) => ({
+                                ...prev,
+                                moduleWiseConfigs: {
+                                  ...(prev.moduleWiseConfigs || {}),
+                                  [mod.key]: {
+                                    ...(prev.moduleWiseConfigs?.[mod.key] || {}),
+                                    registerDocCode: val,
+                                  },
+                                },
+                              }));
+                            }}
+                            placeholder={mod.defaultRegisterDocCode}
+                            className="w-full px-2.5 py-1 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold uppercase focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Right: Individual Dossier Config */}
+                      <div className="p-2.5 rounded-lg bg-slate-50/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+                            <FileText className="w-3 h-3" /> Individual Dossier Export
+                          </span>
+                          <span className="text-[9.5px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                            {prefix}-{currentSingleDocCode}-[ID]
+                          </span>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 block">
+                            Dossier Record Name (Single Spec Title):
+                          </label>
+                          <input
+                            type="text"
+                            value={currentSingleTitle}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSettings((prev) => ({
+                                ...prev,
+                                moduleWiseConfigs: {
+                                  ...(prev.moduleWiseConfigs || {}),
+                                  [mod.key]: {
+                                    ...(prev.moduleWiseConfigs?.[mod.key] || {}),
+                                    singleTitle: val,
+                                  },
+                                },
+                              }));
+                            }}
+                            placeholder={mod.defaultSingleTitle}
+                            className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5 block">
+                            Dossier Document Code:
+                          </label>
+                          <input
+                            type="text"
+                            value={currentSingleDocCode}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase();
+                              setSettings((prev) => ({
+                                ...prev,
+                                moduleWiseConfigs: {
+                                  ...(prev.moduleWiseConfigs || {}),
+                                  [mod.key]: {
+                                    ...(prev.moduleWiseConfigs?.[mod.key] || {}),
+                                    singleDocCode: val,
+                                  },
+                                },
+                              }));
+                            }}
+                            placeholder={mod.defaultSingleDocCode}
+                            className="w-full px-2.5 py-1 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold uppercase focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -993,8 +1149,8 @@ export function ExportTemplatesTab() {
                   onChange={(e) => setSelectedSampleDoc(Number(e.target.value))}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 appearance-none pr-8 cursor-pointer"
                 >
-                  {SAMPLE_DOCS.map((doc, idx) => (
-                    <option key={doc.code} value={idx}>
+                  {dynamicSampleDocs.map((doc, idx) => (
+                    <option key={doc.key} value={idx}>
                       [{doc.module}] {doc.title} ({doc.code})
                     </option>
                   ))}

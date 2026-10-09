@@ -126,7 +126,7 @@ export function signToken(user: UserSession): string {
       role: user.role,
       department: user.department,
       avatarUrl: user.avatarUrl,
-      isSuperAdmin: user.isSuperAdmin || user.role === 'ADMIN',
+      isSuperAdmin: Boolean(user.isSuperAdmin || user.role === 'ADMIN' || user.role === 'Super Admin' || (user.role as string) === 'super_admin'),
       phone: user.phone,
       designation: user.designation,
       employeeId: user.employeeId,

@@ -249,7 +249,7 @@ export function BuyerOrderExportModal({
                     PDF Summary Sheet
                   </h4>
                   <p className="text-[11px] text-slate-500">
-                    Printable summary with KPIs, delivery schedule &amp; order status.
+                    Printable summary with KPIs, delivery schedule, Color/Size breakdown &amp; order status.
                   </p>
                 </div>
                 <button
@@ -277,7 +277,7 @@ export function BuyerOrderExportModal({
                     Excel Register
                   </h4>
                   <p className="text-[11px] text-slate-500">
-                    Full spreadsheet with commercial totals, styles &amp; merchandising data.
+                    Full spreadsheet with commercial totals, Color/Size breakdown, styles &amp; merchandising data.
                   </p>
                 </div>
                 <button

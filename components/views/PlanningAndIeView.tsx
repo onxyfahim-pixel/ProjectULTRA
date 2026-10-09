@@ -19,14 +19,18 @@ import {
   Flame,
   Printer,
   Download,
+  FileDown,
   Filter,
   Search,
   RefreshCw,
   Zap,
 } from 'lucide-react';
 import { ModuleHeader, ModuleTabOption } from '@/components/ui/ModuleHeader';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { BuyerOrder } from '@/lib/types/modules';
 import { ProductionOrder } from '@/lib/types/erp';
+import { PlanningIeExportModal } from '@/components/modules/planning-ie/PlanningIeExportModal';
+import { PlanningIeSingleExportModal } from '@/components/modules/planning-ie/PlanningIeSingleExportModal';
 import {
   StyleOperationBulletin,
   ProductionPlanSchedule,
@@ -169,6 +173,7 @@ export function PlanningAndIeView({
   orders: propBuyerOrders = [],
   productionOrders: propProdOrders = [],
 }: PlanningAndIeViewProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('planning_ie');
   const [activeTab, setActiveTab] = useState<PlanningTabId>('dashboard');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -209,6 +214,38 @@ export function PlanningAndIeView({
   const [managedSections, setManagedSections] = useState<ProductionSection[]>(getProductionSections);
   const [managedLines, setManagedLines] = useState<ProductionLine[]>(getProductionLines);
   const [liveProdRecords, setLiveProdRecords] = useState<ProductionOrder[]>(getProductionRecords);
+
+  // Global & Individual Export States (Synchronized with Production & Quality Modules)
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedOrdersForExport, setSelectedOrdersForExport] = useState<ProductionOrderPlan[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [singleExportOrder, setSingleExportOrder] = useState<ProductionOrderPlan | null>(null);
+  const [singleExportBulletin, setSingleExportBulletin] = useState<StyleOperationBulletin | null>(null);
+  const [singleExportSchedule, setSingleExportSchedule] = useState<ProductionPlanSchedule | null>(null);
+
+  const handleOpenGlobalExport = () => {
+    setSelectedOrdersForExport([]);
+    setIsGlobalExportModalOpen(true);
+  };
+
+  const handleOpenBatchOrdersExport = (selected: ProductionOrderPlan[]) => {
+    setSelectedOrdersForExport(selected);
+    setIsGlobalExportModalOpen(true);
+  };
+
+  const handleOpenSingleOrderExport = (ord: ProductionOrderPlan) => {
+    setSingleExportOrder(ord);
+    setSingleExportBulletin(null);
+    setSingleExportSchedule(null);
+    setIsSingleExportModalOpen(true);
+  };
+
+  const handleOpenSingleBulletinExport = (bulletin: StyleOperationBulletin) => {
+    setSingleExportBulletin(bulletin);
+    setSingleExportOrder(null);
+    setSingleExportSchedule(null);
+    setIsSingleExportModalOpen(true);
+  };
 
   // Helper toast notification
   const showToast = (msg: string) => {
@@ -262,6 +299,8 @@ export function PlanningAndIeView({
     window.addEventListener('erp_production_orders_updated', handleUpdate);
     window.addEventListener('erp_hourly_updated', handleUpdate);
     window.addEventListener('erp_wip_updated', handleUpdate);
+    window.addEventListener('erp_wip_records_updated', handleUpdate);
+    window.addEventListener('erp_buyer_orders_updated', handleUpdate);
     window.addEventListener('erp_kaizen_updated', handleUpdate);
     window.addEventListener('erp_audit_updated', handleUpdate);
     window.addEventListener('erp_production_management_updated', handleManagementUpdate);
@@ -275,6 +314,8 @@ export function PlanningAndIeView({
       window.removeEventListener('erp_production_orders_updated', handleUpdate);
       window.removeEventListener('erp_hourly_updated', handleUpdate);
       window.removeEventListener('erp_wip_updated', handleUpdate);
+      window.removeEventListener('erp_wip_records_updated', handleUpdate);
+      window.removeEventListener('erp_buyer_orders_updated', handleUpdate);
       window.removeEventListener('erp_kaizen_updated', handleUpdate);
       window.removeEventListener('erp_audit_updated', handleUpdate);
       window.removeEventListener('erp_production_management_updated', handleManagementUpdate);
@@ -768,21 +809,37 @@ export function PlanningAndIeView({
               <span>Sync All Modules</span>
             </button>
 
-            <button
-              onClick={() => handleExportCsv('Production_Orders.csv', productionOrders)}
-              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
-              <span>Export CSV</span>
-            </button>
+            {canExport && (
+              <button
+                onClick={handleOpenGlobalExport}
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                title="Global Export: Production Orders, MPS & Operation Bulletins (PDF or Excel)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span className="hidden sm:inline">Export Register</span>
+                <span className="sm:hidden">Export</span>
+              </button>
+            )}
 
-            <button
-              onClick={() => handlePrint('Planning & IE Master Report')}
-              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              <Printer className="w-3.5 h-3.5 text-slate-500" />
-              <span>Print</span>
-            </button>
+            {canExport && (
+              <button
+                onClick={() => handleExportCsv('Production_Orders.csv', productionOrders)}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span>Export CSV</span>
+              </button>
+            )}
+
+            {canExport && (
+              <button
+                onClick={() => handlePrint('Planning & IE Master Report')}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-500" />
+                <span>Print</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -925,6 +982,9 @@ export function PlanningAndIeView({
           onDuplicateOrder={handleDuplicateProductionOrder}
           onExportCsv={handleExportCsv}
           onPrintOrders={() => handlePrint('Production Orders Register')}
+          onExportSingleOrder={handleOpenSingleOrderExport}
+          onExportOrdersBatch={handleOpenBatchOrdersExport}
+          onOpenGlobalExport={handleOpenGlobalExport}
         />
       )}
 
@@ -937,6 +997,7 @@ export function PlanningAndIeView({
           onAddSchedule={handleAddSchedule}
           onUpdateScheduleStatus={handleUpdateScheduleStatus}
           onExportCsv={handleExportCsv}
+          onOpenGlobalExport={handleOpenGlobalExport}
         />
       )}
 
@@ -972,6 +1033,7 @@ export function PlanningAndIeView({
           onDeleteOperationFromBulletin={handleDeleteOperationFromBulletin}
           onExportCsv={handleExportCsv}
           onPrintOb={() => handlePrint(`Operation Bulletin - ${bulletins.find((b) => b.id === selectedBulletinId)?.styleNumber}`)}
+          onExportSingleBulletin={handleOpenSingleBulletinExport}
         />
       )}
 
@@ -1036,6 +1098,30 @@ export function PlanningAndIeView({
           onPrintReport={(reportName) => handlePrint(reportName)}
         />
       )}
+
+      {/* GLOBAL EXPORT MODAL */}
+      <PlanningIeExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allOrders={productionOrders}
+        selectedOrders={selectedOrdersForExport}
+        schedules={schedules}
+        bulletins={bulletins}
+      />
+
+      {/* INDIVIDUAL SINGLE EXPORT MODAL */}
+      <PlanningIeSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setSingleExportOrder(null);
+          setSingleExportBulletin(null);
+          setSingleExportSchedule(null);
+        }}
+        order={singleExportOrder}
+        bulletin={singleExportBulletin}
+        schedule={singleExportSchedule}
+      />
     </div>
   );
 }

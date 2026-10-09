@@ -23,6 +23,7 @@ import {
   Barcode,
   ExternalLink,
   Filter,
+  FileDown,
 } from 'lucide-react';
 import { StatCard } from '@/components/ui/StatCard';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
@@ -36,6 +37,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { TraceabilityDetailsPage } from '../modules/traceability/TraceabilityDetailsPage';
 import { TraceabilityEntryPage } from '../modules/traceability/TraceabilityEntryPage';
 import { DeleteTraceabilityModal } from '../modules/traceability/DeleteTraceabilityModal';
+import { TraceabilityExportModal } from '../modules/traceability/TraceabilityExportModal';
+import { TraceabilitySingleExportModal } from '../modules/traceability/TraceabilitySingleExportModal';
 
 type TraceabilitySubView =
   | { type: 'none' }
@@ -71,6 +74,11 @@ export function TraceabilityAuditView() {
     isOpen: boolean;
     records: TraceabilityChain[];
   } | null>(null);
+
+  // Export Modal States
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [selectedForExport, setSelectedForExport] = useState<TraceabilityChain[]>([]);
+  const [singleExportRecord, setSingleExportRecord] = useState<TraceabilityChain | null>(null);
 
   // Filters & Search
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
@@ -330,6 +338,18 @@ export function TraceabilityAuditView() {
             </button>
           )}
 
+          {/* Export Dossier Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setSingleExportRecord(item)}
+              className="p-1 rounded-md text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors cursor-pointer"
+              title="Export Traceability Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Delete Button (Trash) */}
           {canDelete && (
             <button
@@ -359,6 +379,18 @@ export function TraceabilityAuditView() {
                 isOpen: true,
                 records: selected,
               });
+            },
+          },
+        ]
+      : []),
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected',
+            icon: <FileDown className="w-3.5 h-3.5" />,
+            onClick: (selected: TraceabilityChain[]) => {
+              setSelectedForExport(selected);
+              setIsExportModalOpen(true);
             },
           },
         ]

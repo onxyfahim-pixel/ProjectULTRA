@@ -1,6 +1,11 @@
 import { InspectionRecord } from '@/lib/types/erp';
-import { loadPdfHeaderSettings, renderPdfHeaderHtml } from '@/lib/pdf/pdf-header-store';
+import {
+  loadPdfHeaderSettings,
+  renderPdfHeaderHtml,
+  getModuleExportConfig,
+} from '@/lib/pdf/pdf-header-store';
 import { syncRecordCheckpoints } from './inspection-checkpoints';
+import { deriveSizeBreakdownFromBuyerOrder } from './inspection-size-utils';
 
 export type FooterSignatureMode = 'dual' | 'single' | 'none';
 
@@ -93,6 +98,7 @@ export function exportInspectionSummaryPdf(
 ): void {
   try {
     const pdfSettings = loadPdfHeaderSettings();
+    const config = getModuleExportConfig(pdfSettings, 'inspection', 'register');
     const kpis = computeInspectionKpis(records);
     const dateStr = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
@@ -100,13 +106,12 @@ export function exportInspectionSummaryPdf(
       day: 'numeric',
     });
 
-    const today = new Date().toISOString().split('T')[0];
     const headerHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'QUALITY ASSURANCE & AQL AUDIT MASTER REGISTER',
-      `QA-REG-${today.replace(/-/g, '')}`,
+      config.title,
+      config.fullDocCode,
       dateStr,
-      'Quality Assurance & Compliance Division'
+      config.department
     );
 
     const rowsHtml = records
@@ -421,6 +426,7 @@ export function exportSingleInspectionPdf(
 ): void {
   try {
     const pdfSettings = loadPdfHeaderSettings();
+    const config = getModuleExportConfig(pdfSettings, 'inspection', 'single', record.inspectionCode || `QA-${record.id}`);
     const dateStr = new Date(record.createdAt).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -429,10 +435,10 @@ export function exportSingleInspectionPdf(
 
     const headerHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'AQL QUALITY INSPECTION CERTIFICATE & AUDIT REPORT',
-      record.inspectionCode || `QA-${record.id}`,
+      config.title,
+      config.fullDocCode,
       dateStr,
-      'Quality Assurance & Compliance Division'
+      config.department
     );
 
     const isPassed = record.status === 'PASSED';
@@ -441,6 +447,47 @@ export function exportSingleInspectionPdf(
     const verdictColor = isPassed ? '#047857' : isConditional ? '#b45309' : '#b91c1c';
 
     const poDisplay = record.poNumbers && record.poNumbers.length > 0 ? record.poNumbers.join(', ') : record.orderNumber || '-';
+
+    // Size Breakdown Data & Rows
+    const sizeItems = record.sizeBreakdown && record.sizeBreakdown.length > 0
+      ? record.sizeBreakdown
+      : deriveSizeBreakdownFromBuyerOrder(null, record.lotQuantity || record.orderQuantity || 10000, record.sampleSize || 315);
+
+    const totalOrderQty = sizeItems.reduce((s, i) => s + (Number(i.orderQuantity) || 0), 0);
+    const totalInspQty = sizeItems.reduce((s, i) => s + (Number(i.inspectedQuantity) || 0), 0);
+    const totalSamplePickup = sizeItems.reduce((s, i) => s + (Number(i.samplePickupQuantity) || 0), 0);
+    const totalDefectsSize = sizeItems.reduce((s, i) => s + (Number(i.defectCount) || 0), 0);
+    const netVariance = totalInspQty - totalOrderQty;
+
+    const sizeRowsHtml = sizeItems
+      .map((item, idx) => {
+        const diff = (item.inspectedQuantity || 0) - (item.orderQuantity || 0);
+        const diffStr = diff > 0 ? `+${diff.toLocaleString()}` : diff < 0 ? `${diff.toLocaleString()}` : '0';
+        const diffColor = diff > 0 ? '#047857' : diff < 0 ? '#b91c1c' : '#64748b';
+        const sharePct = totalSamplePickup > 0 ? ((item.samplePickupQuantity / totalSamplePickup) * 100).toFixed(1) : '0';
+        return `
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="font-family: monospace; font-size: 8px; color: #64748b; text-align: center;">${idx + 1}</td>
+            <td style="font-size: 8.5px; font-weight: 800; color: #0f172a; font-family: monospace;">${item.size}</td>
+            <td style="text-align: right; font-family: monospace; font-size: 8.5px; font-weight: 600; color: #334155;">${(item.orderQuantity || 0).toLocaleString()}</td>
+            <td style="text-align: right; font-family: monospace; font-size: 8.5px; font-weight: 800; color: #1e40af; background: #eff6ff;">${(item.inspectedQuantity || 0).toLocaleString()}</td>
+            <td style="text-align: right; font-family: monospace; font-size: 8px; font-weight: 700; color: ${diffColor};">${diffStr}</td>
+            <td style="text-align: right; font-family: monospace; font-size: 8.5px; font-weight: 800; color: #4338ca; background: #eef2ff;">${item.samplePickupQuantity || 0}</td>
+            <td style="text-align: center; font-family: monospace; font-size: 8px; color: #475569;">${sharePct}%</td>
+            <td style="text-align: center; font-family: monospace; font-size: 8px; font-weight: 700; color: ${(item.defectCount || 0) > 0 ? '#b91c1c' : '#64748b'};">${item.defectCount || 0}</td>
+            <td style="text-align: center;">
+              <span style="font-size: 7.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; ${
+                item.status === 'FAIL' || (item.defectCount || 0) > 3
+                  ? 'background: #fef2f2; color: #b91c1c;'
+                  : 'background: #ecfdf5; color: #047857;'
+              }">
+                ${item.status === 'FAIL' || (item.defectCount || 0) > 3 ? 'FAIL' : 'PASS'}
+              </span>
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
 
     // Defects table
     const defectRowsHtml = (record.defects || [])
@@ -682,6 +729,39 @@ export function exportSingleInspectionPdf(
             </div>
           </div>
 
+          <!-- Size-Wise Breakdown & Sample Pickup Plan Table -->
+          <div class="section-title">Final Inspection Size-Wise Breakdown &amp; Sample Pickup Plan</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25px; text-align: center;">#</th>
+                <th style="width: 60px;">Size</th>
+                <th style="width: 80px; text-align: right;">Order Qty</th>
+                <th style="width: 90px; text-align: right;">Inspected Lot</th>
+                <th style="width: 80px; text-align: right;">Variance</th>
+                <th style="width: 85px; text-align: right;">Sample Pickup</th>
+                <th style="width: 75px; text-align: center;">Share %</th>
+                <th style="width: 70px; text-align: center;">Defects</th>
+                <th style="width: 75px; text-align: center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sizeRowsHtml}
+            </tbody>
+            <tfoot>
+              <tr style="font-weight: 800; background: #f8fafc; border-top: 1.5px solid #cbd5e1;">
+                <td colspan="2" style="text-align: right; text-transform: uppercase; font-size: 7.5px; color: #475569;">Total Aggregate:</td>
+                <td style="text-align: right; font-family: monospace;">${totalOrderQty.toLocaleString()}</td>
+                <td style="text-align: right; font-family: monospace; color: #1e40af;">${totalInspQty.toLocaleString()}</td>
+                <td style="text-align: right; font-family: monospace; color: ${netVariance > 0 ? '#047857' : netVariance < 0 ? '#b91c1c' : '#64748b'};">${netVariance > 0 ? `+${netVariance.toLocaleString()}` : netVariance.toLocaleString()}</td>
+                <td style="text-align: right; font-family: monospace; color: #4338ca;">${totalSamplePickup.toLocaleString()}</td>
+                <td style="text-align: center; font-family: monospace;">100.0%</td>
+                <td style="text-align: center; font-family: monospace; color: ${totalDefectsSize > 0 ? '#b91c1c' : '#64748b'};">${totalDefectsSize}</td>
+                <td style="text-align: center; color: #047857;">LOT PASS</td>
+              </tr>
+            </tfoot>
+          </table>
+
           <!-- Defect Itemization Table -->
           ${
             record.defects && record.defects.length > 0
@@ -832,6 +912,65 @@ export function exportSingleInspectionExcel(record: InspectionRecord): void {
               <td>Minor Defects:</td><td>${record.minorDefects || 0}</td>
               <td>Inspector:</td><td>${record.inspectorName || ''}</td>
             </tr>
+          </table>
+
+          <!-- Size-Wise Breakdown & Sample Pickup Matrix -->
+          <h3>Final Inspection Size Breakdown &amp; Sample Pickup Specification</h3>
+          <table>
+            <tr>
+              <th style="width: 30px;">#</th>
+              <th>Garment Size</th>
+              <th>Order Qty (pcs)</th>
+              <th>Inspected / Offered Lot (pcs)</th>
+              <th>Lot Variance (Plus/Short)</th>
+              <th>Sample Pickup Qty (pcs)</th>
+              <th>Sampling Share %</th>
+              <th>Defects Found</th>
+              <th>QC Verdict</th>
+            </tr>
+            ${(() => {
+              const sizeItemsExcel = record.sizeBreakdown && record.sizeBreakdown.length > 0
+                ? record.sizeBreakdown
+                : deriveSizeBreakdownFromBuyerOrder(null, record.lotQuantity || record.orderQuantity || 10000, record.sampleSize || 315);
+              const totalOrd = sizeItemsExcel.reduce((s, i) => s + (Number(i.orderQuantity) || 0), 0);
+              const totalInsp = sizeItemsExcel.reduce((s, i) => s + (Number(i.inspectedQuantity) || 0), 0);
+              const totalPick = sizeItemsExcel.reduce((s, i) => s + (Number(i.samplePickupQuantity) || 0), 0);
+              const totalDef = sizeItemsExcel.reduce((s, i) => s + (Number(i.defectCount) || 0), 0);
+              const diffTot = totalInsp - totalOrd;
+
+              const rows = sizeItemsExcel.map((item, idx) => {
+                const diff = (item.inspectedQuantity || 0) - (item.orderQuantity || 0);
+                const share = totalPick > 0 ? ((item.samplePickupQuantity / totalPick) * 100).toFixed(1) : '0';
+                return `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td style="font-weight: bold;">${item.size}</td>
+                    <td style="text-align: right;">${item.orderQuantity || 0}</td>
+                    <td style="text-align: right; font-weight: bold; color: #1e40af;">${item.inspectedQuantity || 0}</td>
+                    <td style="text-align: right;">${diff > 0 ? `+${diff}` : diff}</td>
+                    <td style="text-align: right; font-weight: bold; color: #4338ca;">${item.samplePickupQuantity || 0}</td>
+                    <td style="text-align: center;">${share}%</td>
+                    <td style="text-align: center;">${item.defectCount || 0}</td>
+                    <td style="text-align: center;">${item.status || 'PASS'}</td>
+                  </tr>
+                `;
+              }).join('');
+
+              const footer = `
+                <tr style="font-weight: bold; background-color: #f1f5f9;">
+                  <td colspan="2" style="text-align: right;">Total Aggregate:</td>
+                  <td style="text-align: right;">${totalOrd}</td>
+                  <td style="text-align: right; color: #1e40af;">${totalInsp}</td>
+                  <td style="text-align: right;">${diffTot > 0 ? `+${diffTot}` : diffTot}</td>
+                  <td style="text-align: right; color: #4338ca;">${totalPick}</td>
+                  <td style="text-align: center;">100.0%</td>
+                  <td style="text-align: center;">${totalDef}</td>
+                  <td style="text-align: center;">${record.status}</td>
+                </tr>
+              `;
+
+              return rows + footer;
+            })()}
           </table>
 
           <h3>Defect Itemization Log</h3>

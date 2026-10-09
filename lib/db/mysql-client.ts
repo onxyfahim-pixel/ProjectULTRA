@@ -254,6 +254,7 @@ export class MySqlDatabaseManager {
           wip_record JSON,
           bom_items JSON,
           logistics JSON,
+          color_size_breakdown JSON,
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX idx_bo_order (order_number),
@@ -262,6 +263,12 @@ export class MySqlDatabaseManager {
           INDEX idx_bo_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
+
+      try {
+        await pool.query('ALTER TABLE buyer_orders ADD COLUMN color_size_breakdown JSON');
+      } catch (_) {
+        // Column may already exist
+      }
 
       // 3. Production Records Table (Floor daily & hourly outputs)
       await pool.query(`
@@ -363,6 +370,7 @@ export class MySqlDatabaseManager {
           inspector_name VARCHAR(191) NOT NULL,
           buyer VARCHAR(191) NOT NULL,
           defects JSON,
+          size_breakdown JSON,
           inspection_type VARCHAR(100),
           po_number VARCHAR(191),
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -373,6 +381,15 @@ export class MySqlDatabaseManager {
           INDEX idx_ir_po (po_number)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
+
+      // Inspection records migration probe
+      try {
+        await pool.query('SELECT size_breakdown FROM inspection_records LIMIT 1');
+      } catch {
+        try {
+          await pool.query('ALTER TABLE inspection_records ADD COLUMN size_breakdown JSON');
+        } catch {}
+      }
 
       // 7. Production Orders Table (Running lines summary)
       await pool.query(`
@@ -527,6 +544,7 @@ export class MySqlDatabaseManager {
         wipRecord: typeof r.wip_record === 'string' ? JSON.parse(r.wip_record) : r.wip_record,
         bomItems: typeof r.bom_items === 'string' ? JSON.parse(r.bom_items) : r.bom_items,
         logistics: typeof r.logistics === 'string' ? JSON.parse(r.logistics) : r.logistics,
+        colorSizeBreakdown: typeof r.color_size_breakdown === 'string' ? JSON.parse(r.color_size_breakdown) : (r.color_size_breakdown || undefined),
       }));
     } catch (err) {
       console.error('[MySQL Host] Error loading buyer orders:', err);
@@ -544,8 +562,8 @@ export class MySqlDatabaseManager {
           season, order_quantity, fob_price, currency, ship_date, cutting_start_date,
           status, quality_standard, product_image, merchandiser_name, merchandiser_email,
           merchandiser_phone, smv, production_target, daily_target, production_tracking,
-          wip_record, bom_items, logistics, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          wip_record, bom_items, logistics, color_size_breakdown, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         ON DUPLICATE KEY UPDATE
           buyer_name = VALUES(buyer_name),
           brand = VALUES(brand),
@@ -570,6 +588,7 @@ export class MySqlDatabaseManager {
           wip_record = VALUES(wip_record),
           bom_items = VALUES(bom_items),
           logistics = VALUES(logistics),
+          color_size_breakdown = VALUES(color_size_breakdown),
           updated_at = NOW();
       `;
 
@@ -599,6 +618,7 @@ export class MySqlDatabaseManager {
         JSON.stringify(order.wipRecord || {}),
         JSON.stringify(order.bomItems || []),
         JSON.stringify(order.logistics || {}),
+        JSON.stringify(order.colorSizeBreakdown || []),
       ]);
     } catch (err) {
       console.error('[MySQL Host] Error upserting buyer order:', err);
@@ -857,6 +877,7 @@ export class MySqlDatabaseManager {
         inspectorName: r.inspector_name,
         buyer: r.buyer,
         defects: typeof r.defects === 'string' ? JSON.parse(r.defects) : r.defects || [],
+        sizeBreakdown: typeof r.size_breakdown === 'string' ? JSON.parse(r.size_breakdown) : (r.size_breakdown || undefined),
         inspectionType: r.inspection_type || undefined,
         poNumber: r.po_number || undefined,
         createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
@@ -875,8 +896,8 @@ export class MySqlDatabaseManager {
         INSERT INTO inspection_records (
           id, inspection_code, style_number, lot_number, stage, sample_size,
           pass_count, defect_count, major_defects, minor_defects, critical_defects,
-          status, inspector_id, inspector_name, buyer, defects, inspection_type, po_number, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          status, inspector_id, inspector_name, buyer, defects, size_breakdown, inspection_type, po_number, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
           status = VALUES(status),
           pass_count = VALUES(pass_count),
@@ -885,6 +906,7 @@ export class MySqlDatabaseManager {
           minor_defects = VALUES(minor_defects),
           critical_defects = VALUES(critical_defects),
           defects = VALUES(defects),
+          size_breakdown = VALUES(size_breakdown),
           updated_at = NOW();
       `;
 
@@ -905,6 +927,7 @@ export class MySqlDatabaseManager {
         record.inspectorName,
         record.buyer,
         JSON.stringify(record.defects || []),
+        record.sizeBreakdown ? JSON.stringify(record.sizeBreakdown) : null,
         record.inspectionType || null,
         (record as any).poNumber || (record.poNumbers && record.poNumbers[0]) || null,
         new Date(record.createdAt || Date.now()),

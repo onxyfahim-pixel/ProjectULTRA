@@ -190,7 +190,7 @@ export function ErpAuthProvider({ children }: { children: React.ReactNode }) {
       );
 
       if (!roleDef) {
-        return action === 'view' && moduleKey === 'dashboard';
+        return false;
       }
 
       if (roleDef.isSystemRole || roleDef.id === 'super_admin') {

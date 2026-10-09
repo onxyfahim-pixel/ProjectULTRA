@@ -74,7 +74,7 @@ export function InspectionSingleExportModal({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Export AQL inspection certificate, defect breakdown &amp; QC checkpoints checklist
+                Export AQL inspection certificate, Size breakdown, defect breakdown &amp; QC checkpoints checklist
               </p>
             </div>
           </div>
@@ -125,7 +125,7 @@ export function InspectionSingleExportModal({
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-200/80 grid grid-cols-3 gap-2 text-[10px] text-slate-600">
+            <div className="pt-2 border-t border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-600">
               <div>
                 <span className="text-slate-400 block">Critical / Major:</span>
                 <span className="font-mono font-semibold text-rose-700">
@@ -135,6 +135,12 @@ export function InspectionSingleExportModal({
               <div>
                 <span className="text-slate-400 block">Minor Defects:</span>
                 <span className="font-mono font-semibold text-amber-700">{record.minorDefects || 0}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">Size Breakdown:</span>
+                <span className="font-mono font-semibold text-indigo-700">
+                  {record.sizeBreakdown?.length || 6} Sizes • {record.sampleSize} Pickups
+                </span>
               </div>
               <div>
                 <span className="text-slate-400 block">Auditor:</span>
@@ -170,7 +176,7 @@ export function InspectionSingleExportModal({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Official inspection certificate with AQL verdict &amp; defect analysis.
+                    Official inspection certificate with Size breakdown, AQL verdict &amp; defect analysis.
                   </p>
                 </div>
               </div>
@@ -201,7 +207,7 @@ export function InspectionSingleExportModal({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Full audit workbook with defect itemization &amp; QC checkpoints checklist.
+                    Full QC workbook with Size breakdown, sample pickups, defects &amp; checkpoints.
                   </p>
                 </div>
               </div>

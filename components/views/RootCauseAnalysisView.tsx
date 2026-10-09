@@ -23,6 +23,7 @@ import {
   AlertOctagon,
   X,
   FileSpreadsheet,
+  FileDown,
 } from 'lucide-react';
 import { StatCard } from '@/components/ui/StatCard';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
@@ -36,6 +37,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { RcaDetailsPage } from '../modules/root-cause/RcaDetailsPage';
 import { RcaEntryPage } from '../modules/root-cause/RcaEntryPage';
 import { DeleteRcaModal } from '../modules/root-cause/DeleteRcaModal';
+import { RcaExportModal } from '../modules/root-cause/RcaExportModal';
+import { RcaSingleExportModal } from '../modules/root-cause/RcaSingleExportModal';
 
 type RcaSubView =
   | { type: 'none' }
@@ -81,6 +84,12 @@ export function RootCauseAnalysisView() {
   const [departmentFilter, setDepartmentFilter] = useState('ALL');
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  // Export Modals State
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedCasesForExport, setSelectedCasesForExport] = useState<RootCauseCase[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [caseForSingleExport, setCaseForSingleExport] = useState<RootCauseCase | null>(null);
 
   // Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -302,6 +311,18 @@ export function RootCauseAnalysisView() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
+          {canExport && (
+            <button
+              onClick={() => {
+                setCaseForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+              title="Export RCA Dossier"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
           {canEdit && (
             <button
               onClick={() => setSubView({ type: 'edit', rcaCase: item })}
@@ -327,6 +348,14 @@ export function RootCauseAnalysisView() {
 
   // Batch actions
   const batchActions: BatchAction<RootCauseCase>[] = [
+    ...(canExport ? [{
+      label: 'Export RCA Register',
+      icon: <FileDown className="w-4 h-4" />,
+      onClick: (selectedItems: RootCauseCase[]) => {
+        setSelectedCasesForExport(selectedItems);
+        setIsGlobalExportModalOpen(true);
+      },
+    }] : []),
     ...(canDelete ? [{
       label: 'Delete Selected',
       icon: <Trash2 className="w-4 h-4" />,
@@ -400,12 +429,15 @@ export function RootCauseAnalysisView() {
           <div className="flex items-center gap-2">
             {canExport && (
               <button
-                onClick={handleExportCsv}
+                onClick={() => {
+                  setSelectedCasesForExport([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
-                title="Export RCA Ledger to CSV"
+                title="Export RCA Master Register"
               >
-                <Download className="w-3.5 h-3.5 text-slate-500" />
-                <span className="hidden sm:inline">Export CSV</span>
+                <FileDown className="w-3.5 h-3.5 text-rose-500" />
+                <span className="hidden sm:inline">Export Register</span>
               </button>
             )}
             {canCreate && (
@@ -762,6 +794,24 @@ export function RootCauseAnalysisView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global RCA Export Modal */}
+      <RcaExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allCases={cases}
+        selectedCases={selectedCasesForExport}
+      />
+
+      {/* Single RCA Dossier Export Modal */}
+      <RcaSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setCaseForSingleExport(null);
+        }}
+        rcaCase={caseForSingleExport}
+      />
     </div>
   );
 }

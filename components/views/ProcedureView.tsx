@@ -15,6 +15,7 @@ import {
   Trash2,
   FileText,
   Download,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -25,6 +26,9 @@ import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { ProcedureDetailsPage } from '../modules/procedure/ProcedureDetailsPage';
 import { ProcedureEntryPage } from '../modules/procedure/ProcedureEntryPage';
 import { DeleteProcedureModal } from '../modules/procedure/DeleteProcedureModal';
+import { ProcedureExportModal } from '../modules/procedure/ProcedureExportModal';
+import { ProcedureSingleExportModal } from '../modules/procedure/ProcedureSingleExportModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 type ProcedureSubView =
   | { type: 'none' }
@@ -33,6 +37,7 @@ type ProcedureSubView =
   | { type: 'edit'; procedure: ProcedureItem };
 
 export function ProcedureView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('procedure');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
   const [procedures, setProcedures] = useLiveModuleData<ProcedureItem[]>(
@@ -59,6 +64,12 @@ export function ProcedureView() {
     isOpen: boolean;
     procedures: ProcedureItem[];
   } | null>(null);
+
+  // Global & Individual Export States
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedProceduresForExport, setSelectedProceduresForExport] = useState<ProcedureItem[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [procedureForSingleExport, setProcedureForSingleExport] = useState<ProcedureItem | null>(null);
 
   // Filters & Search
   const [deptFilter, setDeptFilter] = useState<string>('ALL');
@@ -245,35 +256,56 @@ export function ProcedureView() {
             <Eye className="w-3.5 h-3.5" />
           </button>
 
+          {/* Individual Export Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setProcedureForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Export Procedure Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', procedure: item })}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Open Separate Procedure Edit Page"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', procedure: item })}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Open Separate Procedure Edit Page"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateProcedure(item)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate Procedure"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateProcedure(item)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate Procedure"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, procedures: [item] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Procedure"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, procedures: [item] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Procedure"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -304,6 +336,34 @@ export function ProcedureView() {
             { id: 'list', label: 'Procedure Register', count: procedures.length },
             { id: 'departments', label: 'Department Processes', count: 6 },
           ]}
+          actions={
+            <div className="flex items-center gap-2">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedProceduresForExport(procedures);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer border border-slate-200"
+                  title="Export Procedures Register (PDF / Excel / CSV)"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Export Register</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'add' })}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Procedure</span>
+                </button>
+              )}
+            </div>
+          }
         />
       )}
 
@@ -521,35 +581,57 @@ export function ProcedureView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Procedure</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Procedure</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={[
-                  {
-                    label: 'Delete Selected',
-                    variant: 'danger',
-                    icon: <Trash2 className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
-                      setDeleteModal({
-                        isOpen: true,
-                        procedures: selected,
-                      });
-                    },
-                  },
-                  {
-                    label: 'Export Register',
-                    icon: <Download className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
-                      showToast(`Exported ${selected.length} procedure records`);
-                    },
-                  },
+                  ...(canExport
+                    ? [
+                        {
+                          label: 'Export Selected (PDF/Excel)',
+                          icon: <FileDown className="w-3.5 h-3.5" />,
+                          onClick: (selected: ProcedureItem[]) => {
+                            setSelectedProceduresForExport(selected);
+                            setIsGlobalExportModalOpen(true);
+                          },
+                        },
+                      ]
+                    : []),
+                  ...(canDelete
+                    ? [
+                        {
+                          label: 'Delete Selected',
+                          variant: 'danger' as const,
+                          icon: <Trash2 className="w-3.5 h-3.5" />,
+                          onClick: (selected: ProcedureItem[]) => {
+                            setDeleteModal({
+                              isOpen: true,
+                              procedures: selected,
+                            });
+                          },
+                        },
+                      ]
+                    : []),
                 ]}
+                moduleKey="procedure"
+                canExport={canExport}
+                canDelete={canDelete}
+                onExport={
+                  canExport
+                    ? (items) => {
+                        setSelectedProceduresForExport(items.length < procedures.length ? items : []);
+                        setIsGlobalExportModalOpen(true);
+                      }
+                    : undefined
+                }
               />
             </div>
           )}
@@ -620,6 +702,27 @@ export function ProcedureView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global & Batch Procedure Register Export Modal */}
+      <ProcedureExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => {
+          setIsGlobalExportModalOpen(false);
+          setSelectedProceduresForExport([]);
+        }}
+        allProcedures={procedures}
+        selectedProcedures={selectedProceduresForExport}
+      />
+
+      {/* Individual Procedure Dossier Export Modal */}
+      <ProcedureSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setProcedureForSingleExport(null);
+        }}
+        procedure={procedureForSingleExport}
+      />
     </div>
   );
 }

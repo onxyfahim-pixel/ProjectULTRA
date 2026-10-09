@@ -25,6 +25,7 @@ import {
   Building2,
   User,
   ArrowRight,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -38,6 +39,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { CapaDetailsPage } from '../modules/capa/CapaDetailsPage';
 import { CapaEntryPage } from '../modules/capa/CapaEntryPage';
 import { DeleteCapaModal } from '../modules/capa/DeleteCapaModal';
+import { CapaExportModal } from '../modules/capa/CapaExportModal';
+import { CapaSingleExportModal } from '../modules/capa/CapaSingleExportModal';
 
 type CapaSubView =
   | { type: 'none' }
@@ -68,6 +71,12 @@ export function CapaView() {
     isOpen: boolean;
     capas: CapaItem[];
   } | null>(null);
+
+  // Global & Single Export Modals
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedCapasForExport, setSelectedCapasForExport] = useState<CapaItem[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [capaForSingleExport, setCapaForSingleExport] = useState<CapaItem | null>(null);
 
   // Filters & Search
   const [activeSourceFilter, setActiveSourceFilter] = useState<string>('ALL');
@@ -313,6 +322,21 @@ export function CapaView() {
             <Eye className="w-3.5 h-3.5" />
           </button>
 
+          {/* Export Single Report Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setCapaForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1 rounded-md text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors cursor-pointer"
+              title="Export 8D CAPA Report (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Edit Button */}
           {canEdit && (
             <button
@@ -343,6 +367,18 @@ export function CapaView() {
 
   // Batch actions
   const batchActions: BatchAction<CapaItem>[] = [
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected (PDF/Excel)',
+            icon: <FileDown className="w-3.5 h-3.5" />,
+            onClick: (selected: CapaItem[]) => {
+              setSelectedCapasForExport(selected);
+              setIsGlobalExportModalOpen(true);
+            },
+          },
+        ]
+      : []),
     ...(canDelete
       ? [
           {
@@ -450,16 +486,31 @@ export function CapaView() {
           },
         ]}
         actions={
-          canCreate ? (
-            <button
-              type="button"
-              onClick={() => setSubView({ type: 'add' })}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Raise New CAPA</span>
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCapasForExport([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs hover:border-slate-300 transition-all cursor-pointer"
+              >
+                <FileDown className="w-4 h-4 text-slate-600" />
+                <span>Export Master Register</span>
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => setSubView({ type: 'add' })}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Raise New CAPA</span>
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -737,6 +788,24 @@ export function CapaView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global Export Modal */}
+      <CapaExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allCapas={capas}
+        selectedCapas={selectedCapasForExport}
+      />
+
+      {/* Single Export Modal */}
+      <CapaSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setCapaForSingleExport(null);
+        }}
+        capa={capaForSingleExport}
+      />
     </div>
   );
 }

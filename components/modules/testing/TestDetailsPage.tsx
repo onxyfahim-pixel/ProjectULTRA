@@ -24,9 +24,11 @@ import {
   Wrench,
   Activity,
   Award,
+  FileDown,
 } from 'lucide-react';
 import { LabTestRecord } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { TestingSingleExportModal } from './TestingSingleExportModal';
 
 interface TestDetailsPageProps {
   test: LabTestRecord;
@@ -71,6 +73,7 @@ export function TestDetailsPage({
 }: TestDetailsPageProps) {
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('testing');
   const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const verdictConfig = VERDICT_CONFIG[test.verdict] || VERDICT_CONFIG.PENDING;
   const VerdictIcon = verdictConfig.icon;
@@ -123,12 +126,12 @@ export function TestDetailsPage({
           {canExport && (
             <button
               type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
-              title="Print Lab Certificate"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors border border-blue-200 cursor-pointer shadow-2xs"
+              title="Export Lab Certificate (PDF / Excel / CSV)"
             >
-              <Printer className="w-3.5 h-3.5 text-slate-500" />
-              <span>Print / Export</span>
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export Certificate</span>
             </button>
           )}
 
@@ -487,6 +490,13 @@ export function TestDetailsPage({
         </div>
       </div>
       </div>
+
+      {/* SINGLE TEST EXPORT MODAL */}
+      <TestingSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        test={test}
+      />
     </div>
   );
 }

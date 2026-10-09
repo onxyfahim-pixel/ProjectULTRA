@@ -9,6 +9,7 @@ import {
   Copy,
   Printer,
   Download,
+  FileDown,
   AlertTriangle,
   Flame,
   CheckCircle2,
@@ -22,6 +23,7 @@ import {
   Trash2,
   Save,
 } from 'lucide-react';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import {
   StyleOperationBulletin,
   OperationBulletinItem,
@@ -40,6 +42,7 @@ interface OperationBulletinTabProps {
   onDeleteOperationFromBulletin: (bulletinId: string, opId: string) => void;
   onExportCsv: (filename: string, rows: any[]) => void;
   onPrintOb: () => void;
+  onExportSingleBulletin?: (bulletin: StyleOperationBulletin) => void;
 }
 
 export function OperationBulletinTab({
@@ -53,7 +56,9 @@ export function OperationBulletinTab({
   onDeleteOperationFromBulletin,
   onExportCsv,
   onPrintOb,
+  onExportSingleBulletin,
 }: OperationBulletinTabProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('planning_ie');
   const [activeSubTab, setActiveSubTab] = useState<'grid' | 'yamazumi' | 'balancing'>('grid');
   const [isCreateObOpen, setIsCreateObOpen] = useState(false);
 
@@ -341,6 +346,16 @@ export function OperationBulletinTab({
               <Printer className="w-3.5 h-3.5 text-slate-500" />
               <span>Print OB</span>
             </button>
+            {canExport && onExportSingleBulletin && (
+              <button
+                onClick={() => onExportSingleBulletin(currentBulletin)}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Export Style Operation Bulletin & Line Balancing (PDF or Excel)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Export Bulletin</span>
+              </button>
+            )}
             <button
               onClick={() => onExportCsv(`${currentBulletin.styleNumber}_Operation_Bulletin.csv`, currentBulletin.operations)}
               className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"

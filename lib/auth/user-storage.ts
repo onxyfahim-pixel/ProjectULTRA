@@ -25,7 +25,21 @@ export class UserStorageManager {
       stored[adminIndex].email = 'admin@example.com';
       stored[adminIndex].role = 'Super Admin';
       stored[adminIndex].isSuperAdmin = true;
+      if (!stored[adminIndex].password) stored[adminIndex].password = 'admin';
+      if (!stored[adminIndex].avatarUrl) stored[adminIndex].avatarUrl = DEMO_USERS[0].avatarUrl;
     }
+
+    // Ensure all users have a fallback password and avatarUrl
+    stored.forEach((u) => {
+      if (!u.password) {
+        const demo = DEMO_USERS.find((d) => d.username === u.username);
+        u.password = demo?.password || '123456';
+      }
+      if (!u.avatarUrl) {
+        const demo = DEMO_USERS.find((d) => d.username === u.username);
+        u.avatarUrl = demo?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face';
+      }
+    });
 
     // Normalize demo user roles
     const qaIndex = stored.findIndex((u) => u.username === 'tania.qa');
@@ -105,6 +119,7 @@ export class UserStorageManager {
     role: Role;
     department: string;
     avatarUrl?: string;
+    isSuperAdmin?: boolean;
   }): { success: boolean; user?: AppUser; error?: string } {
     const cleanUsername = data.username.trim().toLowerCase();
     const cleanEmail = data.email.trim().toLowerCase();
@@ -123,6 +138,10 @@ export class UserStorageManager {
       return { success: false, error: `Email "${cleanEmail}" is already registered.` };
     }
 
+    const isSuper = data.isSuperAdmin !== undefined
+      ? Boolean(data.isSuperAdmin)
+      : (data.role === 'ADMIN' || data.role === 'Super Admin' || (data.role as string) === 'super_admin');
+
     const newUser: AppUser = {
       id: `usr_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`,
       username: cleanUsername,
@@ -133,7 +152,7 @@ export class UserStorageManager {
       department: data.department || 'Operations',
       avatarUrl: data.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
       isActive: true,
-      isSuperAdmin: data.role === 'ADMIN' || data.role === 'Super Admin' || (data.role as string) === 'super_admin',
+      isSuperAdmin: isSuper,
       createdAt: new Date().toISOString(),
     };
 
@@ -151,13 +170,13 @@ export class UserStorageManager {
       return { success: false, error: 'User not found.' };
     }
 
-    // Cannot change super admin username or deactivate super admin
+    // Cannot change super admin username or deactivate super admin for the primary root account
     if (users[index].id === 'usr_admin') {
       if (updates.isActive === false) {
-        return { success: false, error: 'Super Admin account cannot be deactivated.' };
+        return { success: false, error: 'Primary Super Admin account cannot be deactivated.' };
       }
       if (updates.role && updates.role !== 'ADMIN' && updates.role !== 'Super Admin') {
-        return { success: false, error: 'Super Admin role cannot be changed.' };
+        return { success: false, error: 'Primary Super Admin role cannot be changed.' };
       }
     }
 
@@ -168,6 +187,12 @@ export class UserStorageManager {
         return { success: false, error: `Username "${cleanUsername}" is already taken.` };
       }
       updates.username = cleanUsername;
+    }
+
+    if (updates.role) {
+      if (updates.role === 'ADMIN' || updates.role === 'Super Admin' || (updates.role as string) === 'super_admin') {
+        updates.isSuperAdmin = true;
+      }
     }
 
     const updatedUser = {

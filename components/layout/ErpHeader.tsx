@@ -26,57 +26,18 @@ import {
   ArrowRight,
   Database,
   Palette,
+  Trash2,
+  Check,
+  ExternalLink,
+  SlidersHorizontal,
+  Sparkles,
+  Filter,
 } from 'lucide-react';
 import { useErpAuth } from '@/hooks/use-erp-auth';
-
-interface ErpNotification {
-  id: string;
-  title: string;
-  message: string;
-  timestamp: string;
-  type: 'urgent' | 'warning' | 'success' | 'info';
-  read: boolean;
-  module?: string;
-}
-
-const INITIAL_NOTIFICATIONS: ErpNotification[] = [
-  {
-    id: 'notif-1',
-    title: 'DHU Spike Alert — Line 04',
-    message: 'Sewing Line 04 exceeded 3.5% DHU threshold (Current: 4.8%). Broken stitch recurring.',
-    timestamp: '10m ago',
-    type: 'urgent',
-    read: false,
-    module: 'production',
-  },
-  {
-    id: 'notif-2',
-    title: 'ASTM D5430 Roll Passed',
-    message: 'Fabric Roll #LOT-88241 passed 4-Point inspection with 14 penalty pts/100 sq.yd.',
-    timestamp: '35m ago',
-    type: 'success',
-    read: false,
-    module: 'incoming_qc',
-  },
-  {
-    id: 'notif-3',
-    title: 'CAPA 8D Sign-off Required',
-    message: 'Buyer H&M issued CAPA-2024-019 for color shading on Style #HM-8840.',
-    timestamp: '1h ago',
-    type: 'warning',
-    read: false,
-    module: 'capa',
-  },
-  {
-    id: 'notif-4',
-    title: 'Texpedia Post Verified',
-    message: 'QA Lead approved technical solution: "Skipped stitch prevention on denim lockstitch".',
-    timestamp: '3h ago',
-    type: 'info',
-    read: true,
-    module: 'texpedia',
-  },
-];
+import {
+  NotificationService,
+  ErpNotificationItem,
+} from '@/lib/notifications/notification-service';
 
 const SEARCHABLE_MODULES = [
   { id: 'dashboard', label: 'Dashboard — Factory Command Center', category: 'MAIN' },
@@ -139,9 +100,53 @@ export function ErpHeader({
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [notifications, setNotifications] = useState<ErpNotification[]>(INITIAL_NOTIFICATIONS);
+  const [allNotifications, setAllNotifications] = useState<ErpNotificationItem[]>([]);
+  const [notifConfig, setNotifConfig] = useState(NotificationService.getConfig());
+  const [notifFilter, setNotifFilter] = useState<'all' | 'unread' | 'buyer' | 'production' | 'quality'>('all');
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  useEffect(() => {
+    const load = () => {
+      setAllNotifications(NotificationService.getNotifications());
+      setNotifConfig(NotificationService.getConfig());
+    };
+    load();
+
+    const handleNotifUpdate = () => load();
+    window.addEventListener('erp_notifications_updated', handleNotifUpdate);
+    window.addEventListener('erp_notification_config_updated', handleNotifUpdate);
+
+    return () => {
+      window.removeEventListener('erp_notifications_updated', handleNotifUpdate);
+      window.removeEventListener('erp_notification_config_updated', handleNotifUpdate);
+    };
+  }, []);
+
+  // Filter alerts specifically for this active user based on their role and module permissions
+  const userNotifications = React.useMemo(() => {
+    return NotificationService.filterForUser(allNotifications, user, can, notifConfig);
+  }, [allNotifications, user, can, notifConfig]);
+
+  const displayedNotifications = React.useMemo(() => {
+    if (notifFilter === 'unread') return userNotifications.filter((n) => !n.read);
+    if (notifFilter === 'buyer') return userNotifications.filter((n) => n.module === 'buyer_order');
+    if (notifFilter === 'production') {
+      return userNotifications.filter((n) => n.module === 'production' || n.module === 'planning_ie');
+    }
+    if (notifFilter === 'quality') {
+      return userNotifications.filter(
+        (n) =>
+          n.module === 'inspections' ||
+          n.module === 'defects_library' ||
+          n.module === 'incoming_qc' ||
+          n.module === 'testing' ||
+          n.module === 'calibration' ||
+          n.module === 'capa'
+      );
+    }
+    return userNotifications;
+  }, [userNotifications, notifFilter]);
+
+  const unreadCount = userNotifications.filter((n) => !n.read).length;
 
   // Listen to fullscreen changes across all browsers
   useEffect(() => {
@@ -212,17 +217,41 @@ export function ErpHeader({
   };
 
   const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    const userNotifIds = new Set(userNotifications.map((n) => n.id));
+    const updated = allNotifications.map((n) => (userNotifIds.has(n.id) ? { ...n, read: true } : n));
+    NotificationService.saveNotifications(updated);
   };
 
-  const handleNotificationClick = (notif: ErpNotification) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
-    );
+  const handleNotificationClick = (notif: ErpNotificationItem) => {
+    const updated = allNotifications.map((n) => (n.id === notif.id ? { ...n, read: true } : n));
+    NotificationService.saveNotifications(updated);
     if (notif.module && onNavigateTab) {
       onNavigateTab(notif.module);
       setIsNotificationOpen(false);
     }
+  };
+
+  const handleDeleteNotification = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const updated = allNotifications.filter((n) => n.id !== id);
+    NotificationService.saveNotifications(updated);
+  };
+
+  const handleClearAll = () => {
+    const userNotifIds = new Set(userNotifications.map((n) => n.id));
+    const updated = allNotifications.filter((n) => !userNotifIds.has(n.id));
+    NotificationService.saveNotifications(updated);
+  };
+
+  const handleOpenNotificationSettings = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('settings_active_tab', 'notification');
+      window.dispatchEvent(new CustomEvent('navigate-settings-subtab', { detail: 'notification' }));
+    }
+    if (onNavigateTab) {
+      onNavigateTab('settings');
+    }
+    setIsNotificationOpen(false);
   };
 
   const matchedModules = globalSearch.trim()
@@ -338,7 +367,7 @@ export function ErpHeader({
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Database Connected / Ready"></span>
           </button>
 
-          {/* Notifications Button & Dropdown */}
+          {/* Notifications Button & Dropdown with Role-Aware Filtering */}
           <div className="relative">
             <button
               type="button"
@@ -349,85 +378,195 @@ export function ErpHeader({
               }}
               title="Quality & Plant Alerts"
               aria-label="Quality & Plant Alerts"
-              className="relative p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer shadow-2xs"
+              className="relative p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-2xs"
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-500 text-[10px] font-extrabold text-white shadow-xs">
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-500 text-[10px] font-extrabold text-white shadow-xs animate-pulse">
                   {unreadCount}
                 </span>
               )}
             </button>
 
-            {/* Notification Panel Dropdown */}
+            {/* Role-Based Notification Panel Dropdown */}
             {isNotificationOpen && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white text-slate-900 rounded-2xl shadow-2xl border border-slate-200 py-3 z-50 animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-4 pb-2.5 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs uppercase tracking-wider text-slate-700">
-                      Plant Alerts &amp; QA Feed
-                    </span>
-                    {unreadCount > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
-                        {unreadCount} new
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 md:w-[420px] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden flex flex-col max-h-[85vh]">
+                {/* Header */}
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 shrink-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-xs uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <Bell className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        Alert Center
                       </span>
-                    )}
+                      {unreadCount > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300">
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleMarkAllRead}
+                          className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                      {userNotifications.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearAll}
+                          className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
+                          title="Clear all alerts"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {unreadCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleMarkAllRead}
-                      className="text-[11px] font-semibold text-blue-600 hover:underline cursor-pointer"
-                    >
-                      Mark all as read
-                    </button>
+
+                  {/* Role Targeting Banner */}
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60">
+                    <span className="truncate">
+                      Role Access: <span className="font-bold text-slate-800 dark:text-slate-200">{user.role || 'Super Admin'}</span>
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400 shrink-0">
+                      {userNotifications.length} permitted {userNotifications.length === 1 ? 'alert' : 'alerts'}
+                    </span>
+                  </div>
+
+                  {/* Category Filter Pills */}
+                  <div className="flex items-center gap-1 mt-2.5 overflow-x-auto no-scrollbar pb-0.5 text-[11px]">
+                    {[
+                      { id: 'all', label: `All (${userNotifications.length})` },
+                      { id: 'unread', label: `Unread (${unreadCount})` },
+                      { id: 'buyer', label: 'Orders' },
+                      { id: 'production', label: 'Production' },
+                      { id: 'quality', label: 'Quality & QC' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setNotifFilter(tab.id as any)}
+                        className={`px-2.5 py-1 rounded-lg font-semibold shrink-0 transition-colors cursor-pointer ${
+                          notifFilter === tab.id
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 border border-slate-200/80 dark:border-slate-700/80'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Notifications Scrollable List */}
+                <div className="overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80 flex-1 px-1 py-1 min-h-[160px] max-h-[380px]">
+                  {displayedNotifications.length === 0 ? (
+                    <div className="py-12 px-6 text-center text-slate-400 dark:text-slate-500 space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
+                        <Check className="w-5 h-5" />
+                      </div>
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        No notifications in this view
+                      </p>
+                      <p className="text-[11px] leading-relaxed max-w-xs mx-auto">
+                        Alerts are filtered in real-time according to permissions for <span className="font-semibold text-slate-800 dark:text-slate-200">"{user.role || 'Viewer'}"</span>.
+                      </p>
+                    </div>
+                  ) : (
+                    displayedNotifications.map((notif) => {
+                      const iconColor =
+                        notif.severity === 'urgent'
+                          ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900/60'
+                          : notif.severity === 'warning'
+                          ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900/60'
+                          : notif.severity === 'success'
+                          ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800/60'
+                          : 'text-blue-600 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/60';
+
+                      const moduleBadge = notif.module
+                        ? notif.module.replace(/_/g, ' ').toUpperCase()
+                        : 'SYSTEM';
+
+                      return (
+                        <div
+                          key={notif.id}
+                          onClick={() => handleNotificationClick(notif)}
+                          className={`p-3 rounded-xl transition-all cursor-pointer flex items-start gap-3 group relative ${
+                            !notif.read
+                              ? 'bg-blue-50/60 dark:bg-blue-950/30 hover:bg-blue-50 dark:hover:bg-blue-950/50'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-xl shrink-0 border shadow-2xs ${iconColor}`}>
+                            {notif.severity === 'urgent' && <AlertCircle className="w-4 h-4" />}
+                            {notif.severity === 'warning' && <AlertTriangle className="w-4 h-4" />}
+                            {notif.severity === 'success' && <CheckCircle2 className="w-4 h-4" />}
+                            {notif.severity === 'info' && <Info className="w-4 h-4" />}
+                          </div>
+
+                          <div className="flex-1 min-w-0 pr-4">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                {moduleBadge}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                • {notif.timestamp}
+                              </span>
+                            </div>
+
+                            <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                              {notif.title}
+                            </div>
+
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2 mt-1 leading-snug">
+                              {notif.message}
+                            </p>
+
+                            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <span>Open module view</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </div>
+                          </div>
+
+                          {/* Delete single notification button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteNotification(e, notif.id)}
+                            className="p-1 rounded-md text-slate-300 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2.5 right-2 cursor-pointer"
+                            title="Dismiss alert"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          {!notif.read && (
+                            <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-2 absolute top-2 right-2.5 group-hover:opacity-0 transition-opacity" />
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
 
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 px-1 py-1">
-                  {notifications.map((notif) => {
-                    const iconColor =
-                      notif.type === 'urgent'
-                        ? 'text-rose-600 bg-rose-50'
-                        : notif.type === 'warning'
-                        ? 'text-amber-600 bg-amber-50'
-                        : notif.type === 'success'
-                        ? 'text-emerald-600 bg-emerald-50'
-                        : 'text-blue-600 bg-blue-50';
+                {/* Footer Link to Notification Settings */}
+                <div className="p-2.5 px-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between text-xs shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleOpenNotificationSettings}
+                    className="inline-flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>Notification Settings &amp; Role Matrix</span>
+                  </button>
 
-                    return (
-                      <div
-                        key={notif.id}
-                        onClick={() => handleNotificationClick(notif)}
-                        className={`p-3 rounded-xl transition-colors cursor-pointer flex items-start gap-3 ${
-                          !notif.read ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className={`p-2 rounded-lg shrink-0 ${iconColor}`}>
-                          {notif.type === 'urgent' && <AlertCircle className="w-4 h-4" />}
-                          {notif.type === 'warning' && <AlertTriangle className="w-4 h-4" />}
-                          {notif.type === 'success' && <CheckCircle2 className="w-4 h-4" />}
-                          {notif.type === 'info' && <Info className="w-4 h-4" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-xs font-bold text-slate-800 truncate">
-                              {notif.title}
-                            </span>
-                            <span className="text-[10px] text-slate-400 shrink-0 font-mono">
-                              {notif.timestamp}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-600 line-clamp-2 mt-0.5 leading-snug">
-                            {notif.message}
-                          </p>
-                        </div>
-                        {!notif.read && (
-                          <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1.5" />
-                        )}
-                      </div>
-                    );
-                  })}
+                  <span className="text-[10px] text-slate-400">
+                    Auto-synced
+                  </span>
                 </div>
               </div>
             )}

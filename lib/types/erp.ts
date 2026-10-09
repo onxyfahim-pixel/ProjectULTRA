@@ -197,6 +197,20 @@ export interface CombinedPoItem {
   colorOrDestination?: string;
 }
 
+export interface InspectionSizeBreakdownItem {
+  id?: string;
+  size: string;
+  orderQuantity: number;
+  inspectedQuantity: number; // Presented lot quantity for this size (can be plus/short)
+  samplePickupQuantity: number; // Auto-calculated proportional to total sample size, editable
+  defectCount?: number;
+  passedCount?: number;
+  status?: 'PASS' | 'FAIL' | 'PENDING';
+  cartonCount?: number;
+  colorName?: string;
+  notes?: string;
+}
+
 export interface InspectionRecord {
   id: string;
   inspectionCode: string;
@@ -216,6 +230,7 @@ export interface InspectionRecord {
   excessQuantity?: number; // Calculated overproduction (if lotQuantity > orderQuantity)
   shortQuantity?: number; // Calculated shortage (if lotQuantity < orderQuantity)
   quantityVariance?: number; // lotQuantity - orderQuantity
+  sizeBreakdown?: InspectionSizeBreakdownItem[]; // Size-wise breakdown with order, inspected, and sample pickups
   aqlCodeLetter?: string; // ISO 2859-1 Code letter (e.g. 'A' through 'Q')
   maxAllowedMajor?: number; // AQL Major acceptance limit (Ac)
   majorRejectionPoint?: number; // AQL Major rejection limit (Re)
@@ -236,6 +251,9 @@ export interface InspectionRecord {
   buyer: string;
   sewingLine?: string;
   factoryUnit?: string;
+  unit?: string;
+  section?: string;
+  lineId?: string;
   shift?: string;
   remarks?: string;
   correctiveAction?: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   Printer,
@@ -22,8 +22,11 @@ import {
   Award,
   ChevronRight,
   ExternalLink,
+  FileDown,
 } from 'lucide-react';
 import { QualityManualSection, QualityManualStatus } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
+import { QualityManualSingleExportModal } from './QualityManualSingleExportModal';
 
 interface QualityManualDetailsPageProps {
   section: QualityManualSection;
@@ -44,6 +47,8 @@ export function QualityManualDetailsPage({
   onUpdateStatus,
   showToast,
 }: QualityManualDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('quality_manual');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const handleStatusChange = (newStatus: QualityManualStatus) => {
     const updated: QualityManualSection = {
       ...section,
@@ -108,34 +113,53 @@ export function QualityManualDetailsPage({
 
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => onDuplicate(section)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-          >
-            <Copy className="w-3.5 h-3.5 text-slate-600" />
-            <span className="hidden sm:inline">Duplicate</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(section)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5 text-slate-600" />
+              <span className="hidden sm:inline">Duplicate</span>
+            </button>
+          )}
+
+          {/* Export Dossier Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors cursor-pointer"
+              title="Export Chapter Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export Chapter</span>
+            </button>
+          )}
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => onEdit(section)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors cursor-pointer"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Chapter</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(section)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors cursor-pointer"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Chapter</span>
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => onDelete(section)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Delete</span>
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(section)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -436,6 +460,12 @@ export function QualityManualDetailsPage({
         </div>
       </div>
       </div>
+
+      <QualityManualSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        section={section}
+      />
     </div>
   );
 }

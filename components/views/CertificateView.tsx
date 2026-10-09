@@ -25,6 +25,7 @@ import {
   Table2,
   Sparkles,
   FileText,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -39,6 +40,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { CertificateEntryPage } from '../modules/certificate/CertificateEntryPage';
 import { CertificateDetailsPage } from '../modules/certificate/CertificateDetailsPage';
 import { DeleteCertificateModal } from '../modules/certificate/DeleteCertificateModal';
+import { CertificateExportModal } from '../modules/certificate/CertificateExportModal';
+import { CertificateSingleExportModal } from '../modules/certificate/CertificateSingleExportModal';
 
 type CertificateSubView =
   | { type: 'none' }
@@ -74,6 +77,12 @@ export function CertificateView() {
     isOpen: boolean;
     certificates: FactoryCertificate[];
   } | null>(null);
+
+  // Global & Individual Export States
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedCertsForExport, setSelectedCertsForExport] = useState<FactoryCertificate[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [certForSingleExport, setCertForSingleExport] = useState<FactoryCertificate | null>(null);
 
   // Filters & Search
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('ALL');
@@ -330,15 +339,18 @@ export function CertificateView() {
             </button>
           )}
 
-          {/* Download PDF */}
+          {/* Individual Export Button */}
           {canExport && (
             <button
               type="button"
-              onClick={() => triggerDownload(item.name)}
+              onClick={() => {
+                setCertForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
               className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
-              title="Download Certificate PDF"
+              title="Export Certificate Dossier (PDF / Excel / CSV)"
             >
-              <Download className="w-3.5 h-3.5" />
+              <FileDown className="w-3.5 h-3.5" />
             </button>
           )}
 
@@ -360,6 +372,18 @@ export function CertificateView() {
 
   // Batch actions
   const batchActions: BatchAction<FactoryCertificate>[] = [
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected (PDF/Excel)',
+            icon: <FileDown className="w-3.5 h-3.5" />,
+            onClick: (selected: FactoryCertificate[]) => {
+              setSelectedCertsForExport(selected);
+              setIsGlobalExportModalOpen(true);
+            },
+          },
+        ]
+      : []),
     ...(canDelete
       ? [
           {
@@ -434,16 +458,32 @@ export function CertificateView() {
           },
         ]}
         actions={
-          canCreate ? (
-            <button
-              type="button"
-              onClick={() => setSubView({ type: 'add' })}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Register New Certificate</span>
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCertsForExport(certs);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer border border-slate-200"
+                title="Export Certificates Register (PDF / Excel / CSV)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                <span>Export Register</span>
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => setSubView({ type: 'add' })}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Register New Certificate</span>
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -685,6 +725,14 @@ export function CertificateView() {
             moduleKey="certificate"
             canExport={canExport}
             canDelete={canDelete}
+            onExport={
+              canExport
+                ? (items) => {
+                    setSelectedCertsForExport(items.length < certs.length ? items : []);
+                    setIsGlobalExportModalOpen(true);
+                  }
+                : undefined
+            }
           />
         </div>
       )}
@@ -698,6 +746,27 @@ export function CertificateView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global & Batch Certificate Register Export Modal */}
+      <CertificateExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => {
+          setIsGlobalExportModalOpen(false);
+          setSelectedCertsForExport([]);
+        }}
+        allCertificates={certs}
+        selectedCertificates={selectedCertsForExport}
+      />
+
+      {/* Individual Certificate Dossier Export Modal */}
+      <CertificateSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setCertForSingleExport(null);
+        }}
+        certificate={certForSingleExport}
+      />
     </div>
   );
 }

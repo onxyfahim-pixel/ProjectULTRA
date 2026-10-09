@@ -23,8 +23,9 @@ import {
   ArrowRight,
   ShieldCheck,
   Target,
+  FileDown,
 } from 'lucide-react';
-import { DataTable, ColumnDef } from '@/components/ui/DataTable';
+import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { JobDescriptionItem, JobDescriptionStatus } from '@/lib/types/modules';
@@ -34,6 +35,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { JobDescriptionDetailsPage } from '../modules/job-description/JobDescriptionDetailsPage';
 import { JobDescriptionEntryPage } from '../modules/job-description/JobDescriptionEntryPage';
 import { DeleteJobDescriptionModal } from '../modules/job-description/DeleteJobDescriptionModal';
+import { JobDescriptionExportModal } from '../modules/job-description/JobDescriptionExportModal';
+import { JobDescriptionSingleExportModal } from '../modules/job-description/JobDescriptionSingleExportModal';
 
 type JobDescriptionSubView =
   | { type: 'none' }
@@ -69,6 +72,12 @@ export function JobDescriptionView() {
     isOpen: boolean;
     jobs: JobDescriptionItem[];
   } | null>(null);
+
+  // Export Modals State
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedJobsForExport, setSelectedJobsForExport] = useState<JobDescriptionItem[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [jobForSingleExport, setJobForSingleExport] = useState<JobDescriptionItem | null>(null);
 
   // Filters
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
@@ -274,12 +283,27 @@ export function JobDescriptionView() {
             <Eye className="w-3.5 h-3.5" />
           </button>
 
+          {/* Export Single Profile Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setJobForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
+              title="Export Job Description Specification"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Edit Button */}
           {canEdit && (
             <button
               type="button"
               onClick={() => setSubView({ type: 'edit', job: item })}
-              className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
               title="Edit Role Profile"
             >
               <Edit className="w-3.5 h-3.5" />
@@ -339,6 +363,34 @@ export function JobDescriptionView() {
             { id: 'list', label: 'Job Profiles', count: jobs.length },
             { id: 'competency', label: 'Skills Matrix' },
           ]}
+          actions={
+            <div className="flex items-center gap-2">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedJobsForExport([]);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                  title="Export Job Descriptions Master Register"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="hidden sm:inline">Export Register</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'add' })}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Create Position</span>
+                </button>
+              )}
+            </div>
+          }
         />
       )}
 
@@ -594,10 +646,11 @@ export function JobDescriptionView() {
                     },
                   }] : []),
                   ...(canExport ? [{
-                    label: 'Export Register',
-                    icon: <Download className="w-3.5 h-3.5" />,
+                    label: 'Export JD Register',
+                    icon: <FileDown className="w-3.5 h-3.5" />,
                     onClick: (selected: JobDescriptionItem[]) => {
-                      showToast(`Exported ${selected.length} job description records`);
+                      setSelectedJobsForExport(selected);
+                      setIsGlobalExportModalOpen(true);
                     },
                   }] : []),
                 ]}
@@ -687,6 +740,24 @@ export function JobDescriptionView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global Job Descriptions Export Modal */}
+      <JobDescriptionExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allJobs={jobs}
+        selectedJobs={selectedJobsForExport}
+      />
+
+      {/* Single Job Description Export Modal */}
+      <JobDescriptionSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setJobForSingleExport(null);
+        }}
+        job={jobForSingleExport}
+      />
     </div>
   );
 }

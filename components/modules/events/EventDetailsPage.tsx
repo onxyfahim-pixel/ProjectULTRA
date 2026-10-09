@@ -25,6 +25,7 @@ import {
   Compass,
   Briefcase,
   AlertTriangle,
+  FileDown,
 } from 'lucide-react';
 import {
   FactoryEventItem,
@@ -36,6 +37,8 @@ import {
   EventChecklistItem,
 } from '@/lib/types/modules';
 import { EVENT_TYPE_CONFIG } from './events-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
+import { EventSingleExportModal } from './EventSingleExportModal';
 
 interface EventDetailsPageProps {
   event: FactoryEventItem;
@@ -56,10 +59,12 @@ export function EventDetailsPage({
   onUpdateEvent,
   showToast,
 }: EventDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('events');
   const [currentEvent, setCurrentEvent] = useState<FactoryEventItem>(event);
   const [attendees, setAttendees] = useState<EventAttendee[]>(event.delegationMembers || []);
   const [itinerary, setItinerary] = useState<EventScheduleItem[]>(event.itinerary || []);
   const [checklist, setChecklist] = useState<EventChecklistItem[]>(event.preparationChecklist || []);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Quick Add Attendee Form State
   const [showAddAttendee, setShowAddAttendee] = useState(false);
@@ -326,35 +331,54 @@ export function EventDetailsPage({
 
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => onDuplicate(currentEvent)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
-            title="Duplicate Event Template"
-          >
-            <Copy className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden md:inline">Duplicate</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(currentEvent)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Duplicate Event Template"
+            >
+              <Copy className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden md:inline">Duplicate</span>
+            </button>
+          )}
+
+          {/* Export Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Export Event Dossier"
+            >
+              <FileDown className="w-3.5 h-3.5 text-violet-600" />
+              <span className="hidden md:inline">Export Dossier</span>
+            </button>
+          )}
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => onEdit(currentEvent)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Event</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(currentEvent)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Event</span>
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => onDelete(currentEvent)}
-            className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Event"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(currentEvent)}
+              className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Event"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -845,6 +869,13 @@ export function EventDetailsPage({
         </div>
       </div>
       </div>
+
+      {/* Single Event Export Modal */}
+      <EventSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        event={currentEvent}
+      />
     </div>
   );
 }

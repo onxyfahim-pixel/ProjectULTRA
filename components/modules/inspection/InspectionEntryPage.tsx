@@ -22,6 +22,7 @@ import {
   Search,
   FileText,
   Building2,
+  Factory,
   AlertCircle,
   Scale,
   TrendingUp,
@@ -36,8 +37,14 @@ import {
   DefectItem,
   CheckpointItem,
   CombinedPoItem,
+  InspectionSizeBreakdownItem,
 } from '@/lib/types/erp';
 import { BuyerOrder } from '@/lib/types/modules';
+import {
+  deriveSizeBreakdownFromBuyerOrder,
+  calculateSizeSamplePickups,
+} from './inspection-size-utils';
+import { InspectionSizeBreakdownSection } from './InspectionSizeBreakdownSection';
 import {
   calculateAqlInspection,
   evaluateAqlVerdict,
@@ -74,6 +81,83 @@ const COMMON_GARMENT_DEFECTS = [
   'Buttonhole Frayed / Misplaced',
   'Polybag Barcode Unreadable',
   'Carton Marking Inaccurate',
+];
+
+const INSPECTION_UNITS = [
+  'Unit 01 (Dhaka Complex)',
+  'Unit 02 (Chittagong SEZ)',
+  'Unit 03 (Ashulia Modern Plant)',
+  'Unit 04 (Gazipur Export Zone)',
+];
+
+const INSPECTION_SECTIONS: Array<{ id: InspectionStage; name: string; icon: string; lines: string[] }> = [
+  {
+    id: 'SEWING_IN_LINE',
+    name: 'Sewing In-Line Inspection',
+    icon: '🧵',
+    lines: [
+      'Line 01 (Knit Tops)',
+      'Line 02 (Knit Polo & Fleece)',
+      'Line 03 (Woven Bottoms)',
+      'Line 04 (Heavy Denim)',
+      'Line 05 (Precision Knit)',
+      'Line 06 (Fleece Assembly)',
+      'Line 07 (Cargo & Utility)',
+      'Line 08 (Intimates & Activewear)',
+    ],
+  },
+  {
+    id: 'END_LINE_QC',
+    name: 'End-Line 100% Quality Inspection',
+    icon: '🔍',
+    lines: [
+      'End-Line QC Station 01',
+      'End-Line QC Station 02',
+      'End-Line QC Station 03',
+      'End-Line QC Station 04',
+      'Defect Alteration Post 01',
+    ],
+  },
+  {
+    id: 'FINISHING_PACKING',
+    name: 'Finishing & Packing Floor',
+    icon: '📦',
+    lines: [
+      'Finishing Line 01 (Steam Press)',
+      'Finishing Line 02 (Iron & Fold)',
+      'Metal Detection & Needle Audit 01',
+      'Carton Packaging Station 01',
+      'Pre-Shipment Audit Room',
+    ],
+  },
+  {
+    id: 'CUTTING_INSPECTION',
+    name: 'Cutting Floor Inspection',
+    icon: '✂️',
+    lines: [
+      'Cutting Table 01 (Gerber CNC)',
+      'Cutting Table 02 (Manual Spreader)',
+      'Fabric Bundle Audit Post 01',
+      'Pattern Master Station',
+    ],
+  },
+  {
+    id: 'FABRIC_INWARD',
+    name: 'Fabric Inward & Raw Material',
+    icon: '📜',
+    lines: [
+      'Fabric 4-Point Inspection Frame 01',
+      'Fabric Roll Lab Testing 01',
+      'Shade Continuity Table 01',
+    ],
+  },
+];
+
+const INSPECTION_SHIFTS = [
+  'Morning Shift A (08:00 - 16:30)',
+  'Evening Shift B (16:30 - 01:00)',
+  'Night Shift C (01:00 - 08:00)',
+  'General Day Shift (08:30 - 17:30)',
 ];
 
 export function InspectionEntryPage({
@@ -143,6 +227,26 @@ export function InspectionEntryPage({
       setSampleSize(aqlCalc.sampleSize);
     }
   }, [aqlCalc.sampleSize, isSampleSizeManual]);
+
+  // Size-Wise Breakdown State
+  const [sizeBreakdown, setSizeBreakdown] = useState<InspectionSizeBreakdownItem[]>(() => {
+    if (record?.sizeBreakdown && record.sizeBreakdown.length > 0) {
+      return record.sizeBreakdown;
+    }
+    const matchedOrder = orders.find(
+      (o) => o.id === record?.buyerOrderId || o.orderNumber === record?.orderNumber
+    );
+    return deriveSizeBreakdownFromBuyerOrder(
+      matchedOrder,
+      record?.lotQuantity || record?.orderQuantity || 10000,
+      record?.sampleSize || aqlCalc.sampleSize
+    );
+  });
+
+  // Automatically recalculate size-wise sample pickup quantities when total sampleSize changes
+  React.useEffect(() => {
+    setSizeBreakdown((prev) => calculateSizeSamplePickups(prev, sampleSize));
+  }, [sampleSize]);
   const [factoryUnit, setFactoryUnit] = useState(record?.factoryUnit || 'Unit 01 (Dhaka Complex)');
   const [sewingLine, setSewingLine] = useState(record?.sewingLine || 'Sewing Line 04 (Bottoms)');
   const [shift, setShift] = useState(record?.shift || 'Morning Shift A (08:00 - 16:30)');
@@ -307,6 +411,9 @@ export function InspectionEntryPage({
       setOrderQuantity(ord.orderQuantity);
       setLotQuantity(ord.orderQuantity);
       setCartonCount(Math.ceil(ord.orderQuantity / 24));
+      // Populate size breakdown from selected order
+      const derived = deriveSizeBreakdownFromBuyerOrder(ord, ord.orderQuantity, sampleSize);
+      setSizeBreakdown(derived);
     }
   };
 
@@ -432,6 +539,9 @@ export function InspectionEntryPage({
       buyer,
       factoryUnit,
       sewingLine,
+      unit: factoryUnit,
+      section: stage,
+      lineId: sewingLine,
       shift,
       remarks,
       correctiveAction,
@@ -439,6 +549,7 @@ export function InspectionEntryPage({
       defects,
       measurements: [],
       checkpoints,
+      sizeBreakdown,
     };
 
     onSave(finalizedRecord);
@@ -910,6 +1021,109 @@ export function InspectionEntryPage({
           </div>
         </div>
 
+        {/* SUBSECTION: UNIT, SECTION & LINE AUDIT LOCATION */}
+        <div className="p-4 bg-slate-50/80 border border-slate-200 rounded-xl space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+            <div className="flex items-center gap-2">
+              <Factory className="w-4 h-4 text-blue-600" />
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                Manufacturing Unit, Inspection Section &amp; Line Location
+              </h4>
+            </div>
+            <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 font-semibold">
+              Distinct Floor Hierarchy
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            {/* 1. Unit */}
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                <span>Manufacturing Unit *</span>
+              </label>
+              <select
+                value={factoryUnit}
+                onChange={(e) => setFactoryUnit(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 font-medium text-slate-800 cursor-pointer"
+              >
+                {INSPECTION_UNITS.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. Section */}
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Inspection Section *</span>
+              </label>
+              <select
+                value={stage}
+                onChange={(e) => {
+                  const newStage = e.target.value as InspectionStage;
+                  setStage(newStage);
+                  const found = INSPECTION_SECTIONS.find((s) => s.id === newStage);
+                  if (found && found.lines.length > 0) {
+                    setSewingLine(found.lines[0]);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-indigo-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800 cursor-pointer"
+              >
+                {INSPECTION_SECTIONS.map((sec) => (
+                  <option key={sec.id} value={sec.id}>
+                    {sec.icon} {sec.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Line */}
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                <Factory className="w-3.5 h-3.5 text-blue-600" />
+                <span>Production Line / Station *</span>
+              </label>
+              <select
+                value={sewingLine}
+                onChange={(e) => setSewingLine(e.target.value)}
+                className="w-full px-3 py-2 border border-blue-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 font-bold text-slate-900 cursor-pointer"
+              >
+                {(
+                  INSPECTION_SECTIONS.find((s) => s.id === stage)?.lines ||
+                  INSPECTION_SECTIONS[0].lines
+                ).map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 4. Shift */}
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-slate-500" />
+                <span>Operating Shift</span>
+              </label>
+              <select
+                value={shift}
+                onChange={(e) => setShift(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 font-medium text-slate-800 cursor-pointer"
+              >
+                {INSPECTION_SHIFTS.map((sh) => (
+                  <option key={sh} value={sh}>
+                    {sh}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
         {/* INTERACTIVE QUANTITY RECONCILIATION & EXCESS / SHORTAGE CARD */}
         <div className="p-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 via-blue-50/20 to-slate-50 shadow-2xs space-y-2.5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1360,6 +1574,19 @@ export function InspectionEntryPage({
           </span>
         </div>
       </div>
+
+      {/* SECTION 3B: SIZE-WISE BREAKDOWN & SAMPLE PICKUP ALLOCATION */}
+      <InspectionSizeBreakdownSection
+        items={sizeBreakdown}
+        onChange={setSizeBreakdown}
+        totalSampleSize={sampleSize}
+        currentLotQuantity={lotQuantity}
+        currentOrderQuantity={orderQuantity}
+        onSyncLotQuantityToSizes={(newTotalLot) => {
+          setLotQuantity(newTotalLot);
+          showToast(`Synchronized Offered Lot Quantity to ${newTotalLot.toLocaleString()} pcs from size matrix.`);
+        }}
+      />
 
       {/* SECTION 4: INTERACTIVE DEFECT LOGGING MATRIX */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">

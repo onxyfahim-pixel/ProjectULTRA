@@ -35,9 +35,12 @@ import {
   BookmarkCheck,
   Eye,
   Hash,
+  FileDown,
 } from 'lucide-react';
 import { RootCauseCase, RcaStatus, RcaEvidenceImage } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { DeleteRcaModal } from './DeleteRcaModal';
+import { RcaSingleExportModal } from './RcaSingleExportModal';
 
 interface RcaDetailsPageProps {
   rcaCase: RootCauseCase;
@@ -117,6 +120,9 @@ export function RcaDetailsPage({
   const [isAddPhotoOpen, setIsAddPhotoOpen] = useState(false);
   const [newPhotoUrl, setNewPhotoUrl] = useState('');
   const [newPhotoCaption, setNewPhotoCaption] = useState('');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  const { canExport } = useModulePermission('root_cause');
 
   const statusInfo = STATUS_CONFIG[rcaCase.status] || STATUS_CONFIG.COMPLETED;
   const severityInfo = SEVERITY_CONFIG[rcaCase.severity || 'MAJOR'] || SEVERITY_CONFIG.MAJOR;
@@ -254,6 +260,17 @@ export function RcaDetailsPage({
             <Edit className="w-3.5 h-3.5" />
             <span>Edit Case</span>
           </button>
+
+          {canExport && (
+            <button
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
+              title="Export 8D RCA Dossier"
+            >
+              <FileDown className="w-3.5 h-3.5 text-rose-500" />
+              <span>Export Dossier</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsDeleteModalOpen(true)}
@@ -865,6 +882,13 @@ export function RcaDetailsPage({
           onDelete(rcaCase);
         }}
         onCancel={() => setIsDeleteModalOpen(false)}
+      />
+
+      {/* Single RCA Dossier Export Modal */}
+      <RcaSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        rcaCase={rcaCase}
       />
       </div>
     </div>

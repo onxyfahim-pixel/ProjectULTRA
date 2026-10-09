@@ -36,6 +36,7 @@ import {
   printReportPdf,
   PrintableReportConfig,
 } from './reports-export-utils';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface UniversalReportViewerProps {
   reportKey: ReportTypeKey;
@@ -48,6 +49,7 @@ export function UniversalReportViewer({
   onBack,
   showToast,
 }: UniversalReportViewerProps) {
+  const { canExport } = useModulePermission('report_analysis');
   const [filters, setFilters] = useState<ReportFilterState>(INITIAL_REPORT_FILTER);
   const [tableSearch, setTableSearch] = useState('');
 
@@ -179,37 +181,39 @@ export function UniversalReportViewer({
         </div>
 
         {/* Quick Actions */}
-        <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
-          <button
-            type="button"
-            onClick={handleDownloadCsv}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 transition-all cursor-pointer"
-            title="Download CSV"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-600" />
-            <span className="hidden sm:inline">CSV</span>
-          </button>
+        {canExport && (
+          <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+            <button
+              type="button"
+              onClick={handleDownloadCsv}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 transition-all cursor-pointer"
+              title="Download CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-600" />
+              <span className="hidden sm:inline">CSV</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={handleDownloadExcel}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl shadow-2xs transition-all cursor-pointer"
-            title="Download Excel"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span className="hidden sm:inline">Excel</span>
-          </button>
+            <button
+              type="button"
+              onClick={handleDownloadExcel}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl shadow-2xs transition-all cursor-pointer"
+              title="Download Excel"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+              <span className="hidden sm:inline">Excel</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={handlePrintPdf}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-2xs transition-all cursor-pointer"
-            title="Print or Save PDF"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print / PDF</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={handlePrintPdf}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-2xs transition-all cursor-pointer"
+              title="Print or Save PDF"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print / PDF</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Interactive Customization Filter Toolbar */}
@@ -220,6 +224,7 @@ export function UniversalReportViewer({
         onDownloadExcel={handleDownloadExcel}
         onPrintPdf={handlePrintPdf}
         totalRecordsCount={tableRows.length}
+        canExport={canExport}
       />
 
       {/* 4 Dynamic KPI Cards */}

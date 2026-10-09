@@ -33,6 +33,7 @@ export interface PdfHeaderSettings {
   docCodePrefix: string;
   defaultOrientation?: 'portrait' | 'landscape';
   recordDocCodes?: Record<string, string>;
+  moduleWiseConfigs?: Record<string, ModuleCustomHeaderConfig>;
   showQrVerificationCode: boolean;
   qrCodeText: string;
   showConfidentialNotice: boolean;
@@ -43,8 +44,340 @@ export interface PdfHeaderSettings {
   lastUpdatedAt?: string;
 }
 
+export interface ModuleCustomHeaderConfig {
+  registerTitle?: string;
+  registerDocCode?: string;
+  singleTitle?: string;
+  singleDocCode?: string;
+}
+
+export interface ModuleHeaderDefinition {
+  key: string;
+  name: string;
+  category: string;
+  department: string;
+  defaultRegisterTitle: string;
+  defaultRegisterDocCode: string;
+  defaultSingleTitle: string;
+  defaultSingleDocCode: string;
+}
+
+export const DEFAULT_MODULE_HEADER_CONFIGS: ModuleHeaderDefinition[] = [
+  {
+    key: 'production',
+    name: 'Production Operations',
+    category: 'Manufacturing & Operations',
+    department: 'Garment Manufacturing & Floor Production Control',
+    defaultRegisterTitle: 'PRODUCTION & FLOOR OPERATIONS MASTER REGISTER',
+    defaultRegisterDocCode: 'PRD-REG',
+    defaultSingleTitle: 'DAILY PRODUCTION BATCH & LINE INSPECTION DOSSIER',
+    defaultSingleDocCode: 'PRD-SPEC',
+  },
+  {
+    key: 'buyer_order',
+    name: 'Buyer & Purchase Orders',
+    category: 'Manufacturing & Operations',
+    department: 'Buyer & Merchandising Division',
+    defaultRegisterTitle: 'BUYER ORDERS & PRODUCTION SUMMARY REGISTER',
+    defaultRegisterDocCode: 'PO-REG',
+    defaultSingleTitle: 'PURCHASE ORDER & TECH PACK SPECIFICATION DOSSIER',
+    defaultSingleDocCode: 'PO-SPEC',
+  },
+  {
+    key: 'planning_ie',
+    name: 'Planning & Industrial Engineering',
+    category: 'Manufacturing & Operations',
+    department: 'Industrial Engineering & Planning Division',
+    defaultRegisterTitle: 'LINE BALANCING & PRODUCTION PLANNING REGISTER',
+    defaultRegisterDocCode: 'IE-REG',
+    defaultSingleTitle: 'OPERATION BULLETIN & ORDER PLANNING DOSSIER',
+    defaultSingleDocCode: 'IE-PLAN',
+  },
+  {
+    key: 'inventory',
+    name: 'Warehouse & Inventory',
+    category: 'Supply Chain & Inventory',
+    department: 'Supply Chain & Warehouse Logistics',
+    defaultRegisterTitle: 'WAREHOUSE INVENTORY & RAW MATERIAL REGISTER',
+    defaultRegisterDocCode: 'INV-REG',
+    defaultSingleTitle: 'MATERIAL GOODS RECEIVED NOTE (GRN) DOSSIER',
+    defaultSingleDocCode: 'GRN-REC',
+  },
+  {
+    key: 'inspections',
+    name: 'Quality Inspections (AQL)',
+    category: 'Quality Management',
+    department: 'Quality Assurance & Quality Control',
+    defaultRegisterTitle: 'QUALITY INSPECTION & AQL AUDIT MASTER REGISTER',
+    defaultRegisterDocCode: 'QC-INSP',
+    defaultSingleTitle: 'FINAL QUALITY AUDIT & AQL 2.5 INSPECTION REPORT',
+    defaultSingleDocCode: 'QC-SPEC',
+  },
+  {
+    key: 'incoming_qc',
+    name: 'Incoming Raw Material QC',
+    category: 'Quality Management',
+    department: 'Incoming Raw Material Laboratory',
+    defaultRegisterTitle: 'FABRIC & ACCESSORIES INWARD QC MASTER REGISTER',
+    defaultRegisterDocCode: 'IQC-REG',
+    defaultSingleTitle: 'RAW MATERIAL 4-POINT INWARD TEST CERTIFICATE',
+    defaultSingleDocCode: 'IQC-CERT',
+  },
+  {
+    key: 'testing',
+    name: 'Laboratory Testing',
+    category: 'Quality Management',
+    department: 'Physical & Chemical Textile Testing Laboratory',
+    defaultRegisterTitle: 'LABORATORY TESTING & CERTIFICATION REGISTER',
+    defaultRegisterDocCode: 'LAB-REG',
+    defaultSingleTitle: 'FABRIC & GARMENT TECHNICAL TEST REPORT',
+    defaultSingleDocCode: 'LAB-TEST',
+  },
+  {
+    key: 'defects_library',
+    name: 'Defect Classification Library',
+    category: 'Quality Management',
+    department: 'Quality Engineering & Defect Prevention',
+    defaultRegisterTitle: 'GARMENT DEFECT CATALOG & CLASSIFICATION REGISTER',
+    defaultRegisterDocCode: 'DEF-CAT',
+    defaultSingleTitle: 'DEFECT TECHNICAL CLASSIFICATION SPECIFICATION',
+    defaultSingleDocCode: 'DEF-SPEC',
+  },
+  {
+    key: 'quality_manual',
+    name: 'Quality Manual (ISO 9001)',
+    category: 'Quality Management',
+    department: 'Executive Quality Assurance & ISO Governance',
+    defaultRegisterTitle: 'ISO 9001:2015 QUALITY MANUAL MASTER REGISTER',
+    defaultRegisterDocCode: 'QM-REG',
+    defaultSingleTitle: 'QUALITY MANUAL SECTION & POLICY SPECIFICATION',
+    defaultSingleDocCode: 'QM-MANUAL',
+  },
+  {
+    key: 'quality_goals',
+    name: 'Annual Quality Objectives',
+    category: 'Quality Management',
+    department: 'Strategic Planning & Quality Steering Committee',
+    defaultRegisterTitle: 'ANNUAL QUALITY OBJECTIVES & KPI TARGETS REGISTER',
+    defaultRegisterDocCode: 'QG-REG',
+    defaultSingleTitle: 'QUALITY GOAL KPI TARGET CHARTER & TRACKING DOSSIER',
+    defaultSingleDocCode: 'QG-SPEC',
+  },
+  {
+    key: 'capa',
+    name: 'CAPA Corrective Actions',
+    category: 'Audits & Compliance',
+    department: 'Compliance & Technical Auditing',
+    defaultRegisterTitle: 'CORRECTIVE & PREVENTIVE ACTIONS (CAPA) REGISTER',
+    defaultRegisterDocCode: 'CAPA-REG',
+    defaultSingleTitle: 'CAPA 8D CORRECTIVE & PREVENTIVE ACTION REPORT',
+    defaultSingleDocCode: 'CAPA-ACT',
+  },
+  {
+    key: 'audit',
+    name: 'Quality & Compliance Audits',
+    category: 'Audits & Compliance',
+    department: 'Internal Audit & Compliance Assurance',
+    defaultRegisterTitle: 'QUALITY & SOCIAL COMPLIANCE AUDIT REGISTER',
+    defaultRegisterDocCode: 'AUD-REG',
+    defaultSingleTitle: 'INTERNAL & BUYER AUDIT ASSESSMENT DOSSIER',
+    defaultSingleDocCode: 'AUD-INT',
+  },
+  {
+    key: 'root_cause',
+    name: 'Root Cause Analysis (RCA)',
+    category: 'Audits & Compliance',
+    department: 'Continuous Improvement & Quality Assurance',
+    defaultRegisterTitle: 'ROOT CAUSE ANALYSIS (RCA) INVESTIGATION REGISTER',
+    defaultRegisterDocCode: 'RCA-REG',
+    defaultSingleTitle: 'RCA 5-WHY & ISHIKAWA INVESTIGATION DOSSIER',
+    defaultSingleDocCode: 'RCA-8D',
+  },
+  {
+    key: 'risk_assessment',
+    name: 'Risk Assessment & FMEA',
+    category: 'Audits & Compliance',
+    department: 'Risk Management & Operational Governance',
+    defaultRegisterTitle: 'OPERATIONAL RISK ASSESSMENT & FMEA REGISTER',
+    defaultRegisterDocCode: 'RSK-REG',
+    defaultSingleTitle: 'RISK ASSESSMENT & FAILURE MODE (FMEA) DOSSIER',
+    defaultSingleDocCode: 'RSK-FMEA',
+  },
+  {
+    key: 'customer_complaint',
+    name: 'Customer Complaints',
+    category: 'Audits & Compliance',
+    department: 'Customer Satisfaction & Quality Assurance',
+    defaultRegisterTitle: 'CUSTOMER & BUYER COMPLAINT MASTER REGISTER',
+    defaultRegisterDocCode: 'CLM-REG',
+    defaultSingleTitle: '8D CUSTOMER COMPLAINT INVESTIGATION DOSSIER',
+    defaultSingleDocCode: 'CLM-8D',
+  },
+  {
+    key: 'certificate',
+    name: 'Certifications & Accreditations',
+    category: 'Audits & Compliance',
+    department: 'Regulatory Compliance & Certification',
+    defaultRegisterTitle: 'FACTORY ACCREDITATION & CERTIFICATES MASTER REGISTER',
+    defaultRegisterDocCode: 'CERT-REG',
+    defaultSingleTitle: 'FACTORY ACCREDITATION & CERTIFICATE DOSSIER',
+    defaultSingleDocCode: 'CERT-SPEC',
+  },
+  {
+    key: 'sub_supplier',
+    name: 'Sub-Supplier & Mills',
+    category: 'Supply Chain & Inventory',
+    department: 'Supply Chain Quality & Vendor Assurance',
+    defaultRegisterTitle: 'SUB-SUPPLIER & FABRIC MILL AUDIT REGISTER',
+    defaultRegisterDocCode: 'SUP-REG',
+    defaultSingleTitle: 'SUB-SUPPLIER QUALIFICATION & AUDIT DOSSIER',
+    defaultSingleDocCode: 'SUP-AUD',
+  },
+  {
+    key: 'traceability',
+    name: 'Traceability & Passports',
+    category: 'Supply Chain & Inventory',
+    department: 'Digital Traceability & Chain of Custody',
+    defaultRegisterTitle: 'SUPPLY CHAIN & LOT TRACEABILITY MASTER REGISTER',
+    defaultRegisterDocCode: 'TRC-REG',
+    defaultSingleTitle: 'PRODUCT TRACEABILITY CHAIN & AUDIT TRAIL DOSSIER',
+    defaultSingleDocCode: 'TRC-AUD',
+  },
+  {
+    key: 'calibration',
+    name: 'Calibration & Metrology',
+    category: 'Standards & Engineering',
+    department: 'Metrology & Equipment Maintenance Section',
+    defaultRegisterTitle: 'EQUIPMENT CALIBRATION & METROLOGY MASTER REGISTER',
+    defaultRegisterDocCode: 'CAL-REG',
+    defaultSingleTitle: 'EQUIPMENT CALIBRATION & VERIFICATION CERTIFICATE',
+    defaultSingleDocCode: 'CAL-CERT',
+  },
+  {
+    key: 'procedure',
+    name: 'Standard Procedures',
+    category: 'Standards & Engineering',
+    department: 'Process Engineering & Quality Management',
+    defaultRegisterTitle: 'STANDARD OPERATING PROCEDURES (SOP) MASTER REGISTER',
+    defaultRegisterDocCode: 'PRC-REG',
+    defaultSingleTitle: 'PROCEDURE SPECIFICATION & PROCESS FLOW DOSSIER',
+    defaultSingleDocCode: 'PRC-SPEC',
+  },
+  {
+    key: 'process_flow',
+    name: 'Process Flow Maps',
+    category: 'Standards & Engineering',
+    department: 'Industrial Engineering & Process Control',
+    defaultRegisterTitle: 'GARMENT MANUFACTURING PROCESS FLOW REGISTER',
+    defaultRegisterDocCode: 'PFC-REG',
+    defaultSingleTitle: 'PROCESS FLOW CHART & QUALITY GATE DOSSIER',
+    defaultSingleDocCode: 'PFC-MAP',
+  },
+  {
+    key: 'sop_management',
+    name: 'SOP Protocols Library',
+    category: 'Standards & Engineering',
+    department: 'Technical Standards & Process Engineering',
+    defaultRegisterTitle: 'STANDARD OPERATING PROCEDURES LIBRARY REGISTER',
+    defaultRegisterDocCode: 'SOP-REG',
+    defaultSingleTitle: 'STANDARD OPERATING PROCEDURE SPECIFICATION DOSSIER',
+    defaultSingleDocCode: 'SOP-MANUAL',
+  },
+  {
+    key: 'document_control',
+    name: 'Document Control Register',
+    category: 'Standards & Engineering',
+    department: 'Document Control & Information Management',
+    defaultRegisterTitle: 'CONTROLLED DOCUMENTS MASTER REGISTER',
+    defaultRegisterDocCode: 'DOC-REG',
+    defaultSingleTitle: 'CONTROLLED DOCUMENT ARCHIVE & SPECIFICATION DOSSIER',
+    defaultSingleDocCode: 'DOC-SPEC',
+  },
+  {
+    key: 'training',
+    name: 'Training & Skill Matrix',
+    category: 'Organization & Workforce',
+    department: 'Human Resources & Technical Training Institute',
+    defaultRegisterTitle: 'SKILLS MATRIX & QUALITY TRAINING REGISTER',
+    defaultRegisterDocCode: 'TRN-MAT',
+    defaultSingleTitle: 'TECHNICAL TRAINING PROGRAM & CURRICULUM DOSSIER',
+    defaultSingleDocCode: 'TRN-CURR',
+  },
+  {
+    key: 'job_description',
+    name: 'Job Descriptions',
+    category: 'Organization & Workforce',
+    department: 'Human Resources & Organizational Development',
+    defaultRegisterTitle: 'FACTORY JOB DESCRIPTIONS & HIERARCHY REGISTER',
+    defaultRegisterDocCode: 'JD-REG',
+    defaultSingleTitle: 'EMPLOYMENT POSITION & JOB DESCRIPTION SPECIFICATION',
+    defaultSingleDocCode: 'JD-SPEC',
+  },
+  {
+    key: 'organogram',
+    name: 'Organogram & Hierarchy',
+    category: 'Organization & Workforce',
+    department: 'Human Capital & Operational Hierarchy Board',
+    defaultRegisterTitle: 'CORPORATE & FACTORY ORGANIZATIONAL STRUCTURE REGISTER',
+    defaultRegisterDocCode: 'ORG-REG',
+    defaultSingleTitle: 'DEPARTMENT ORGANOGRAM & REPORTING STRUCTURE DOSSIER',
+    defaultSingleDocCode: 'ORG-CHART',
+  },
+  {
+    key: 'communication',
+    name: 'Communication Portal',
+    category: 'Organization & Workforce',
+    department: 'Internal Factory Communications & HR Affairs',
+    defaultRegisterTitle: 'FACTORY NOTICES & OPERATIONAL DIRECTIVES REGISTER',
+    defaultRegisterDocCode: 'COM-REG',
+    defaultSingleTitle: 'OFFICIAL FACTORY NOTICE & DIRECTIVE BULLETIN',
+    defaultSingleDocCode: 'COM-NOT',
+  },
+  {
+    key: 'meeting_minutes',
+    name: 'Management Review Meetings',
+    category: 'Organization & Workforce',
+    department: 'Corporate Governance & Executive Administration',
+    defaultRegisterTitle: 'MANAGEMENT REVIEW MEETING MINUTES REGISTER',
+    defaultRegisterDocCode: 'MOM-REG',
+    defaultSingleTitle: 'MANAGEMENT REVIEW MEETING RESOLUTIONS DOSSIER',
+    defaultSingleDocCode: 'MOM-SPEC',
+  },
+  {
+    key: 'events',
+    name: 'Factory Events & Audits',
+    category: 'Organization & Workforce',
+    department: 'Factory Operations & Compliance Scheduling',
+    defaultRegisterTitle: 'FACTORY AUDITS & REGULATORY EVENTS REGISTER',
+    defaultRegisterDocCode: 'EVT-REG',
+    defaultSingleTitle: 'COMPLIANCE EVENT & AUDIT SCHEDULE DOSSIER',
+    defaultSingleDocCode: 'EVT-SPEC',
+  },
+  {
+    key: 'report_analysis',
+    name: 'Reports & Analytics',
+    category: 'Executive & Reporting',
+    department: 'Business Intelligence & Executive Analytics',
+    defaultRegisterTitle: 'CENTRAL REPORTING & ANALYTICAL AUDIT REGISTER',
+    defaultRegisterDocCode: 'RPT-REG',
+    defaultSingleTitle: 'ANALYTICAL PERFORMANCE REPORT DOSSIER',
+    defaultSingleDocCode: 'RPT-SPEC',
+  },
+  {
+    key: 'kpi_management',
+    name: 'KPI Management',
+    category: 'Executive & Reporting',
+    department: 'Performance Management & Strategic Steering',
+    defaultRegisterTitle: 'PLANT PERFORMANCE & OPERATIONAL KPI MASTER REGISTER',
+    defaultRegisterDocCode: 'KPI-REG',
+    defaultSingleTitle: 'KEY PERFORMANCE INDICATOR (KPI) SPECIFICATION DOSSIER',
+    defaultSingleDocCode: 'KPI-SPEC',
+  },
+];
+
 export const DEFAULT_PDF_HEADER_SETTINGS: PdfHeaderSettings = {
   autoSyncWithGeneral: true,
+  moduleWiseConfigs: {},
 
   companyName: 'Valiant Garments Manufacturing Ltd.',
   companySubtitle: 'Precision Quality, Production & Global Compliance Suite',
@@ -77,9 +410,56 @@ export const DEFAULT_PDF_HEADER_SETTINGS: PdfHeaderSettings = {
     buyerOrderSingle: 'PO-SPEC',
     inspectionReport: 'QC-INSP',
     capaRecord: 'CAPA-ACT',
+    capaRegister: 'CAPA-REG',
     auditReport: 'AUD-INT',
     inventoryGrn: 'GRN-REC',
     testReport: 'LAB-TEST',
+    testingRegister: 'LAB-REG',
+    planningRegister: 'VAL-IE-REG',
+    planningOrderPlan: 'PO-PLAN',
+    operationBulletin: 'VAL-OB',
+    reportsRegister: 'VAL-RPT-REG',
+    reportSingle: 'VAL-RPT-SPEC',
+    incomingQcRegister: 'IQC-REG',
+    incomingQcCertificate: 'IQC-CERT',
+    complaintRegister: 'CLM-REG',
+    complaintInvestigation: 'CLM-8D',
+    supplierRegister: 'SUP-REG',
+    supplierAudit: 'SUP-AUD',
+    riskRegister: 'RSK-REG',
+    riskReport: 'RSK-FMEA',
+    calibrationRegister: 'CAL-REG',
+    calibrationCertificate: 'CAL-CERT',
+    defectCatalog: 'DEF-CAT',
+    defectSpecSheet: 'DEF-SPEC',
+    trainingMatrix: 'TRN-MAT',
+    trainingCurriculum: 'TRN-CURR',
+    docControlRegister: 'DOC-REG',
+    controlledDocumentDossier: 'DOC-SPEC',
+    rcaRegister: 'RCA-REG',
+    rcaDossier: 'RCA-8D',
+    meetingMinutesRegister: 'MOM-REG',
+    meetingMinutesDossier: 'MOM-SPEC',
+    factoryEventsRegister: 'EVT-REG',
+    factoryEventDossier: 'EVT-SPEC',
+    sopRegister: 'SOP-REG',
+    sopManual: 'SOP-MANUAL',
+    jobDescriptionRegister: 'JD-REG',
+    jobDescriptionDossier: 'JD-SPEC',
+    qualityManualRegister: 'QM-REG',
+    qualityManualDossier: 'QM-MANUAL',
+    traceabilityRegister: 'TRC-REG',
+    traceabilityDossier: 'TRC-AUD',
+    certificateRegister: 'CERT-REG',
+    certificateDossier: 'CERT-SPEC',
+    organogramRegister: 'ORG-REG',
+    organogramChart: 'ORG-CHART',
+    procedureRegister: 'PRC-REG',
+    procedureDossier: 'PRC-SPEC',
+    processFlowRegister: 'PFC-REG',
+    processFlowDossier: 'PFC-MAP',
+    communicationRegister: 'COM-REG',
+    communicationDossier: 'COM-NOT',
   },
   showQrVerificationCode: true,
   qrCodeText: 'https://valiantgarments.com/verify-qms-doc',
@@ -96,7 +476,24 @@ export const DEFAULT_PDF_HEADER_SETTINGS: PdfHeaderSettings = {
     'capa',
     'audit',
     'testing',
+    'sub_supplier',
     'risk_assessment',
+    'calibration',
+    'defects_library',
+    'training',
+    'document_control',
+    'root_cause',
+    'meeting_minutes',
+    'events',
+    'sop_management',
+    'job_description',
+    'quality_manual',
+    'traceability',
+    'certificate',
+    'organogram',
+    'procedure',
+    'process_flow',
+    'communication',
   ],
   lastUpdatedAt: new Date().toISOString(),
 };
@@ -148,6 +545,9 @@ export function loadPdfHeaderSettings(): PdfHeaderSettings {
           recordDocCodes: {
             ...DEFAULT_PDF_HEADER_SETTINGS.recordDocCodes,
             ...(parsed.recordDocCodes || {}),
+          },
+          moduleWiseConfigs: {
+            ...(parsed.moduleWiseConfigs || {}),
           },
         };
       }
@@ -218,6 +618,91 @@ export function savePdfHeaderSettings(settings: PdfHeaderSettings): void {
   }).catch((err) => {
     console.warn('Failed to sync PDF header settings to server:', err);
   });
+}
+
+/**
+ * Resolves the configured Record Title and Document Code for any module,
+ * prioritizing user customizations from settings and falling back to QMS standard defaults.
+ */
+export function getModuleExportConfig(
+  settings: PdfHeaderSettings,
+  moduleKey: string,
+  type: 'register' | 'single' = 'register',
+  itemIdentifier?: string
+): {
+  title: string;
+  docCode: string;
+  fullDocCode: string;
+  department: string;
+  prefix: string;
+} {
+  const normalizedKey =
+    moduleKey === 'complaint' ? 'customer_complaint' :
+    moduleKey === 'rca' ? 'root_cause' :
+    moduleKey === 'sop' ? 'sop_management' :
+    moduleKey === 'planning' ? 'planning_ie' :
+    moduleKey === 'inspection' ? 'inspections' :
+    moduleKey === 'defect_library' ? 'defects_library' :
+    moduleKey === 'reports' ? 'report_analysis' :
+    moduleKey;
+
+  const definition = DEFAULT_MODULE_HEADER_CONFIGS.find((m) => m.key === normalizedKey || m.key === moduleKey);
+  const custom = settings.moduleWiseConfigs?.[normalizedKey] || settings.moduleWiseConfigs?.[moduleKey];
+  const prefix = settings.docCodePrefix || 'VAL-QMS';
+
+  let title = '';
+  let docCode = '';
+  const department = definition?.department || 'Quality Assurance & Compliance Division';
+
+  const legacyDocCode = type === 'register' ? (
+    settings.recordDocCodes?.[normalizedKey + 'Register'] ||
+    settings.recordDocCodes?.[moduleKey + 'Register'] ||
+    (normalizedKey === 'customer_complaint' ? settings.recordDocCodes?.complaintRegister : undefined) ||
+    (normalizedKey === 'capa' ? settings.recordDocCodes?.capaRegister : undefined) ||
+    (normalizedKey === 'buyer_order' ? settings.recordDocCodes?.buyerOrderSummary : undefined) ||
+    (normalizedKey === 'calibration' ? settings.recordDocCodes?.calibrationRegister : undefined) ||
+    (normalizedKey === 'inspections' ? settings.recordDocCodes?.inspectionReport : undefined)
+  ) : (
+    settings.recordDocCodes?.[normalizedKey + 'Single'] ||
+    settings.recordDocCodes?.[moduleKey + 'Single'] ||
+    (normalizedKey === 'customer_complaint' ? settings.recordDocCodes?.complaintInvestigation : undefined) ||
+    (normalizedKey === 'capa' ? settings.recordDocCodes?.capaRecord : undefined) ||
+    (normalizedKey === 'buyer_order' ? settings.recordDocCodes?.buyerOrderSingle : undefined) ||
+    (normalizedKey === 'calibration' ? settings.recordDocCodes?.calibrationCertificate : undefined) ||
+    (normalizedKey === 'inspections' ? settings.recordDocCodes?.inspectionReport : undefined)
+  );
+
+  if (type === 'register') {
+    title = custom?.registerTitle?.trim() || definition?.defaultRegisterTitle || 'MASTER RECORD REGISTER';
+    docCode = custom?.registerDocCode?.trim() || legacyDocCode || definition?.defaultRegisterDocCode || 'REG';
+  } else {
+    title = custom?.singleTitle?.trim() || definition?.defaultSingleTitle || 'TECHNICAL RECORD DOSSIER';
+    docCode = custom?.singleDocCode?.trim() || legacyDocCode || definition?.defaultSingleDocCode || 'SPEC';
+  }
+
+  const fullDocCode = itemIdentifier ? `${prefix}-${docCode}-${itemIdentifier}` : `${prefix}-${docCode}`;
+
+  return {
+    title,
+    docCode,
+    fullDocCode,
+    department,
+    prefix,
+  };
+}
+
+/**
+ * Convenient helper to render the PDF Header HTML directly using the module's configured settings
+ */
+export function renderPdfHeaderHtmlForModule(
+  settings: PdfHeaderSettings,
+  moduleKey: string,
+  type: 'register' | 'single' = 'register',
+  itemIdentifier?: string,
+  docDate: string = new Date().toISOString().split('T')[0]
+): string {
+  const config = getModuleExportConfig(settings, moduleKey, type, itemIdentifier);
+  return renderPdfHeaderHtml(settings, config.title, config.fullDocCode, docDate, config.department);
 }
 
 /**

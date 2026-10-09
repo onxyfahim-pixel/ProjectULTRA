@@ -26,11 +26,13 @@ import {
   QrCode,
   Tag,
   Image as ImageIcon,
+  FileDown,
 } from 'lucide-react';
 import { CalibrationDevice } from '@/lib/types/modules';
 import { CalibrationCertificateModal } from './CalibrationCertificateModal';
 import { RecordCalibrationModal } from './RecordCalibrationModal';
 import { DeleteCalibrationModal } from './DeleteCalibrationModal';
+import { CalibrationSingleExportModal } from './CalibrationSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface CalibrationDetailsPageProps {
@@ -54,6 +56,7 @@ export function CalibrationDetailsPage({
   const [isCertModalOpen, setIsCertModalOpen] = useState(false);
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Expiry calculation
   const today = new Date();
@@ -115,6 +118,19 @@ export function CalibrationDetailsPage({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Export Certificate */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 transition-colors border border-amber-200 cursor-pointer"
+              title="Export Certificate (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-amber-600" />
+              <span>Export Certificate</span>
+            </button>
+          )}
+
           {/* 1. Record New Calibration */}
           {canCreate && (
             <button
@@ -563,6 +579,13 @@ export function CalibrationDetailsPage({
           onCancel={() => setIsDeleteModalOpen(false)}
         />
       )}
+
+      {/* Single Calibration Export Modal */}
+      <CalibrationSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        device={device}
+      />
       </div>
     </div>
   );

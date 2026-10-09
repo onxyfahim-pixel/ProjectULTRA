@@ -281,7 +281,7 @@ export function saveProductionUnits(units: ProductionUnit[]): void {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: units }),
-    }).catch(() => {});
+    }).catch(() => { });
   } catch (err) {
     console.error('Failed to save production units to localStorage', err);
   }
@@ -315,7 +315,7 @@ export function saveProductionSections(sections: ProductionSection[]): void {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: sections }),
-    }).catch(() => {});
+    }).catch(() => { });
   } catch (err) {
     console.error('Failed to save production sections to localStorage', err);
   }
@@ -349,8 +349,9 @@ export function saveProductionLines(lines: ProductionLine[]): void {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: lines }),
-    }).catch(() => {});
+    }).catch(() => { });
   } catch (err) {
     console.error('Failed to save production lines to localStorage', err);
   }
 }
+

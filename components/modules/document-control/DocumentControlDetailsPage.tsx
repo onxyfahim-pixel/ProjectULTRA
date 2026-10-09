@@ -22,9 +22,12 @@ import {
   FileCheck2,
   ExternalLink,
   Plus,
+  FileDown,
 } from 'lucide-react';
 import { ControlledDocument, DocumentAttachment, DocumentRevision } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { DeleteDocumentModal } from './DeleteDocumentModal';
+import { DocumentControlSingleExportModal } from './DocumentControlSingleExportModal';
 
 interface DocumentControlDetailsPageProps {
   doc: ControlledDocument;
@@ -43,7 +46,9 @@ export function DocumentControlDetailsPage({
   onUpdateDoc,
   showToast,
 }: DocumentControlDetailsPageProps) {
+  const { canEdit, canDelete, canExport } = useModulePermission('document_control');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // New Revision Quick Logger Modal
   const [isNewRevModalOpen, setIsNewRevModalOpen] = useState(false);
@@ -177,15 +182,30 @@ export function DocumentControlDetailsPage({
 
         {/* Action Buttons - Styled identically to Certificate Module */}
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          {/* Export Document Dossier Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors cursor-pointer"
+              title="Export Document Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-blue-600" />
+              <span>Export Dossier</span>
+            </button>
+          )}
+
           {/* Edit Document Button */}
-          <button
-            type="button"
-            onClick={() => onEdit(doc)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Document</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(doc)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Document</span>
+            </button>
+          )}
 
           {/* Delete Document Button */}
           {onDelete && (
@@ -652,6 +672,13 @@ export function DocumentControlDetailsPage({
           </div>
         </div>
       )}
+
+      {/* Individual Controlled Document Export Modal */}
+      <DocumentControlSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        doc={doc}
+      />
       </div>
     </div>
   );

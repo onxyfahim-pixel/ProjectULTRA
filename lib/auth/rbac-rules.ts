@@ -179,6 +179,13 @@ export const DEFAULT_SYSTEM_ROLES: RoleDefinition[] = [
         'calibration',
         'buyer_order',
         'inventory',
+        'planning_ie',
+        'audit',
+        'report_analysis',
+        'capa',
+        'customer_complaint',
+        'sub_supplier',
+        'risk_assessment',
       ];
       allowed.forEach((id) => {
         p[id] = {
@@ -186,6 +193,38 @@ export const DEFAULT_SYSTEM_ROLES: RoleDefinition[] = [
           create: id !== 'dashboard',
           edit: false,
           delete: false,
+          export: true,
+        };
+      });
+      return p;
+    })(),
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'planning_ie_manager',
+    name: 'Planning & IE Manager',
+    description: 'Can manage Master Production Schedules, Operation Bulletins, line capacity and IE analytics.',
+    isSystemRole: false,
+    permissions: (() => {
+      const p = createEmptyPermissions();
+      const operational = [
+        'dashboard',
+        'planning_ie',
+        'production',
+        'buyer_order',
+        'inventory',
+        'kpi_management',
+        'report_analysis',
+        'quality_goals',
+        'audit',
+      ];
+      operational.forEach((id) => {
+        p[id] = {
+          view: true,
+          create: true,
+          edit: true,
+          delete: id !== 'dashboard',
           export: true,
         };
       });

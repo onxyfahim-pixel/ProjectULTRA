@@ -37,6 +37,7 @@ import {
   SlidersHorizontal,
   Info,
   Paperclip,
+  Palette,
 } from 'lucide-react';
 import {
   BuyerOrder,
@@ -45,6 +46,7 @@ import {
   ProductionStageDetail,
   LogisticsDetail,
   BuyerOrderWIPRecord,
+  OrderColorSizeBreakdown,
 } from '@/lib/types/modules';
 import {
   computeWIPRecordForPO,
@@ -56,6 +58,8 @@ import {
   SEWING_TRACK_UPDATED_EVENT,
 } from '@/lib/db/production-records-store';
 import { OrderAttachmentsUploader } from './OrderAttachmentsUploader';
+import { OrderColorSizeSection } from './OrderColorSizeSection';
+import { ensureColorSizeBreakdown, calculateBreakdownTotal } from './order-breakdown-utils';
 
 interface BuyerOrderEditPageProps {
   order: BuyerOrder;
@@ -64,7 +68,7 @@ interface BuyerOrderEditPageProps {
   onSave: (updatedOrder: BuyerOrder) => void;
   onCancel: () => void;
   showToast: (msg: string) => void;
-  initialTab?: 'general' | 'upload' | 'stages' | 'bom' | 'logistics';
+  initialTab?: 'general' | 'breakdown' | 'upload' | 'stages' | 'bom' | 'logistics';
 }
 
 const SAMPLE_PRODUCT_IMAGES = [
@@ -161,12 +165,13 @@ export function BuyerOrderEditPage({
 }: BuyerOrderEditPageProps) {
   // Navigation Section Active State
   const [activeSection, setActiveSection] = useState<
-    'general' | 'upload' | 'stages' | 'bom' | 'logistics'
+    'general' | 'breakdown' | 'upload' | 'stages' | 'bom' | 'logistics'
   >(initialTab);
 
   // Core Form State
   const [formData, setFormData] = useState<BuyerOrder>({
     ...order,
+    colorSizeBreakdown: ensureColorSizeBreakdown(order),
     productionTracking: order.productionTracking || {
       currentStage: order.status,
       overallProgressPercent: 50,
@@ -577,10 +582,11 @@ export function BuyerOrderEditPage({
       <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200 text-xs font-semibold">
         {[
           { id: 'general', label: '1. Commercial & Style Specs', icon: Tag },
-          { id: 'upload', label: '2. Style Image & Attachments', icon: Paperclip },
-          { id: 'stages', label: '3. WIP Record & Pipeline Tracking', icon: Activity },
-          { id: 'bom', label: '4. BOM & Material Matrix', icon: Layers },
-          { id: 'logistics', label: '5. Logistics & Shipping', icon: Truck },
+          { id: 'breakdown', label: '2. Color & Size Breakdown', icon: Palette },
+          { id: 'upload', label: '3. Style Image & Attachments', icon: Paperclip },
+          { id: 'stages', label: '4. WIP Record & Pipeline Tracking', icon: Activity },
+          { id: 'bom', label: '5. BOM & Material Matrix', icon: Layers },
+          { id: 'logistics', label: '6. Logistics & Shipping', icon: Truck },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeSection === tab.id;
@@ -899,11 +905,59 @@ export function BuyerOrderEditPage({
               />
             </div>
           </div>
+
+          {/* Quick Color & Size Breakdown Overview in Section 1 */}
+          <div className="mt-4 p-4 rounded-xl bg-purple-50/50 border border-purple-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                <Palette className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900 flex items-center gap-2">
+                  <span>Color &amp; Size Breakdown Matrix</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                    {calculateBreakdownTotal(formData.colorSizeBreakdown).toLocaleString()} / {formData.orderQuantity.toLocaleString()} pcs Allocated
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {(formData.colorSizeBreakdown?.length || 0)} Colorway{(formData.colorSizeBreakdown?.length || 0) === 1 ? '' : 's'} configured with size-wise ratios
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveSection('breakdown')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all shadow-2xs cursor-pointer self-start sm:self-auto text-xs"
+            >
+              <span>Open Color &amp; Size Matrix</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION 2: GARMENT PHOTO & ATTACHMENTS UPLOAD */}
+      {/* SECTION 2: COLOR & SIZE BREAKDOWN SPECIFICATION MATRIX */}
+      {/* ========================================================================= */}
+      {activeSection === 'breakdown' && (
+        <OrderColorSizeSection
+          breakdown={formData.colorSizeBreakdown}
+          orderQuantity={formData.orderQuantity}
+          fobPrice={formData.fobPrice}
+          readOnly={false}
+          onChange={(newBreakdown) =>
+            setFormData((prev) => ({ ...prev, colorSizeBreakdown: newBreakdown }))
+          }
+          onSyncOrderQuantity={(newQty) =>
+            setFormData((prev) => ({ ...prev, orderQuantity: newQty }))
+          }
+          showToast={showToast}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* SECTION 3: GARMENT PHOTO & ATTACHMENTS UPLOAD */}
       {/* ========================================================================= */}
       {activeSection === 'upload' && (
         <div className="space-y-6">

@@ -26,6 +26,7 @@ import {
   Layers,
   ChevronRight,
   ExternalLink,
+  FileDown,
 } from 'lucide-react';
 import {
   MeetingMinutesItem,
@@ -33,7 +34,9 @@ import {
   MeetingActionItem,
   MeetingAttendee,
 } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { MEETING_TYPE_LABELS } from './meeting-minutes-data';
+import { MeetingSingleExportModal } from './MeetingSingleExportModal';
 
 interface MeetingMinutesDetailsPageProps {
   meeting: MeetingMinutesItem;
@@ -58,6 +61,9 @@ export function MeetingMinutesDetailsPage({
   const [actionItems, setActionItems] = useState<MeetingActionItem[]>(meeting.actionItems || []);
   const [attendees, setAttendees] = useState<MeetingAttendee[]>(meeting.attendees || []);
   const [discussionNotes, setDiscussionNotes] = useState<string[]>(meeting.discussionNotes || []);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  const { canExport } = useModulePermission('meeting_minutes');
 
   // Inline Quick Add Action Item
   const [showAddAction, setShowAddAction] = useState(false);
@@ -297,6 +303,19 @@ export function MeetingMinutesDetailsPage({
             <Copy className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden md:inline">Duplicate</span>
           </button>
+
+          {/* Export Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Export Meeting Minutes Dossier"
+            >
+              <FileDown className="w-3.5 h-3.5 text-teal-600" />
+              <span className="hidden md:inline">Export Dossier</span>
+            </button>
+          )}
 
           {/* Edit Button */}
           <button
@@ -891,6 +910,13 @@ export function MeetingMinutesDetailsPage({
         </div>
       </div>
       </div>
+
+      {/* Single Meeting Export Modal */}
+      <MeetingSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        meeting={currentMeeting}
+      />
     </div>
   );
 }

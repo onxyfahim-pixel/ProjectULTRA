@@ -26,6 +26,7 @@ import {
   MapPin,
   ExternalLink,
   FileCheck,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -38,6 +39,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { AddSubSupplierModal } from '../modules/sub-supplier/AddSubSupplierModal';
 import { SubSupplierDetailsPage } from '../modules/sub-supplier/SubSupplierDetailsPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
+import { SubSupplierExportModal } from '../modules/sub-supplier/SubSupplierExportModal';
+import { SubSupplierSingleExportModal } from '../modules/sub-supplier/SubSupplierSingleExportModal';
 
 type SupplierSubView =
   | { type: 'none' }
@@ -51,6 +54,12 @@ export function SubSupplierView() {
     MOCK_SUB_SUPPLIERS,
     'erp_sub_suppliers_v1'
   );
+
+  // Export Modals State
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedSuppliersForExport, setSelectedSuppliersForExport] = useState<SubSupplier[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [supplierForSingleExport, setSupplierForSingleExport] = useState<SubSupplier | null>(null);
 
   // Dedicated Separate Page for Supplier Details
   const [supplierSubView, setSupplierSubView] = useState<SupplierSubView>({ type: 'none' });
@@ -339,6 +348,21 @@ export function SubSupplierView() {
             <Eye className="w-3.5 h-3.5" />
           </button>
 
+          {/* Export Individual Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setSupplierForSingleExport(row);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 border border-blue-200 transition-colors cursor-pointer"
+              title="Export Supplier Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* 2. Edit Button */}
           {canEdit && (
             <button
@@ -406,6 +430,37 @@ export function SubSupplierView() {
             { id: 'list', label: 'Supplier Matrix', count: suppliers.length },
             { id: 'profiles', label: 'Vendor Profiles', count: suppliers.length },
           ]}
+          actions={
+            <div className="flex items-center gap-2">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSuppliersForExport(suppliers);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                  title="Export Sub-Supplier Register (PDF / Excel / CSV)"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Export Register</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSupplierToEdit(null);
+                    setIsAddModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Sub-Supplier</span>
+                </button>
+              )}
+            </div>
+          }
         />
       )}
 
@@ -655,9 +710,11 @@ export function SubSupplierView() {
                   ...(canExport
                     ? [
                         {
-                          label: 'Export Selected',
+                          label: 'Export Selected (PDF/Excel)',
+                          icon: <FileDown className="w-3.5 h-3.5" />,
                           onClick: (selected: SubSupplier[]) => {
-                            showToast(`Exported ${selected.length} sub-suppliers`);
+                            setSelectedSuppliersForExport(selected);
+                            setIsGlobalExportModalOpen(true);
                           },
                         },
                       ]
@@ -989,9 +1046,11 @@ export function SubSupplierView() {
                     ...(canExport
                       ? [
                           {
-                            label: 'Export Selected',
+                            label: 'Export Selected (PDF/Excel)',
+                            icon: <FileDown className="w-3.5 h-3.5" />,
                             onClick: (selected: SubSupplier[]) => {
-                              showToast(`Exported ${selected.length} vendors`);
+                              setSelectedSuppliersForExport(selected);
+                              setIsGlobalExportModalOpen(true);
                             },
                           },
                         ]
@@ -1035,6 +1094,24 @@ export function SubSupplierView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* GLOBAL EXPORT MODAL */}
+      <SubSupplierExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allSuppliers={suppliers}
+        selectedSuppliers={selectedSuppliersForExport}
+      />
+
+      {/* INDIVIDUAL EXPORT MODAL */}
+      <SubSupplierSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setSupplierForSingleExport(null);
+        }}
+        supplier={supplierForSingleExport}
+      />
     </div>
   );
 }

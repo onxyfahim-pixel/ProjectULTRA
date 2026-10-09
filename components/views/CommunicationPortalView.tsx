@@ -24,6 +24,7 @@ import {
   Layers,
   ArrowRight,
   TrendingUp,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -44,7 +45,10 @@ import {
 import { NoticeDetailsPage } from '../modules/communication/NoticeDetailsPage';
 import { NoticeEntryPage } from '../modules/communication/NoticeEntryPage';
 import { DeleteNoticeModal } from '../modules/communication/DeleteNoticeModal';
+import { CommunicationExportModal } from '../modules/communication/CommunicationExportModal';
+import { CommunicationSingleExportModal } from '../modules/communication/CommunicationSingleExportModal';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 const STORAGE_KEY = 'erp_communication_notices_v1';
 
@@ -54,6 +58,7 @@ type SubView =
   | { type: 'entry'; notice?: CommunicationNotice };
 
 export function CommunicationPortalView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('communication');
   const [activeTab, setActiveTab] = useState<'summary' | 'list' | 'acknowledgments'>('summary');
   const [notices, setNotices] = useLiveModuleData<CommunicationNotice[]>(
     'communication_notices',
@@ -66,6 +71,12 @@ export function CommunicationPortalView() {
     isOpen: boolean;
     notices: CommunicationNotice[];
   } | null>(null);
+
+  // Export states
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedNoticesForExport, setSelectedNoticesForExport] = useState<CommunicationNotice[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [noticeForSingleExport, setNoticeForSingleExport] = useState<CommunicationNotice | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -300,30 +311,49 @@ export function CommunicationPortalView() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'entry', notice: row })}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Bulletin"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDuplicate(row)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate Bulletin"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, notices: [row] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Bulletin"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'entry', notice: row })}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Bulletin"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicate(row)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate Bulletin"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setNoticeForSingleExport(row);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Export Bulletin (PDF/Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-blue-600" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, notices: [row] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Bulletin"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -331,14 +361,30 @@ export function CommunicationPortalView() {
 
   // Batch actions
   const batchActions: BatchAction<CommunicationNotice>[] = [
-    {
-      label: 'Delete Selected',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      variant: 'danger',
-      onClick: (selectedItems: CommunicationNotice[]) => {
-        setDeleteModal({ isOpen: true, notices: selectedItems });
-      },
-    },
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected (PDF/Excel)',
+            icon: <FileDown className="w-3.5 h-3.5" />,
+            onClick: (selectedItems: CommunicationNotice[]) => {
+              setSelectedNoticesForExport(selectedItems);
+              setIsGlobalExportModalOpen(true);
+            },
+          },
+        ]
+      : []),
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            variant: 'danger' as const,
+            onClick: (selectedItems: CommunicationNotice[]) => {
+              setDeleteModal({ isOpen: true, notices: selectedItems });
+            },
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -365,6 +411,22 @@ export function CommunicationPortalView() {
             { id: 'list', label: 'Bulletins Log', count: notices.length },
             { id: 'acknowledgments', label: 'Sign-offs & Advisories', count: totalSignoffs },
           ]}
+          actions={
+            canExport ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedNoticesForExport([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+                title="Export Bulletin Register"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Export Register</span>
+              </button>
+            ) : undefined
+          }
         />
       )}
 
@@ -606,14 +668,16 @@ export function CommunicationPortalView() {
               </select>
 
               {/* Primary + Broadcast Button styled like Buyer & Order */}
-              <button
-                type="button"
-                onClick={() => setSubView({ type: 'entry' })}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Broadcast Notice</span>
-              </button>
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'entry' })}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Broadcast Notice</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -626,6 +690,17 @@ export function CommunicationPortalView() {
             columns={columns}
             batchActions={batchActions}
             emptyMessage="No notices matching selected filters."
+            moduleKey="communication"
+            canExport={canExport}
+            canDelete={canDelete}
+            onExport={
+              canExport
+                ? (items) => {
+                    setSelectedNoticesForExport(items.length < notices.length ? items : []);
+                    setIsGlobalExportModalOpen(true);
+                  }
+                : undefined
+            }
           />
         </div>
       )}
@@ -646,14 +721,16 @@ export function CommunicationPortalView() {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setSubView({ type: 'entry' })}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Broadcast Notice</span>
-              </button>
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'entry' })}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Broadcast Notice</span>
+                </button>
+              )}
             </div>
 
             <div className="space-y-3 pt-2">
@@ -733,6 +810,24 @@ export function CommunicationPortalView() {
         notices={deleteModal?.notices || []}
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteModal(null)}
+      />
+
+      {/* Global Communication Register Export Modal */}
+      <CommunicationExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allNotices={notices}
+        selectedNotices={selectedNoticesForExport}
+      />
+
+      {/* Individual Directive Bulletin Export Modal */}
+      <CommunicationSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setNoticeForSingleExport(null);
+        }}
+        notice={noticeForSingleExport}
       />
     </div>
   );

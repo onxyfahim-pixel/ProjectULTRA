@@ -24,6 +24,7 @@ import {
   Tag,
   Check,
   ShieldCheck,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -34,6 +35,8 @@ import { MOCK_CUSTOMER_COMPLAINTS } from '@/lib/db/modules-mock-data';
 import { AddComplaintModal } from '../modules/customer-complaint/AddComplaintModal';
 import { ComplaintDetailsPage } from '../modules/customer-complaint/ComplaintDetailsPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
+import { ComplaintExportModal } from '../modules/customer-complaint/ComplaintExportModal';
+import { ComplaintSingleExportModal } from '../modules/customer-complaint/ComplaintSingleExportModal';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { useModulePermission } from '@/hooks/use-module-permission';
 
@@ -45,6 +48,12 @@ export function CustomerComplaintView() {
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('customer_complaint');
   const [viewMode, setViewMode] = useState<'summary' | 'list' | 'capa'>('summary');
   const [complaints, setComplaints] = useLiveModuleData<CustomerComplaint[]>('customer_complaints', MOCK_CUSTOMER_COMPLAINTS);
+
+  // Export Modal state
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedComplaintsForExport, setSelectedComplaintsForExport] = useState<CustomerComplaint[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [complaintForSingleExport, setComplaintForSingleExport] = useState<CustomerComplaint | null>(null);
 
   // Dedicated Separate Page for Complaint Details
   const [complaintSubView, setComplaintSubView] = useState<ComplaintSubView>({ type: 'none' });
@@ -328,6 +337,21 @@ export function CustomerComplaintView() {
             <Eye className="w-3.5 h-3.5" />
           </button>
 
+          {/* Export Individual Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setComplaintForSingleExport(row);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Export 8D Investigation Report (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* 2. Edit Button */}
           {canEdit && (
             <button
@@ -396,19 +420,35 @@ export function CustomerComplaintView() {
             { id: 'capa', label: 'CAPA & 8D Cards', count: complaints.length },
           ]}
           actions={
-            canCreate ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setComplaintToEdit(null);
-                  setIsAddModalOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Log New Claim</span>
-              </button>
-            ) : undefined
+            <div className="flex items-center gap-2">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedComplaintsForExport(complaints);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                  title="Export Customer Claims Register (PDF / Excel / CSV)"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Export Register</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setComplaintToEdit(null);
+                    setIsAddModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Log New Claim</span>
+                </button>
+              )}
+            </div>
           }
         />
       )}
@@ -657,9 +697,11 @@ export function CustomerComplaintView() {
                   ...(canExport
                     ? [
                         {
-                          label: 'Export Selected',
+                          label: 'Export Selected (PDF/Excel)',
+                          icon: <FileDown className="w-3.5 h-3.5" />,
                           onClick: (selected: CustomerComplaint[]) => {
-                            showToast(`Exported ${selected.length} customer claims`);
+                            setSelectedComplaintsForExport(selected);
+                            setIsGlobalExportModalOpen(true);
                           },
                         },
                       ]
@@ -964,9 +1006,11 @@ export function CustomerComplaintView() {
                     ...(canExport
                       ? [
                           {
-                            label: 'Export Selected',
+                            label: 'Export Selected (PDF/Excel)',
+                            icon: <FileDown className="w-3.5 h-3.5" />,
                             onClick: (selected: CustomerComplaint[]) => {
-                              showToast(`Exported ${selected.length} customer claims`);
+                              setSelectedComplaintsForExport(selected);
+                              setIsGlobalExportModalOpen(true);
                             },
                           },
                         ]
@@ -1007,6 +1051,24 @@ export function CustomerComplaintView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* GLOBAL EXPORT MODAL */}
+      <ComplaintExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allComplaints={complaints}
+        selectedComplaints={selectedComplaintsForExport}
+      />
+
+      {/* INDIVIDUAL EXPORT MODAL */}
+      <ComplaintSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setComplaintForSingleExport(null);
+        }}
+        complaint={complaintForSingleExport}
+      />
     </div>
   );
 }

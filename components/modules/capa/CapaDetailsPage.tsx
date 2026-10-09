@@ -27,12 +27,13 @@ import {
   CheckCircle,
   AlertCircle,
   ExternalLink,
-  ChevronRight,
   Printer,
   ShieldAlert,
+  FileDown,
 } from 'lucide-react';
 import { CapaItem, CapaStatus, CapaEvidenceImage } from '@/lib/types/modules';
 import { DeleteCapaModal } from './DeleteCapaModal';
+import { CapaSingleExportModal } from './CapaSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface CapaDetailsPageProps {
@@ -56,6 +57,9 @@ export function CapaDetailsPage({
   const [activeTab, setActiveTab] = useState<'overview' | 'rca' | 'evidence' | 'signoff'>('overview');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  // Export Modal state
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Quick photo upload modal/state
   const [isAddPhotoOpen, setIsAddPhotoOpen] = useState(false);
@@ -204,11 +208,11 @@ export function CapaDetailsPage({
           {canExport && (
             <button
               type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
-              title="Print / Export 8D CAPA Report"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors cursor-pointer"
+              title="Print / Export 8D CAPA Report (PDF / Excel / CSV)"
             >
-              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <FileDown className="w-3.5 h-3.5" />
               <span>Export Report</span>
             </button>
           )}
@@ -979,6 +983,13 @@ export function CapaDetailsPage({
           }
         }}
         onCancel={() => setIsDeleteModalOpen(false)}
+      />
+
+      {/* ─── SINGLE CAPA EXPORT MODAL ────────────────────────────────────────── */}
+      <CapaSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        capa={capa}
       />
       </div>
     </div>

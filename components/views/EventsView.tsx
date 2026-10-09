@@ -19,8 +19,8 @@ import {
   Check,
   Search,
   Filter,
-  ArrowRight,
   Sparkles,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -29,9 +29,12 @@ import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/u
 import { FactoryEventItem, EventType, EventStatus, EventPriority } from '@/lib/types/modules';
 import { INITIAL_FACTORY_EVENTS, EVENT_TYPE_CONFIG } from '../modules/events/events-data';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { EventDetailsPage } from '../modules/events/EventDetailsPage';
 import { EventEntryPage } from '../modules/events/EventEntryPage';
 import { DeleteEventModal } from '../modules/events/DeleteEventModal';
+import { EventExportModal } from '../modules/events/EventExportModal';
+import { EventSingleExportModal } from '../modules/events/EventSingleExportModal';
 
 type EventSubView =
   | { type: 'none' }
@@ -40,6 +43,7 @@ type EventSubView =
   | { type: 'edit'; event: FactoryEventItem };
 
 export function EventsView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('events');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [subView, setSubView] = useState<EventSubView>({ type: 'none' });
   const [events, setEvents] = useLiveModuleData<FactoryEventItem[]>(
@@ -62,6 +66,12 @@ export function EventsView() {
     isOpen: false,
     events: [],
   });
+
+  // Export Modals State
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedEventsForExport, setSelectedEventsForExport] = useState<FactoryEventItem[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [eventForSingleExport, setEventForSingleExport] = useState<FactoryEventItem | null>(null);
 
   const saveEvents = (updated: FactoryEventItem[]) => {
     setEvents(updated);
@@ -330,30 +340,49 @@ export function EventsView() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', event: item })}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Event"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDuplicateEvent(item)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
-            title="Duplicate Event"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleteModalState({ isOpen: true, events: [item] })}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Delete Event"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setEventForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-violet-600 hover:bg-violet-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Export Event Dossier"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', event: item })}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Event"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateEvent(item)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
+              title="Duplicate Event"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModalState({ isOpen: true, events: [item] })}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Delete Event"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -361,23 +390,33 @@ export function EventsView() {
 
   // Batch actions
   const batchActions: BatchAction<FactoryEventItem>[] = [
-    {
-      label: 'Delete Selected',
-      variant: 'danger',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setDeleteModalState({
-          isOpen: true,
-          events: selected,
-        });
-      },
-    },
-    {
-      label: 'Export Selected',
-      onClick: (selected) => {
-        showToast(`Exported ${selected.length} event records`);
-      },
-    },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            variant: 'danger' as const,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            onClick: (selected: FactoryEventItem[]) => {
+              setDeleteModalState({
+                isOpen: true,
+                events: selected,
+              });
+            },
+          },
+        ]
+      : []),
+    ...(canExport
+      ? [
+          {
+            label: 'Export Events Register',
+            icon: <FileDown className="w-4 h-4" />,
+            onClick: (selected: FactoryEventItem[]) => {
+              setSelectedEventsForExport(selected);
+              setIsGlobalExportModalOpen(true);
+            },
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -405,6 +444,34 @@ export function EventsView() {
             { id: 'list', label: 'Events Calendar', count: events.length },
             { id: 'checklist', label: 'Preparation Checklist', count: pendingChecklistCount },
           ]}
+          actions={
+            <div className="flex items-center gap-2">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEventsForExport([]);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
+                  title="Export Events & Delegations Master Register"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-violet-600" />
+                  <span className="hidden sm:inline">Export Register</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'add' })}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-violet-600 hover:bg-violet-700 text-white transition-colors shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New Event</span>
+                </button>
+              )}
+            </div>
+          }
         />
       )}
 
@@ -654,16 +721,21 @@ export function EventsView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Event</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Event</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={batchActions}
+                moduleKey="events"
+                canExport={canExport}
+                canDelete={canDelete}
               />
             </div>
           )}
@@ -787,6 +859,24 @@ export function EventsView() {
         events={deleteModalState.events}
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteModalState({ isOpen: false, events: [] })}
+      />
+
+      {/* Global Events Export Modal */}
+      <EventExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allEvents={events}
+        selectedEvents={selectedEventsForExport}
+      />
+
+      {/* Single Event Dossier Export Modal */}
+      <EventSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setEventForSingleExport(null);
+        }}
+        event={eventForSingleExport}
       />
     </div>
   );

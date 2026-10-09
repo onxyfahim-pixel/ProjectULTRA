@@ -1,41 +1,24 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar,
-  Zap,
   Download,
-  Plus,
   Search,
-  Filter,
   ArrowRight,
   CheckCircle2,
   AlertTriangle,
-  AlertCircle,
-  X,
   Clock,
-  TrendingUp,
-  TrendingDown,
-  Layers,
   ShieldCheck,
   BarChart2,
   Factory,
   PackageCheck,
   Shirt,
   Activity,
-  Check,
-  FileText,
-  ChevronDown,
   Sparkles,
-  RefreshCw,
-  Eye,
-  Edit,
-  ExternalLink,
   ChevronLeft,
   ChevronRight,
   Boxes,
-  Percent,
-  Sliders,
 } from 'lucide-react';
 import {
   InventoryItem,
@@ -45,8 +28,12 @@ import {
 } from '@/lib/types/erp';
 import { BuyerOrder } from '@/lib/types/modules';
 import { MOCK_BUYER_ORDERS } from '@/lib/db/modules-mock-data';
-import { useErpAuth } from '@/hooks/use-erp-auth';
 import { useLiveSync } from '@/hooks/use-live-sync';
+import { useModulePermission } from '@/hooks/use-module-permission';
+import {
+  isSewingSectionRecord,
+  calculateRecordCheckedQty,
+} from '@/lib/db/production-records-store';
 
 export type TimeRangeOption =
   | 'today'
@@ -69,6 +56,30 @@ interface DashboardViewProps {
   onUpdateProductionOrders?: (orders: ProductionOrder[]) => void;
 }
 
+function formatRelativeTime(dateInput: string | number | Date | undefined): string {
+  if (!dateInput) return 'Just now';
+  const timestamp = new Date(dateInput).getTime();
+  if (isNaN(timestamp)) return 'Recently';
+
+  const diffSeconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (diffSeconds < 0 || diffSeconds < 60) return 'Just now';
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  return `${diffMonths}mo ago`;
+}
+
+function formatDateISO(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export function DashboardView({
   inventory,
   inspections,
@@ -81,74 +92,152 @@ export function DashboardView({
   onUpdateOrders,
   onUpdateProductionOrders,
 }: DashboardViewProps) {
+  const { canExport } = useModulePermission('dashboard');
   const { status, activeUsers } = useLiveSync();
-  const isConnected = status === 'connected';
 
-  // 1. Time Range State
+  // Live running real-time clock ticker (updates every second)
+  const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Time Range Selection State with dynamic defaults
   const [timeRange, setTimeRange] = useState<TimeRangeOption>('today');
-  const [customStartDate, setCustomStartDate] = useState('2026-09-01');
-  const [customEndDate, setCustomEndDate] = useState('2026-09-27');
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return formatDateISO(d);
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    return formatDateISO(new Date());
+  });
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
-  // 2. Chart Focus Mode ('output' | 'dhu' | 'efficiency')
-  const [chartFocusMode, setChartFocusMode] = useState<'output' | 'dhu' | 'efficiency'>('output');
-  const [hoveredChartIndex, setHoveredChartIndex] = useState<number | null>(null);
-
-  // Search & pagination for Recent Orders
+  // Search & pagination for Orders
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [orderPage, setOrderPage] = useState(1);
 
-  // Time Range Multiplier for scaling telemetry dynamically
-  const rangeMultiplier = useMemo(() => {
-    switch (timeRange) {
-      case 'today':
-        return 1;
-      case 'yesterday':
-        return 0.95;
-      case 'week':
-        return 5.8;
-      case 'month':
-        return 24.5;
-      case 'year':
-        return 285;
-      case 'custom':
-        return 14.2;
-      default:
-        return 1;
-    }
-  }, [timeRange]);
-
-  // Label text for active time range
+  // Dynamic label text for active time range based on real Date()
   const timeRangeLabel = useMemo(() => {
+    const now = currentTime;
     switch (timeRange) {
       case 'today':
-        return 'Today • 27 Sep 2026';
-      case 'yesterday':
-        return 'Yesterday • 26 Sep 2026';
-      case 'week':
-        return 'This Week • 21-27 Sep 2026';
+        return `Today • ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      case 'yesterday': {
+        const y = new Date(now);
+        y.setDate(y.getDate() - 1);
+        return `Yesterday • ${y.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      }
+      case 'week': {
+        const startOfWeek = new Date(now);
+        const day = startOfWeek.getDay() || 7;
+        startOfWeek.setDate(startOfWeek.getDate() - day + 1);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(endOfWeek.getDate() + 6);
+        return `This Week • ${startOfWeek.getDate()}-${endOfWeek.getDate()} ${endOfWeek.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`;
+      }
       case 'month':
-        return 'This Month • Sep 2026';
+        return `This Month • ${now.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`;
       case 'year':
-        return 'This Year • Fiscal 2026';
+        return `This Year • Fiscal ${now.getFullYear()}`;
       case 'custom':
         return `Custom • ${customStartDate} to ${customEndDate}`;
     }
-  }, [timeRange, customStartDate, customEndDate]);
+  }, [timeRange, currentTime, customStartDate, customEndDate]);
+
+  // Real-time local state synchronized from props AND storage / events
+  const [liveOrders, setLiveOrders] = useState<BuyerOrder[]>(orders);
+  const [liveProductionOrders, setLiveProductionOrders] = useState<ProductionOrder[]>(productionOrders);
+  const [liveInspections, setLiveInspections] = useState<InspectionRecord[]>(inspections);
+
+  useEffect(() => {
+    if (orders) setLiveOrders(orders);
+  }, [orders]);
+
+  useEffect(() => {
+    if (productionOrders) setLiveProductionOrders(productionOrders);
+  }, [productionOrders]);
+
+  useEffect(() => {
+    if (inspections) setLiveInspections(inspections);
+  }, [inspections]);
+
+  // Cross-module real-time event listeners for instant automatic updates
+  useEffect(() => {
+    const syncOrders = () => {
+      try {
+        const raw = localStorage.getItem('erp_buyer_orders_v1') || localStorage.getItem('erp_buyer_orders');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLiveOrders(parsed);
+          }
+        }
+      } catch {}
+    };
+
+    const syncProduction = () => {
+      try {
+        const raw = localStorage.getItem('erp_production_orders_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLiveProductionOrders(parsed);
+          }
+        }
+      } catch {}
+    };
+
+    const syncInspections = () => {
+      try {
+        const raw = localStorage.getItem('erp_inspections_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLiveInspections(parsed);
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('erp_buyer_orders_updated', syncOrders);
+    window.addEventListener('erp_production_records_updated', syncProduction);
+    window.addEventListener('erp_production_orders_updated', syncProduction);
+    window.addEventListener('erp_production_defects_updated', syncProduction);
+    window.addEventListener('erp_inspection_records_updated', syncInspections);
+    window.addEventListener('erp_inspections_updated', syncInspections);
+    window.addEventListener('erp_wip_records_updated', syncOrders);
+    window.addEventListener('storage', () => {
+      syncOrders();
+      syncProduction();
+      syncInspections();
+    });
+
+    return () => {
+      window.removeEventListener('erp_buyer_orders_updated', syncOrders);
+      window.removeEventListener('erp_production_records_updated', syncProduction);
+      window.removeEventListener('erp_production_orders_updated', syncProduction);
+      window.removeEventListener('erp_production_defects_updated', syncProduction);
+      window.removeEventListener('erp_inspection_records_updated', syncInspections);
+      window.removeEventListener('erp_inspections_updated', syncInspections);
+      window.removeEventListener('erp_wip_records_updated', syncOrders);
+    };
+  }, []);
 
   // ==========================================
   // METRIC 1: Total Order Quantity (Sync from Order Module)
   // ==========================================
   const orderMetrics = useMemo(() => {
-    const rawTotalQty = orders.reduce((sum, o) => sum + (Number(o.orderQuantity) || 0), 0);
-    const rawTotalValue = orders.reduce(
+    const rawTotalQty = liveOrders.reduce((sum, o) => sum + (Number(o.orderQuantity) || 0), 0);
+    const rawTotalValue = liveOrders.reduce(
       (sum, o) => sum + (Number(o.orderQuantity) || 0) * (Number(o.fobPrice) || 0),
       0
     );
     const totalQty = Math.round(rawTotalQty);
     const totalValueUSD = Math.round(rawTotalValue);
-    const activeOrdersCount = orders.filter((o) => o.status !== 'SHIPPED').length;
-    const stylesCount = new Set(orders.map((o) => o.styleNumber)).size;
+    const activeOrdersCount = liveOrders.filter((o) => o.status !== 'SHIPPED').length;
+    const stylesCount = new Set(liveOrders.map((o) => o.styleNumber)).size;
 
     return {
       totalQty,
@@ -156,86 +245,109 @@ export function DashboardView({
       activeOrdersCount,
       stylesCount,
     };
-  }, [orders]);
+  }, [liveOrders]);
 
   // ==========================================
   // METRIC 2: Total Sewing Quantity with DHU & Reject (Sync from Production Module)
   // ==========================================
   const sewingMetrics = useMemo(() => {
-    // Filter sewing lines
-    const sewingLines = productionOrders.filter(
-      (po) =>
-        !po.section?.toLowerCase().includes('finish') &&
-        !po.section?.toLowerCase().includes('pack') &&
-        !po.section?.toLowerCase().includes('cut')
-    );
+    const sewingLines = liveProductionOrders.filter((po) => isSewingSectionRecord(po));
 
-    const baseSewingPcs = sewingLines.reduce((sum, po) => {
-      if (po.hourlyReports && po.hourlyReports.length > 0) {
-        return sum + po.hourlyReports.reduce((s, h) => s + (Number(h.checkedQty) || 0), 0);
-      }
-      return sum + (Number(po.completedQuantity) || 0);
+    const totalSewingPcs = sewingLines.reduce((sum, po) => {
+      return sum + calculateRecordCheckedQty(po);
     }, 0);
 
-    const baseTargetPcs = sewingLines.reduce((sum, po) => sum + (Number(po.targetQuantity) || 0), 0);
+    const totalTargetPcs = sewingLines.reduce((sum, po) => sum + (Number(po.targetQuantity) || 0), 0);
 
-    const totalSewingPcs = Math.round(baseSewingPcs * rangeMultiplier);
-    const totalTargetPcs = Math.round((baseTargetPcs || 52000) * rangeMultiplier);
-
-    // Calculate DHU %
     let dhuSum = 0;
     let dhuCount = 0;
-    sewingLines.forEach((po) => {
-      const d = po.dhuRate || po.defectRate || 1.8;
-      dhuSum += d;
-      dhuCount += 1;
-    });
-    const avgDHU = dhuCount > 0 ? (dhuSum / dhuCount).toFixed(2) : '1.85';
+    let totalRejects = 0;
 
-    // Calculate Reject Pcs
-    const baseRejects = sewingLines.reduce(
-      (sum, po) => sum + (Number(po.rejectQuantity) || Math.round((po.completedQuantity || 1000) * 0.007)),
-      0
-    );
-    const totalRejects = Math.round(baseRejects * rangeMultiplier);
-    const rejectRatePct = totalSewingPcs > 0 ? ((totalRejects / totalSewingPcs) * 100).toFixed(2) : '0.68';
+    sewingLines.forEach((po) => {
+      const d = Number(po.dhuRate || po.defectRate || 0);
+      if (d > 0) {
+        dhuSum += d;
+        dhuCount += 1;
+      }
+      const r = Number(po.rejectQuantity) || 0;
+      totalRejects += r;
+    });
+
+    const avgDHU =
+      dhuCount > 0
+        ? (dhuSum / dhuCount).toFixed(2)
+        : totalSewingPcs > 0
+        ? ((totalRejects / totalSewingPcs) * 100).toFixed(2)
+        : '1.80';
+    const rejectRatePct = totalSewingPcs > 0 ? ((totalRejects / totalSewingPcs) * 100).toFixed(2) : '0.65';
 
     return {
       totalSewingPcs,
-      totalTargetPcs,
+      totalTargetPcs: totalTargetPcs || totalSewingPcs,
       dhuPercent: avgDHU,
       rejectPcs: totalRejects,
       rejectRatePct,
-      linesCount: sewingLines.length || 8,
+      linesCount: sewingLines.length || 1,
     };
-  }, [productionOrders, rangeMultiplier]);
+  }, [liveProductionOrders]);
 
   // ==========================================
-  // METRIC 3: Total Finishing Quantity with DHU & Reject (Sync from Production/Finishing)
+  // METRIC 3: Total Finishing Quantity with DHU & Reject (Sync from Finishing & WIP)
   // ==========================================
   const finishingMetrics = useMemo(() => {
-    // Finishing is typically ~90-95% of sewing completion
-    const baseFinishingPcs = Math.round(sewingMetrics.totalSewingPcs * 0.92);
-    const baseFinishingTarget = Math.round(sewingMetrics.totalTargetPcs * 0.92);
+    // 1. Gather finishing records from liveProductionOrders
+    const finishingLines = liveProductionOrders.filter(
+      (po) =>
+        (po.section &&
+          (po.section.toLowerCase().includes('finish') ||
+            po.section.toLowerCase().includes('pack') ||
+            po.section.toLowerCase().includes('iron'))) ||
+        (po.sewingLine &&
+          (po.sewingLine.toLowerCase().includes('finish') || po.sewingLine.toLowerCase().includes('pack')))
+    );
 
-    // Finishing DHU is strictly lower than sewing (inspection & ironing touch-ups)
-    const finishingDHU = (Number(sewingMetrics.dhuPercent) * 0.45).toFixed(2);
+    const prodFinishingPcs = finishingLines.reduce((sum, po) => sum + calculateRecordCheckedQty(po), 0);
+    const prodFinishingTarget = finishingLines.reduce((sum, po) => sum + (Number(po.targetQuantity) || 0), 0);
+    const prodFinishingRejects = finishingLines.reduce((sum, po) => sum + (Number(po.rejectQuantity) || 0), 0);
 
-    // Finishing Reject Pcs (alterations, soil stains, shade mismatch)
-    const finishingRejects = Math.round(baseFinishingPcs * 0.0035);
-    const finishingRejectRate = '0.35';
+    // 2. Gather from liveOrders WIP tracking
+    const wipFinishingPcs = liveOrders.reduce((sum, o) => {
+      const wipQty = Number(o.wipRecord?.finishingQuantity) || 0;
+      if (wipQty > 0) return sum + wipQty;
+      const stageQty =
+        Number(o.productionTracking?.stages?.find((s) => ((s.stage as string) === 'FINISHING' || s.stage === 'PACKING'))?.actualPcs) || 0;
+      return sum + stageQty;
+    }, 0);
 
-    const packedCartonReady = Math.round(baseFinishingPcs * 0.88);
+    const wipPackedPcs = liveOrders.reduce((sum, o) => {
+      const pQty = Number(o.wipRecord?.packedQuantity) || 0;
+      if (pQty > 0) return sum + pQty;
+      const stageQty = Number(o.productionTracking?.stages?.find((s) => s.stage === 'PACKING')?.actualPcs) || 0;
+      return sum + stageQty;
+    }, 0);
+
+    const totalFinishingPcs = Math.max(prodFinishingPcs, wipFinishingPcs);
+    const targetPcs = prodFinishingTarget > 0 ? prodFinishingTarget : Math.round(sewingMetrics.totalTargetPcs * 0.95);
+    const rejectPcs = prodFinishingRejects > 0 ? prodFinishingRejects : Math.round(totalFinishingPcs * 0.0035);
+    const rejectRatePct = totalFinishingPcs > 0 ? ((rejectPcs / totalFinishingPcs) * 100).toFixed(2) : '0.35';
+
+    let finishingDHU = '0.85';
+    if (finishingLines.length > 0) {
+      const avg = finishingLines.reduce((s, p) => s + (p.dhuRate || 0.8), 0) / finishingLines.length;
+      finishingDHU = avg.toFixed(2);
+    } else {
+      finishingDHU = (Number(sewingMetrics.dhuPercent) * 0.45).toFixed(2);
+    }
 
     return {
-      totalFinishingPcs: baseFinishingPcs,
-      targetPcs: baseFinishingTarget,
+      totalFinishingPcs,
+      targetPcs,
       dhuPercent: finishingDHU,
-      rejectPcs: finishingRejects,
-      rejectRatePct: finishingRejectRate,
-      packedCartonReady,
+      rejectPcs,
+      rejectRatePct,
+      packedCartonReady: wipPackedPcs > 0 ? wipPackedPcs : Math.round(totalFinishingPcs * 0.9),
     };
-  }, [sewingMetrics]);
+  }, [liveProductionOrders, liveOrders, sewingMetrics]);
 
   // ==========================================
   // METRIC 4: Total Final Inspection Quantity with Pass, Recheck, Fail (Sync from Inspection Module)
@@ -246,8 +358,8 @@ export function DashboardView({
     let recheckCount = 0;
     let failedCount = 0;
 
-    inspections.forEach((rec) => {
-      const sample = Number(rec.sampleSize) || 315;
+    liveInspections.forEach((rec) => {
+      const sample = Number(rec.lotQuantity || rec.sampleSize) || 0;
       totalInspected += sample;
 
       if (rec.status === 'PASSED') {
@@ -259,144 +371,147 @@ export function DashboardView({
       }
     });
 
-    const scaledTotal = Math.round(totalInspected * rangeMultiplier);
-    const scaledPassed = Math.round(passedCount * rangeMultiplier);
-    const scaledRecheck = Math.round(recheckCount * rangeMultiplier);
-    const scaledFailed = Math.max(0, scaledTotal - scaledPassed - scaledRecheck);
-
-    const passPct = scaledTotal > 0 ? ((scaledPassed / scaledTotal) * 100).toFixed(1) : '94.2';
-    const recheckPct = scaledTotal > 0 ? ((scaledRecheck / scaledTotal) * 100).toFixed(1) : '3.8';
-    const failPct = scaledTotal > 0 ? ((scaledFailed / scaledTotal) * 100).toFixed(1) : '2.0';
+    const passPct = totalInspected > 0 ? ((passedCount / totalInspected) * 100).toFixed(1) : '100.0';
+    const recheckPct = totalInspected > 0 ? ((recheckCount / totalInspected) * 100).toFixed(1) : '0.0';
+    const failPct = totalInspected > 0 ? ((failedCount / totalInspected) * 100).toFixed(1) : '0.0';
 
     return {
-      totalInspected: scaledTotal,
-      passedPcs: scaledPassed,
+      totalInspected,
+      passedPcs: passedCount,
       passPct,
-      recheckPcs: scaledRecheck,
+      recheckPcs: recheckCount,
       recheckPct,
-      failedPcs: scaledFailed,
+      failedPcs: failedCount,
       failPct,
-      totalLotsCount: Math.round(inspections.length * rangeMultiplier),
+      totalLotsCount: liveInspections.length,
     };
-  }, [inspections, rangeMultiplier]);
+  }, [liveInspections]);
 
   // ==========================================
-  // CHART DATA: Production, DHU, RFT, Efficiency, Target (Dynamically shaped by TimeRange)
+  // TOP 5 DHU CHART DEFECTS BREAKDOWN (Dynamic Pareto Analysis from real logs)
   // ==========================================
-  const chartData = useMemo(() => {
-    if (timeRange === 'today' || timeRange === 'yesterday') {
-      return [
-        { label: '08:00', prod: 520, target: 550, dhu: 2.1, rft: 97.2, eff: 76.5 },
-        { label: '10:00', prod: 1140, target: 1100, dhu: 1.8, rft: 98.1, eff: 81.2 },
-        { label: '12:00', prod: 1820, target: 1750, dhu: 1.6, rft: 98.4, eff: 83.5 },
-        { label: '14:00', prod: 2450, target: 2400, dhu: 1.9, rft: 97.9, eff: 80.8 },
-        { label: '16:00', prod: 3180, target: 3050, dhu: 1.5, rft: 98.7, eff: 84.1 },
-        { label: '18:00', prod: 3820, target: 3700, dhu: 1.7, rft: 98.2, eff: 82.6 },
-        { label: '20:00', prod: 4450, target: 4300, dhu: 1.4, rft: 98.9, eff: 85.0 },
-      ];
-    } else if (timeRange === 'week') {
-      return [
-        { label: 'Mon', prod: 28400, target: 27500, dhu: 2.3, rft: 96.8, eff: 78.2 },
-        { label: 'Tue', prod: 29800, target: 28500, dhu: 2.1, rft: 97.4, eff: 80.5 },
-        { label: 'Wed', prod: 31200, target: 30000, dhu: 1.9, rft: 98.0, eff: 82.8 },
-        { label: 'Thu', prod: 30500, target: 29500, dhu: 1.8, rft: 98.2, eff: 81.9 },
-        { label: 'Fri', prod: 32600, target: 31000, dhu: 1.5, rft: 98.8, eff: 84.6 },
-        { label: 'Sat', prod: 26800, target: 26000, dhu: 1.7, rft: 98.3, eff: 79.4 },
-        { label: 'Sun', prod: 14200, target: 14000, dhu: 1.3, rft: 99.1, eff: 86.2 },
-      ];
-    } else if (timeRange === 'month' || timeRange === 'custom') {
-      return [
-        { label: 'Wk 1', prod: 118400, target: 115000, dhu: 2.2, rft: 97.1, eff: 79.2 },
-        { label: 'Wk 2', prod: 124800, target: 120000, dhu: 1.9, rft: 97.9, eff: 82.1 },
-        { label: 'Wk 3', prod: 131200, target: 128000, dhu: 1.7, rft: 98.3, eff: 83.9 },
-        { label: 'Wk 4', prod: 139500, target: 135000, dhu: 1.4, rft: 98.9, eff: 85.8 },
-      ];
-    } else {
-      // Year
-      return [
-        { label: 'Jan', prod: 480000, target: 460000, dhu: 2.4, rft: 96.9, eff: 77.8 },
-        { label: 'Mar', prod: 520000, target: 500000, dhu: 2.1, rft: 97.5, eff: 80.4 },
-        { label: 'May', prod: 540000, target: 530000, dhu: 1.9, rft: 98.1, eff: 82.6 },
-        { label: 'Jul', prod: 510000, target: 500000, dhu: 1.8, rft: 98.3, eff: 81.9 },
-        { label: 'Sep', prod: 580000, target: 560000, dhu: 1.5, rft: 98.8, eff: 85.2 },
-        { label: 'Nov', prod: 610000, target: 590000, dhu: 1.3, rft: 99.0, eff: 86.5 },
+  const top5DhuDefects = useMemo(() => {
+    const defectCounts = new Map<string, { count: number; severity: string; source: string }>();
+
+    // 1. Gather from liveInspections
+    liveInspections.forEach((insp) => {
+      (insp.defects || []).forEach((d) => {
+        const name = d.defectType || 'Quality Non-Conformance';
+        const count = Number(d.count) || 1;
+        const severity = d.severity || 'MAJOR';
+        const existing = defectCounts.get(name);
+        if (existing) {
+          existing.count += count;
+        } else {
+          defectCounts.set(name, {
+            count,
+            severity,
+            source: `${insp.buyer || 'QA'} • ${insp.stage || 'Inspection'}`,
+          });
+        }
+      });
+    });
+
+    // 2. Gather from liveProductionOrders
+    liveProductionOrders.forEach((po) => {
+      ((po as any).defects || []).forEach((d: any) => {
+        const name = d.defectType || d.defectName || 'Floor Defect';
+        const count = Number(d.count || d.quantity) || 1;
+        const severity = d.severity || 'MAJOR';
+        const existing = defectCounts.get(name);
+        if (existing) {
+          existing.count += count;
+        } else {
+          defectCounts.set(name, {
+            count,
+            severity,
+            source: po.section || po.sewingLine || 'Sewing Floor',
+          });
+        }
+      });
+      (po.hourlyReports || []).forEach((h: any) => {
+        (h.defects || []).forEach((d: any) => {
+          const name = d.defectType || d.name || 'Hourly Sewing Defect';
+          const count = Number(d.count) || 1;
+          const existing = defectCounts.get(name);
+          if (existing) {
+            existing.count += count;
+          } else {
+            defectCounts.set(name, {
+              count,
+              severity: d.severity || 'MAJOR',
+              source: po.section || po.sewingLine || 'Sewing Line',
+            });
+          }
+        });
+      });
+    });
+
+    // Calibrated defect defaults if store is empty
+    let items = Array.from(defectCounts.entries()).map(([name, data]) => ({
+      name,
+      count: data.count,
+      severity: data.severity,
+      source: data.source,
+    }));
+
+    if (items.length === 0) {
+      items = [
+        { name: 'Broken Stitch / Skip Overlock', count: 18, severity: 'MAJOR', source: 'Sewing Floor' },
+        { name: 'Seam Puckering & Tension Wave', count: 12, severity: 'MAJOR', source: 'Finishing Line' },
+        { name: 'Needle Hole & Oil Stain', count: 9, severity: 'CRITICAL', source: 'Sewing Line' },
+        { name: 'Open Seam & Frayed Edge', count: 7, severity: 'MINOR', source: 'Assembly Table' },
+        { name: 'Color Shading Delta', count: 5, severity: 'MAJOR', source: 'Bundle Lot' },
       ];
     }
-  }, [timeRange]);
 
-  // Max value for chart Y-axis scaling
-  const maxProdValue = useMemo(() => {
-    return Math.max(...chartData.map((d) => Math.max(d.prod, d.target))) * 1.15;
-  }, [chartData]);
+    items.sort((a, b) => b.count - a.count);
+    const top5 = items.slice(0, 5);
+    const totalCount = items.reduce((s, it) => s + it.count, 0) || 1;
 
-  // ==========================================
-  // TOP 5 DHU CHART DEFECTS BREAKDOWN
-  // ==========================================
-  const top5DhuDefects = [
-    {
-      rank: 1,
-      name: 'Broken Stitch / Skip Overlock',
-      code: 'DEF-ST-01',
-      source: 'Line 04 & 07 (Sewing)',
-      count: 42,
-      pctOfTotal: 34.2,
-      dhuContribution: '0.62%',
-      severity: 'Major',
-      color: 'bg-rose-500',
-      badgeColor: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-900',
-    },
-    {
-      rank: 2,
-      name: 'Seam Puckering & Tension Wave',
-      code: 'DEF-SE-03',
-      source: 'Finishing & Collar Seam',
-      count: 28,
-      pctOfTotal: 22.8,
-      dhuContribution: '0.41%',
-      severity: 'Major',
-      color: 'bg-amber-500',
-      badgeColor: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900',
-    },
-    {
-      rank: 3,
-      name: 'Needle Hole & Lubricant Oil Stain',
-      code: 'DEF-ND-08',
-      source: 'Sewing Line 02 (Needle Guard)',
-      count: 21,
-      pctOfTotal: 17.1,
-      dhuContribution: '0.31%',
-      severity: 'Critical',
-      color: 'bg-purple-600',
-      badgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-900',
-    },
-    {
-      rank: 4,
-      name: 'Open Seam & Raw Edge Fraying',
-      code: 'DEF-OP-02',
-      source: 'Cuff & Hem Assembly',
-      count: 18,
-      pctOfTotal: 14.6,
-      dhuContribution: '0.27%',
-      severity: 'Minor',
-      color: 'bg-blue-500',
-      badgeColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900',
-    },
-    {
-      rank: 5,
-      name: 'Color Shading / Panel Mismatch',
-      code: 'DEF-SH-05',
-      source: 'Cutting Bundle Lot #882',
-      count: 14,
-      pctOfTotal: 11.3,
-      dhuContribution: '0.21%',
-      severity: 'Major',
-      color: 'bg-teal-500',
-      badgeColor: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-300 dark:border-teal-900',
-    },
-  ];
+    const colorPalettes = [
+      {
+        color: 'bg-rose-500',
+        badgeColor: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-900',
+      },
+      {
+        color: 'bg-amber-500',
+        badgeColor: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900',
+      },
+      {
+        color: 'bg-purple-600',
+        badgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-900',
+      },
+      {
+        color: 'bg-blue-500',
+        badgeColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900',
+      },
+      {
+        color: 'bg-teal-500',
+        badgeColor: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-300 dark:border-teal-900',
+      },
+    ];
+
+    return top5.map((item, index) => {
+      const pct = Math.round((item.count / totalCount) * 1000) / 10;
+      const style = colorPalettes[index % colorPalettes.length];
+      const dhuContribution = ((item.count / (sewingMetrics.totalSewingPcs || 1000)) * 100).toFixed(2);
+      return {
+        rank: index + 1,
+        name: item.name,
+        source: item.source,
+        count: item.count,
+        pctOfTotal: pct,
+        dhuContribution: `${dhuContribution}%`,
+        severity: item.severity,
+        color: style.color,
+        badgeColor: style.badgeColor,
+      };
+    });
+  }, [liveInspections, liveProductionOrders, sewingMetrics.totalSewingPcs]);
 
   // ==========================================
-  // RECENT ACTIVITIES (Live sync with Orders, Inspections, Floor)
+  // RECENT ACTIVITIES (Live sync with real timestamps)
   // ==========================================
   const recentActivities = useMemo(() => {
     const list: Array<{
@@ -409,30 +524,34 @@ export function DashboardView({
       icon: any;
       iconColor: string;
       timestamp: string;
+      rawDate: number;
     }> = [];
 
     // 1. Add order activities
-    orders.slice(0, 3).forEach((o, i) => {
+    liveOrders.slice(0, 4).forEach((o, i) => {
+      const orderDateRaw = (o as any).createdAt ? new Date((o as any).createdAt).getTime() : Date.now() - (i + 1) * 3600000;
       list.push({
         id: `act-order-${o.id || i}`,
-        title: `CRD Target: ${o.orderNumber || 'PO-10823'} (${o.buyerName || 'H&M'})`,
-        sub: `Style: ${o.styleNumber} • ${Number(o.orderQuantity).toLocaleString()} pcs • Ship Date: ${o.shipDate || '15 Oct 2026'}`,
-        meta: `CRD Active`,
-        badge: o.status || 'SEWING',
+        title: `PO: ${o.orderNumber} (${o.buyerName})`,
+        sub: `Style: ${o.styleNumber} • ${Number(o.orderQuantity).toLocaleString()} pcs • CRD: ${o.shipDate || 'Pending'}`,
+        meta: `Order Commitment Active`,
+        badge: o.status || 'ACTIVE',
         badgeColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300',
         icon: Shirt,
         iconColor: 'text-blue-600 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-400',
-        timestamp: `${10 * (i + 1)}m ago`,
+        timestamp: formatRelativeTime((o as any).createdAt || o.shipDate),
+        rawDate: orderDateRaw,
       });
     });
 
     // 2. Add inspection activities
-    inspections.slice(0, 3).forEach((rec, i) => {
+    liveInspections.slice(0, 4).forEach((rec, i) => {
       const isPassed = rec.status === 'PASSED';
+      const inspDateRaw = rec.createdAt ? new Date(rec.createdAt).getTime() : Date.now() - (i + 2) * 1800000;
       list.push({
         id: `act-insp-${rec.id || i}`,
-        title: `Final QC: ${rec.inspectionCode || '#INS-2026-0927'} (${rec.buyer || 'ZARA'})`,
-        sub: `Sample: ${rec.sampleSize} pcs • Defects: ${rec.defectCount} • AQL Level II`,
+        title: `QC Audit: ${rec.inspectionCode} (${rec.buyer || 'Direct'})`,
+        sub: `Sample: ${rec.sampleSize} pcs • Defects: ${rec.defectCount || 0} • ${rec.inspectionType || 'Final'}`,
         meta: isPassed ? 'AQL Accepted' : 'Defect Threshold Exceeded',
         badge: rec.status,
         badgeColor: isPassed
@@ -442,29 +561,35 @@ export function DashboardView({
         iconColor: isPassed
           ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400'
           : 'text-rose-600 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-400',
-        timestamp: `${25 * (i + 1)}m ago`,
+        timestamp: formatRelativeTime(rec.createdAt),
+        rawDate: inspDateRaw,
       });
     });
 
-    // 3. Add floor sewing activity
-    list.push({
-      id: 'act-floor-1',
-      title: 'Line 04 DHU Spike Alert Resolved',
-      sub: 'Needle guard adjusted & lockstitch tension calibrated by IE Team',
-      meta: 'DHU 1.82%',
-      badge: 'RESOLVED',
-      badgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300',
-      icon: Activity,
-      iconColor: 'text-purple-600 bg-purple-50 dark:bg-purple-950/60 dark:text-purple-400',
-      timestamp: '1h ago',
+    // 3. Add floor sewing milestone
+    liveProductionOrders.slice(0, 2).forEach((po, i) => {
+      const poDateRaw = po.createdAt ? new Date(po.createdAt).getTime() : Date.now() - (i + 3) * 7200000;
+      list.push({
+        id: `act-prod-${po.id || i}`,
+        title: `Floor Line: ${po.section || po.sewingLine || 'Sewing Section'} (${po.orderNumber})`,
+        sub: `Target: ${po.targetQuantity || 0} pcs • Completed: ${calculateRecordCheckedQty(po).toLocaleString()} pcs`,
+        meta: `DHU: ${po.dhuRate || '1.8'}%`,
+        badge: po.status || 'ACTIVE',
+        badgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300',
+        icon: Activity,
+        iconColor: 'text-purple-600 bg-purple-50 dark:bg-purple-950/60 dark:text-purple-400',
+        timestamp: formatRelativeTime(po.recordDate || po.createdAt),
+        rawDate: poDateRaw,
+      });
     });
 
-    return list;
-  }, [orders, inspections]);
-
+    // Sort by most recent
+    list.sort((a, b) => b.rawDate - a.rawDate);
+    return list.slice(0, 6);
+  }, [liveOrders, liveInspections, liveProductionOrders]);
 
   const handleExportReport = () => {
-    setExportNotice('Exporting QMS Executive Command Report (PDF/Excel)...');
+    setExportNotice('Exporting Live QMS Dashboard Report (PDF/Excel)...');
     setTimeout(() => {
       setExportNotice(null);
     }, 3000);
@@ -473,14 +598,14 @@ export function DashboardView({
   // Filtered orders table
   const filteredOrders = useMemo(() => {
     const q = orderSearchQuery.toLowerCase();
-    return orders.filter(
+    return liveOrders.filter(
       (o) =>
         (o.orderNumber && o.orderNumber.toLowerCase().includes(q)) ||
         (o.buyerName && o.buyerName.toLowerCase().includes(q)) ||
         (o.styleNumber && o.styleNumber.toLowerCase().includes(q)) ||
         (o.status && o.status.toLowerCase().includes(q))
     );
-  }, [orders, orderSearchQuery]);
+  }, [liveOrders, orderSearchQuery]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -493,24 +618,33 @@ export function DashboardView({
       )}
 
       {/* ======================================================== */}
-      {/* 1. TOP SECTION: TIME RANGE (FIRST, NO MODULE NAME/DESC)  */}
+      {/* 1. TOP SECTION: REAL-TIME CLOCK & DYNAMIC TIME RANGE     */}
       {/* ======================================================== */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 sm:p-4 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
         {/* Time Range Selector: Today, Yesterday, Week, Month, Year, Custom Range */}
         <div className="flex items-center gap-1.5 flex-wrap w-full lg:w-auto">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1 hidden sm:inline-block">
-            Range:
-          </span>
+          {/* Live Clock Pill with pulsing indicator */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 text-xs font-semibold border border-slate-200/80 dark:border-slate-700/80 mr-1">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span className="font-mono font-bold tracking-tight text-slate-900 dark:text-white">
+              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+          </div>
 
           <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 gap-1 flex-wrap">
             <button
               type="button"
               id="time-range-today-btn"
               onClick={() => setTimeRange('today')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeRange === 'today'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'today'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
+              }`}
             >
               Today
             </button>
@@ -519,10 +653,11 @@ export function DashboardView({
               type="button"
               id="time-range-yesterday-btn"
               onClick={() => setTimeRange('yesterday')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeRange === 'yesterday'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'yesterday'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
+              }`}
             >
               Yesterday
             </button>
@@ -531,10 +666,11 @@ export function DashboardView({
               type="button"
               id="time-range-week-btn"
               onClick={() => setTimeRange('week')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeRange === 'week'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'week'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
+              }`}
             >
               Week
             </button>
@@ -543,10 +679,11 @@ export function DashboardView({
               type="button"
               id="time-range-month-btn"
               onClick={() => setTimeRange('month')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeRange === 'month'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'month'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
+              }`}
             >
               Month
             </button>
@@ -555,10 +692,11 @@ export function DashboardView({
               type="button"
               id="time-range-year-btn"
               onClick={() => setTimeRange('year')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeRange === 'year'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'year'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
+              }`}
             >
               Year
             </button>
@@ -567,10 +705,11 @@ export function DashboardView({
               type="button"
               id="time-range-custom-btn"
               onClick={() => setTimeRange('custom')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${timeRange === 'custom'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'custom'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
+              }`}
             >
               Custom Range
             </button>
@@ -604,21 +743,22 @@ export function DashboardView({
 
         {/* Right Action Launcher: Export & Live Sync */}
         <div className="flex items-center gap-2.5 flex-wrap w-full lg:w-auto justify-end">
-
           {/* Export Report Button */}
-          <button
-            type="button"
-            onClick={handleExportReport}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={handleExportReport}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-2xs cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          )}
 
           {/* Live Sync Status Pill */}
-          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-            <span>Live Synced</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Live Synced ({liveOrders.length} POs • {liveProductionOrders.length} Lines • {liveInspections.length} Audits)</span>
           </div>
         </div>
       </div>
@@ -782,487 +922,6 @@ export function DashboardView({
       </div>
 
       {/* ======================================================== */}
-      {/* 3. EXECUTIVE FACTORY TELEMETRY & PERFORMANCE SUITE       */}
-      {/* ======================================================== */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-5">
-        {/* Header Bar: Title + Segmented Control Modes */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
-                <Activity className="w-4 h-4" />
-              </span>
-              <h2 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
-                Executive Telemetry &amp; Performance Trends
-              </h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                Live Dynamic Feed
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Real-time floor velocity, AQL quality limit thresholds, and First Time Right (FTR) benchmarks
-            </p>
-          </div>
-
-          {/* Segmented View Mode Switcher */}
-          <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 gap-1 self-stretch sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setChartFocusMode('output')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                chartFocusMode === 'output'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <BarChart2 className="w-3.5 h-3.5" />
-              <span>Output Velocity</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setChartFocusMode('dhu')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                chartFocusMode === 'dhu'
-                  ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <TrendingDown className="w-3.5 h-3.5" />
-              <span>DHU Quality Curve</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setChartFocusMode('efficiency')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                chartFocusMode === 'efficiency'
-                  ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>Efficiency &amp; FTR</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 4 Clean Micro KPI Scorecard Tiles */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-              Output Achievement
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-lg font-black text-slate-900 dark:text-white">
-                {sewingMetrics.totalSewingPcs.toLocaleString()}
-              </span>
-              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                {Math.round((sewingMetrics.totalSewingPcs / (sewingMetrics.totalTargetPcs || 1)) * 100)}% of Goal
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-400 block mt-0.5">
-              Target: {sewingMetrics.totalTargetPcs.toLocaleString()} pcs
-            </span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-              Floor Defect Rate (DHU)
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-lg font-black text-slate-900 dark:text-white">
-                {sewingMetrics.dhuPercent}%
-              </span>
-              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
-                Target &lt; 2.0%
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-400 block mt-0.5">
-              Safety Margin: -0.32% below tolerance
-            </span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-              First Time Right (FTR)
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-lg font-black text-slate-900 dark:text-white">
-                98.1%
-              </span>
-              <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">
-                +1.2% MoM
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-400 block mt-0.5">
-              Straight-pass before rework
-            </span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-              Line Efficiency
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-lg font-black text-slate-900 dark:text-white">
-                82.4%
-              </span>
-              <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400">
-                Target: 80.0%
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-400 block mt-0.5">
-              GSD SMV earned vs consumed
-            </span>
-          </div>
-        </div>
-
-        {/* Hovered Slot Inspection Banner */}
-        {hoveredChartIndex !== null && chartData[hoveredChartIndex] && (
-          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs animate-in fade-in duration-150">
-            <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-indigo-600" />
-              Slot: {chartData[hoveredChartIndex].label}
-            </span>
-            <div className="flex items-center gap-4 flex-wrap text-slate-600 dark:text-slate-300">
-              <span>Actual: <strong>{chartData[hoveredChartIndex].prod.toLocaleString()} pcs</strong></span>
-              <span>Target: <strong>{chartData[hoveredChartIndex].target.toLocaleString()} pcs</strong></span>
-              <span>DHU: <strong className="text-rose-600">{chartData[hoveredChartIndex].dhu}%</strong></span>
-              <span>RFT: <strong className="text-emerald-600">{chartData[hoveredChartIndex].rft}%</strong></span>
-              <span>Efficiency: <strong className="text-purple-600">{chartData[hoveredChartIndex].eff}%</strong></span>
-            </div>
-          </div>
-        )}
-
-        {/* Visual Chart Canvas */}
-        <div className="w-full h-64 relative pt-2">
-          {chartFocusMode === 'output' && (
-            <svg className="w-full h-full" viewBox="0 0 700 200" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="execProdGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.95" />
-                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.75" />
-                </linearGradient>
-                <linearGradient id="execTargetGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.1" />
-                </linearGradient>
-              </defs>
-
-              {/* Gridlines */}
-              <line x1="45" y1="20" x2="680" y2="20" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="65" x2="680" y2="65" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="110" x2="680" y2="110" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="155" x2="680" y2="155" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="175" x2="680" y2="175" stroke="#94a3b8" strokeOpacity="0.4" strokeWidth="1" />
-
-              {/* Y Axis text */}
-              <text x="5" y="24" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">
-                {Math.round(maxProdValue).toLocaleString()}
-              </text>
-              <text x="5" y="100" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">
-                {Math.round(maxProdValue * 0.5).toLocaleString()}
-              </text>
-              <text x="25" y="178" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">
-                0
-              </text>
-
-              {chartData.map((d, i) => {
-                const totalItems = chartData.length;
-                const spacing = 630 / totalItems;
-                const xCenter = 60 + i * spacing + spacing / 2;
-                const prodHeight = (d.prod / maxProdValue) * 150;
-                const targetHeight = (d.target / maxProdValue) * 150;
-                const isHovered = hoveredChartIndex === i;
-                const achievePct = Math.round((d.prod / (d.target || 1)) * 100);
-
-                return (
-                  <g
-                    key={d.label}
-                    onMouseEnter={() => setHoveredChartIndex(i)}
-                    onMouseLeave={() => setHoveredChartIndex(null)}
-                    className="cursor-pointer"
-                  >
-                    {/* Target Bar (Background Pillar) */}
-                    <rect
-                      x={xCenter - 16}
-                      y={175 - targetHeight}
-                      width="32"
-                      height={targetHeight}
-                      fill="url(#execTargetGradient)"
-                      stroke="#06b6d4"
-                      strokeWidth="1"
-                      strokeDasharray="2 2"
-                      rx="4"
-                    />
-
-                    {/* Actual Production Output Bar */}
-                    <rect
-                      x={xCenter - 11}
-                      y={175 - prodHeight}
-                      width="22"
-                      height={prodHeight}
-                      fill="url(#execProdGradient)"
-                      rx="4"
-                      className="transition-all"
-                      opacity={isHovered ? 1 : 0.9}
-                    />
-
-                    {/* Percentage tag above bar */}
-                    <text
-                      x={xCenter}
-                      y={175 - prodHeight - 6}
-                      fontSize="9"
-                      fill={d.prod >= d.target ? '#059669' : '#d97706'}
-                      fontWeight="700"
-                      textAnchor="middle"
-                      fontFamily="sans-serif"
-                    >
-                      {achievePct}%
-                    </text>
-
-                    {/* X-axis Label */}
-                    <text
-                      x={xCenter}
-                      y="192"
-                      fontSize="10"
-                      fill={isHovered ? '#4f46e5' : '#64748b'}
-                      textAnchor="middle"
-                      fontFamily="sans-serif"
-                      fontWeight="600"
-                    >
-                      {d.label}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-          )}
-
-          {chartFocusMode === 'dhu' && (
-            <svg className="w-full h-full" viewBox="0 0 700 200" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="dhuAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.35" />
-                  <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
-
-              {/* Gridlines */}
-              <line x1="45" y1="20" x2="680" y2="20" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="70" x2="680" y2="70" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="120" x2="680" y2="120" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="175" x2="680" y2="175" stroke="#94a3b8" strokeOpacity="0.4" strokeWidth="1" />
-
-              {/* Y Axis text for DHU (0% to 3.0%) */}
-              <text x="12" y="24" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">3.0%</text>
-              <text x="12" y="74" fontSize="9" fill="#e11d48" fontWeight="bold" fontFamily="sans-serif">2.0%</text>
-              <text x="12" y="124" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">1.0%</text>
-              <text x="12" y="178" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">0.0%</text>
-
-              {/* 2.0% Threshold Line */}
-              <line x1="45" y1="70" x2="680" y2="70" stroke="#e11d48" strokeWidth="1.5" strokeDasharray="4 4" />
-              <text x="675" y="65" fontSize="8.5" fill="#e11d48" fontWeight="bold" textAnchor="end" fontFamily="sans-serif">
-                AQL Limit: ≤ 2.00% DHU
-              </text>
-
-              {/* Area fill */}
-              <path
-                d={`M 60 175 ${chartData
-                  .map((d, i) => {
-                    const spacing = 630 / chartData.length;
-                    const x = 60 + i * spacing + spacing / 2;
-                    const y = 175 - (d.dhu / 3.0) * 155;
-                    return `L ${x} ${Math.max(20, y)}`;
-                  })
-                  .join(' ')} L ${60 + (chartData.length - 1) * (630 / chartData.length) + (630 / chartData.length) / 2} 175 Z`}
-                fill="url(#dhuAreaGradient)"
-              />
-
-              {/* Line curve */}
-              <path
-                d={chartData
-                  .map((d, i) => {
-                    const spacing = 630 / chartData.length;
-                    const x = 60 + i * spacing + spacing / 2;
-                    const y = 175 - (d.dhu / 3.0) * 155;
-                    return `${i === 0 ? 'M' : 'L'} ${x} ${Math.max(20, y)}`;
-                  })
-                  .join(' ')}
-                fill="none"
-                stroke="#e11d48"
-                strokeWidth="2.5"
-              />
-
-              {/* Data points */}
-              {chartData.map((d, i) => {
-                const spacing = 630 / chartData.length;
-                const x = 60 + i * spacing + spacing / 2;
-                const y = Math.max(20, 175 - (d.dhu / 3.0) * 155);
-                const isHovered = hoveredChartIndex === i;
-
-                return (
-                  <g
-                    key={i}
-                    onMouseEnter={() => setHoveredChartIndex(i)}
-                    onMouseLeave={() => setHoveredChartIndex(null)}
-                    className="cursor-pointer"
-                  >
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r={isHovered ? 5 : 3.5}
-                      fill={d.dhu <= 2.0 ? '#059669' : '#e11d48'}
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                    />
-                    <text
-                      x={x}
-                      y={y - 8}
-                      fontSize="9"
-                      fill={d.dhu <= 2.0 ? '#059669' : '#e11d48'}
-                      fontWeight="bold"
-                      textAnchor="middle"
-                      fontFamily="sans-serif"
-                    >
-                      {d.dhu}%
-                    </text>
-                    <text
-                      x={x}
-                      y="192"
-                      fontSize="10"
-                      fill={isHovered ? '#e11d48' : '#64748b'}
-                      textAnchor="middle"
-                      fontFamily="sans-serif"
-                      fontWeight="600"
-                    >
-                      {d.label}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-          )}
-
-          {chartFocusMode === 'efficiency' && (
-            <svg className="w-full h-full" viewBox="0 0 700 200" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="effAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#9333ea" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="#9333ea" stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
-
-              {/* Gridlines */}
-              <line x1="45" y1="20" x2="680" y2="20" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="65" x2="680" y2="65" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="110" x2="680" y2="110" stroke="#94a3b8" strokeOpacity="0.15" strokeDasharray="3 3" />
-              <line x1="45" y1="175" x2="680" y2="175" stroke="#94a3b8" strokeOpacity="0.4" strokeWidth="1" />
-
-              {/* Y Axis text for Efficiency & RFT (70% to 100%) */}
-              <text x="12" y="24" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">100%</text>
-              <text x="12" y="69" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">90%</text>
-              <text x="12" y="114" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">80%</text>
-              <text x="12" y="178" fontSize="9" fill="#94a3b8" fontFamily="sans-serif">70%</text>
-
-              {/* RFT Line (Emerald) */}
-              <path
-                d={chartData
-                  .map((d, i) => {
-                    const spacing = 630 / chartData.length;
-                    const x = 60 + i * spacing + spacing / 2;
-                    const y = 175 - ((d.rft - 70) / 30) * 155;
-                    return `${i === 0 ? 'M' : 'L'} ${x} ${Math.max(20, y)}`;
-                  })
-                  .join(' ')}
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="2.5"
-              />
-
-              {/* Efficiency Line (Purple) */}
-              <path
-                d={chartData
-                  .map((d, i) => {
-                    const spacing = 630 / chartData.length;
-                    const x = 60 + i * spacing + spacing / 2;
-                    const y = 175 - ((d.eff - 70) / 30) * 155;
-                    return `${i === 0 ? 'M' : 'L'} ${x} ${Math.max(20, y)}`;
-                  })
-                  .join(' ')}
-                fill="none"
-                stroke="#9333ea"
-                strokeWidth="2.5"
-                strokeDasharray="4 2"
-              />
-
-              {chartData.map((d, i) => {
-                const spacing = 630 / chartData.length;
-                const x = 60 + i * spacing + spacing / 2;
-                const yRft = Math.max(20, 175 - ((d.rft - 70) / 30) * 155);
-                const yEff = Math.max(20, 175 - ((d.eff - 70) / 30) * 155);
-                const isHovered = hoveredChartIndex === i;
-
-                return (
-                  <g
-                    key={i}
-                    onMouseEnter={() => setHoveredChartIndex(i)}
-                    onMouseLeave={() => setHoveredChartIndex(null)}
-                    className="cursor-pointer"
-                  >
-                    <circle cx={x} cy={yRft} r={isHovered ? 4.5 : 3} fill="#10b981" stroke="#ffffff" strokeWidth="1" />
-                    <circle cx={x} cy={yEff} r={isHovered ? 4.5 : 3} fill="#9333ea" stroke="#ffffff" strokeWidth="1" />
-                    <text
-                      x={x}
-                      y="192"
-                      fontSize="10"
-                      fill={isHovered ? '#9333ea' : '#64748b'}
-                      textAnchor="middle"
-                      fontFamily="sans-serif"
-                      fontWeight="600"
-                    >
-                      {d.label}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-          )}
-        </div>
-
-        {/* Legend Summary */}
-        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 flex-wrap gap-2">
-          <div className="flex items-center gap-4 flex-wrap">
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2.5 h-2.5 rounded-xs bg-indigo-600" />
-              <span>Production: <strong>{sewingMetrics.totalSewingPcs.toLocaleString()} pcs</strong></span>
-            </span>
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2.5 h-2.5 rounded-xs bg-cyan-400 border border-cyan-500" />
-              <span>Target: <strong>{sewingMetrics.totalTargetPcs.toLocaleString()} pcs</strong></span>
-            </span>
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-              <span>DHU Rate: <strong>{sewingMetrics.dhuPercent}%</strong></span>
-            </span>
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-              <span>RFT Standard: <strong>98.1%</strong></span>
-            </span>
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
-              <span>Efficiency: <strong>82.4%</strong></span>
-            </span>
-          </div>
-
-          <span className="text-[11px] font-mono text-slate-400">
-            AQL Target ≤ 2.0% • SAM/SMV Calibration Active
-          </span>
-        </div>
-      </div>
-
-      {/* ======================================================== */}
       {/* 4. DUAL COLUMN: TOP 5 DHU CHART + RECENT ACTIVITIES      */}
       {/* ======================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1333,7 +992,13 @@ export function DashboardView({
 
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span className="font-medium">
-              Top 2 Defects contribute to <strong>57%</strong> of total plant DHU
+              Top 2 Defects contribute to{' '}
+              <strong>
+                {top5DhuDefects.length >= 2
+                  ? `${Math.round(top5DhuDefects[0].pctOfTotal + top5DhuDefects[1].pctOfTotal)}%`
+                  : 'majority'}{' '}
+              </strong>{' '}
+              of total logged defect non-conformances
             </span>
             <button
               type="button"
@@ -1399,7 +1064,9 @@ export function DashboardView({
 
           {/* Bottom Card Footer Action */}
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">Total 42 real-time floor milestones</span>
+            <span className="text-[11px] text-slate-400">
+              Live feed synced across {liveOrders.length + liveProductionOrders.length + liveInspections.length} floor records
+            </span>
             <button
               type="button"
               onClick={() => onNavigateTab('audit')}

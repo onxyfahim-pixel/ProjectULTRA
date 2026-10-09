@@ -25,6 +25,7 @@ import {
   Briefcase,
   ChevronRight,
   CornerDownRight,
+  FileDown,
 } from 'lucide-react';
 import { StatCard } from '@/components/ui/StatCard';
 import { DataTable, ColumnDef } from '@/components/ui/DataTable';
@@ -32,9 +33,12 @@ import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/u
 import { OrganogramNode, OrganogramStatus } from '@/lib/types/modules';
 import { INITIAL_ORGANOGRAM_NODES } from '../modules/organogram/organogram-data';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { OrganogramDetailsPage } from '../modules/organogram/OrganogramDetailsPage';
 import { OrganogramEntryPage } from '../modules/organogram/OrganogramEntryPage';
 import { DeleteOrganogramModal } from '../modules/organogram/DeleteOrganogramModal';
+import { OrganogramExportModal } from '../modules/organogram/OrganogramExportModal';
+import { OrganogramSingleExportModal } from '../modules/organogram/OrganogramSingleExportModal';
 
 type OrganogramSubView =
   | { type: 'none' }
@@ -43,6 +47,7 @@ type OrganogramSubView =
   | { type: 'edit'; node: OrganogramNode };
 
 export function OrganogramView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('organogram');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
 
   const [nodes, setNodes] = useLiveModuleData<OrganogramNode[]>(
@@ -69,6 +74,12 @@ export function OrganogramView() {
     isOpen: boolean;
     nodes: OrganogramNode[];
   } | null>(null);
+
+  // Global & Individual Export States
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedNodesForExport, setSelectedNodesForExport] = useState<OrganogramNode[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [nodeForSingleExport, setNodeForSingleExport] = useState<OrganogramNode | null>(null);
 
   // Filters
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
@@ -300,35 +311,56 @@ export function OrganogramView() {
             <Eye className="w-3.5 h-3.5" />
           </button>
 
+          {/* Individual Export Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setNodeForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Export Role Specification Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', node: item })}
-            className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
-            title="Edit Role Profile"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', node: item })}
+              className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
+              title="Edit Role Profile"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => handleDuplicateNode(item)}
-            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-            title="Duplicate Role Template"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateNode(item)}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Duplicate Role Template"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => setDeleteModal({ isOpen: true, nodes: [item] })}
-            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Role"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModal({ isOpen: true, nodes: [item] })}
+              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Role"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -359,6 +391,34 @@ export function OrganogramView() {
             { id: 'list', label: 'Leadership Register', count: nodes.length },
             { id: 'tree', label: 'Org Chart Tree' },
           ]}
+          actions={
+            <div className="flex items-center gap-2">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedNodesForExport(nodes);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer border border-slate-200"
+                  title="Export Organizational Structure (PDF / Excel / CSV)"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Export Structure</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'add' })}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Add Role</span>
+                </button>
+              )}
+            </div>
+          }
         />
       )}
 
@@ -640,35 +700,57 @@ export function OrganogramView() {
                   </div>
                 }
                 primaryAction={
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Organization Role</span>
-                  </button>
+                  canCreate ? (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add Organization Role</span>
+                    </button>
+                  ) : undefined
                 }
                 batchActions={[
-                  {
-                    label: 'Delete Selected',
-                    variant: 'danger',
-                    icon: <Trash2 className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
-                      setDeleteModal({
-                        isOpen: true,
-                        nodes: selected,
-                      });
-                    },
-                  },
-                  {
-                    label: 'Export Roster',
-                    icon: <Download className="w-3.5 h-3.5" />,
-                    onClick: (selected) => {
-                      showToast(`Exported ${selected.length} organogram role records`);
-                    },
-                  },
+                  ...(canExport
+                    ? [
+                        {
+                          label: 'Export Selected (PDF/Excel)',
+                          icon: <FileDown className="w-3.5 h-3.5" />,
+                          onClick: (selected: OrganogramNode[]) => {
+                            setSelectedNodesForExport(selected);
+                            setIsGlobalExportModalOpen(true);
+                          },
+                        },
+                      ]
+                    : []),
+                  ...(canDelete
+                    ? [
+                        {
+                          label: 'Delete Selected',
+                          variant: 'danger' as const,
+                          icon: <Trash2 className="w-3.5 h-3.5" />,
+                          onClick: (selected: OrganogramNode[]) => {
+                            setDeleteModal({
+                              isOpen: true,
+                              nodes: selected,
+                            });
+                          },
+                        },
+                      ]
+                    : []),
                 ]}
+                moduleKey="organogram"
+                canExport={canExport}
+                canDelete={canDelete}
+                onExport={
+                  canExport
+                    ? (items) => {
+                        setSelectedNodesForExport(items.length < nodes.length ? items : []);
+                        setIsGlobalExportModalOpen(true);
+                      }
+                    : undefined
+                }
               />
             </div>
           )}
@@ -698,14 +780,16 @@ export function OrganogramView() {
                       </option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    onClick={() => setSubView({ type: 'add' })}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Role</span>
-                  </button>
+                  {canCreate && (
+                    <button
+                      type="button"
+                      onClick={() => setSubView({ type: 'add' })}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add Role</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -835,6 +919,28 @@ export function OrganogramView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global & Batch Organogram Hierarchy Register Export Modal */}
+      <OrganogramExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => {
+          setIsGlobalExportModalOpen(false);
+          setSelectedNodesForExport([]);
+        }}
+        allNodes={nodes}
+        selectedNodes={selectedNodesForExport}
+      />
+
+      {/* Individual Role Specification Dossier Export Modal */}
+      <OrganogramSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setNodeForSingleExport(null);
+        }}
+        node={nodeForSingleExport}
+        allNodes={nodes}
+      />
     </div>
   );
 }

@@ -23,9 +23,10 @@ import {
   Tag,
   Scissors,
   Sparkles,
-  Package,
   ArrowRight,
+  Package,
   FileSpreadsheet,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -40,6 +41,8 @@ import { INITIAL_INVENTORY } from '@/lib/db/mock-data';
 import { AddInspectionModal } from '../modules/incoming-qc/AddInspectionModal';
 import { IncomingQcDetailsPage } from '../modules/incoming-qc/IncomingQcDetailsPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
+import { IncomingQcExportModal } from '../modules/incoming-qc/IncomingQcExportModal';
+import { IncomingQcSingleExportModal } from '../modules/incoming-qc/IncomingQcSingleExportModal';
 
 interface IncomingQcViewProps {
   inventoryItems?: InventoryItem[];
@@ -80,6 +83,12 @@ export function IncomingQcView({
     isOpen: boolean;
     items: IncomingQCLot[];
   } | null>(null);
+
+  // Global & Single Export Modals
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedLotsForExport, setSelectedLotsForExport] = useState<IncomingQCLot[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [lotForSingleExport, setLotForSingleExport] = useState<IncomingQCLot | null>(null);
 
   // Card view type
   const [cardViewType, setCardViewType] = useState<'grid' | 'table'>('grid');
@@ -404,6 +413,19 @@ export function IncomingQcView({
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setLotForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors cursor-pointer"
+              title="Export QC Certificate (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
           {canEdit && (
             <button
               type="button"
@@ -434,6 +456,18 @@ export function IncomingQcView({
 
   // Batch actions on Table
   const batchActions: BatchAction<IncomingQCLot>[] = [
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected (PDF/Excel)',
+            icon: <FileDown className="w-3.5 h-3.5" />,
+            onClick: (selected: IncomingQCLot[]) => {
+              setSelectedLotsForExport(selected);
+              setIsGlobalExportModalOpen(true);
+            },
+          },
+        ]
+      : []),
     ...(canEdit
       ? [
           {
@@ -488,6 +522,21 @@ export function IncomingQcView({
             { id: 'list', label: 'Inspection Register', count: lots.length, icon: FileSpreadsheet },
             { id: 'cards', label: 'Inspection Cards', count: lots.length, icon: LayoutGrid },
           ]}
+          actions={
+            canExport ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedLotsForExport([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs hover:border-slate-300 transition-all cursor-pointer"
+              >
+                <FileDown className="w-4 h-4 text-slate-600" />
+                <span>Export Master Register</span>
+              </button>
+            ) : undefined
+          }
         />
       )}
 
@@ -771,19 +820,34 @@ export function IncomingQcView({
                   </select>
                 }
                 primaryAction={
-                  canCreate ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLotToEdit(null);
-                        setIsAddModalOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>New Inspection</span>
-                    </button>
-                  ) : undefined
+                  <div className="flex items-center gap-2">
+                    {canExport && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLotsForExport([]);
+                          setIsGlobalExportModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                      >
+                        <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Export Register</span>
+                      </button>
+                    )}
+                    {canCreate && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLotToEdit(null);
+                          setIsAddModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>New Inspection</span>
+                      </button>
+                    )}
+                  </div>
                 }
                 batchActions={batchActions}
                 moduleKey="incoming_qc"
@@ -1009,6 +1073,24 @@ export function IncomingQcView({
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global Export Modal */}
+      <IncomingQcExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allLots={lots}
+        selectedLots={selectedLotsForExport}
+      />
+
+      {/* Single Export Modal */}
+      <IncomingQcSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setLotForSingleExport(null);
+        }}
+        lot={lotForSingleExport}
+      />
     </div>
   );
 }

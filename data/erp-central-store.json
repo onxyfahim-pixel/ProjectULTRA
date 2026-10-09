@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSavedAt": "2026-10-06T19:07:14.793Z",
+  "lastSavedAt": "2026-10-08T17:50:46.665Z",
   "hostSystem": "Garments QMS ERP Host Center (MySQL Dual-Engine)",
   "inventory": [
     {
@@ -867,13 +867,33 @@
   "auditLogs": [
     {
       "action": "MODULE_DATA_UPDATE",
-      "entity": "kpi_metrics",
-      "entityId": "kpi_metrics",
+      "entity": "production_records",
+      "entityId": "production_records",
       "performedBy": "Admin User",
       "userRole": "Super Admin",
-      "details": "Updated data for module kpi_metrics",
-      "id": "log-1791313634793-25",
-      "timestamp": "2026-10-06T19:07:14.793Z"
+      "details": "Updated data for module production_records",
+      "id": "log-1791481846665-808",
+      "timestamp": "2026-10-08T17:50:46.665Z"
+    },
+    {
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "production_records",
+      "entityId": "production_records",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "details": "Updated data for module production_records",
+      "id": "log-1791481846647-542",
+      "timestamp": "2026-10-08T17:50:46.647Z"
+    },
+    {
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "production_sections",
+      "entityId": "production_sections",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "details": "Updated data for module production_sections",
+      "id": "log-1791481846636-538",
+      "timestamp": "2026-10-08T17:50:46.636Z"
     },
     {
       "action": "MODULE_DATA_UPDATE",
@@ -882,8 +902,8 @@
       "performedBy": "Admin User",
       "userRole": "Super Admin",
       "details": "Updated data for module kpi_metrics",
-      "id": "log-1791313634772-310",
-      "timestamp": "2026-10-06T19:07:14.772Z"
+      "id": "log-1791481269412-642",
+      "timestamp": "2026-10-08T17:41:09.412Z"
     },
     {
       "action": "MODULE_DATA_UPDATE",
@@ -892,8 +912,8 @@
       "performedBy": "Admin User",
       "userRole": "Super Admin",
       "details": "Updated data for module kpi_metrics",
-      "id": "log-1791313634753-430",
-      "timestamp": "2026-10-06T19:07:14.753Z"
+      "id": "log-1791481269403-332",
+      "timestamp": "2026-10-08T17:41:09.403Z"
     },
     {
       "action": "MODULE_DATA_UPDATE",
@@ -902,88 +922,458 @@
       "performedBy": "Admin User",
       "userRole": "Super Admin",
       "details": "Updated data for module kpi_metrics",
-      "id": "log-1791313634737-121",
-      "timestamp": "2026-10-06T19:07:14.737Z"
+      "id": "log-1791481269393-1",
+      "timestamp": "2026-10-08T17:41:09.393Z"
     },
     {
-      "action": "ROLE_UPSERTED",
-      "entity": "RBAC",
-      "entityId": "inspector",
-      "performedBy": "Super Administrator",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "production_records",
+      "entityId": "production_records",
+      "performedBy": "Admin User",
       "userRole": "Super Admin",
-      "details": "Saved role \"Inspector\" with permissions matrix",
-      "id": "log-1791312975277-818",
-      "timestamp": "2026-10-06T18:56:15.277Z"
+      "details": "Updated data for module production_records",
+      "id": "log-1791481269379-754",
+      "timestamp": "2026-10-08T17:41:09.379Z"
     },
     {
-      "action": "USER_UPDATED",
-      "entity": "UserManagement",
-      "entityId": "usr_operator",
-      "performedBy": "Super Administrator",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "production_records",
+      "entityId": "production_records",
+      "performedBy": "Admin User",
       "userRole": "Super Admin",
-      "details": "Updated attributes for user @shirin.op (Shirin Akter (Line Operator))",
-      "id": "log-1791312781753-259",
-      "timestamp": "2026-10-06T18:53:01.753Z"
+      "details": "Updated data for module production_records",
+      "id": "log-1791481269363-504",
+      "timestamp": "2026-10-08T17:41:09.363Z"
     },
     {
-      "action": "USER_DELETED",
-      "entity": "UserManagement",
-      "entityId": "usr_1791312766864_743",
-      "performedBy": "Super Administrator",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
       "userRole": "Super Admin",
-      "details": "Deleted user usr_1791312766864_743",
-      "id": "log-1791312766907-736",
-      "timestamp": "2026-10-06T18:52:46.907Z"
+      "details": "Updated data for module kpi_metrics",
+      "id": "log-1791477275198-682",
+      "timestamp": "2026-10-08T16:34:35.198Z"
     },
     {
-      "action": "USER_CREATED",
-      "entity": "UserManagement",
-      "entityId": "usr_1791312766864_743",
-      "performedBy": "Super Administrator",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
       "userRole": "Super Admin",
-      "details": "Created user @test_inspector_user (Test Inspector User) with role Inspector",
-      "id": "log-1791312766869-468",
-      "timestamp": "2026-10-06T18:52:46.869Z"
+      "details": "Updated data for module kpi_metrics",
+      "id": "log-1791477275185-61",
+      "timestamp": "2026-10-08T16:34:35.185Z"
     },
     {
-      "action": "ROLE_UPSERTED",
-      "entity": "RBAC",
-      "entityId": "inspector",
-      "performedBy": "Super Administrator",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
       "userRole": "Super Admin",
-      "details": "Saved role \"Inspector\" with permissions matrix",
-      "id": "log-1791312751853-339",
-      "timestamp": "2026-10-06T18:52:31.853Z"
+      "details": "Updated data for module kpi_metrics",
+      "id": "log-1791477275174-203",
+      "timestamp": "2026-10-08T16:34:35.174Z"
     },
     {
-      "action": "ROLE_DELETED",
-      "entity": "RBAC",
-      "entityId": "test_role",
-      "performedBy": "Super Administrator",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
       "userRole": "Super Admin",
-      "details": "Deleted role test_role",
-      "id": "log-1791312133675-18",
-      "timestamp": "2026-10-06T18:42:13.675Z"
+      "details": "Updated data for module kpi_metrics",
+      "id": "log-1791477275161-987",
+      "timestamp": "2026-10-08T16:34:35.161Z"
     },
     {
-      "action": "ROLE_UPSERTED",
-      "entity": "RBAC",
-      "entityId": "test_role",
-      "performedBy": "Super Administrator",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "quality_goals",
+      "entityId": "quality_goals",
+      "performedBy": "Admin User",
       "userRole": "Super Admin",
-      "details": "Saved role \"Test Auditor\" with permissions matrix",
-      "id": "log-1791312113611-506",
-      "timestamp": "2026-10-06T18:41:53.611Z"
+      "details": "Updated data for module quality_goals",
+      "id": "log-1791475863150-979",
+      "timestamp": "2026-10-08T16:11:03.150Z"
     },
     {
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "quality_goals",
+      "entityId": "quality_goals",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "details": "Updated data for module quality_goals",
+      "id": "log-1791475863140-898",
+      "timestamp": "2026-10-08T16:11:03.140Z"
+    },
+    {
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "quality_goals",
+      "entityId": "quality_goals",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "details": "Updated data for module quality_goals",
+      "id": "log-1791475863130-169",
+      "timestamp": "2026-10-08T16:11:03.130Z"
+    },
+    {
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "quality_goals",
+      "entityId": "quality_goals",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "details": "Updated data for module quality_goals",
+      "id": "log-1791475863114-416",
+      "timestamp": "2026-10-08T16:11:03.114Z"
+    },
+    {
+      "id": "log-1791474534536-707",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T15:48:54.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791474534550-180",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T15:48:54.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791474534564-961",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T15:48:54.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791474534577-640",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T15:48:54.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791471025372-95",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "texpedia_posts",
+      "entityId": "texpedia_posts",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:50:25.000Z",
+      "details": "Updated data for module texpedia_posts"
+    },
+    {
+      "id": "log-1791471025364-591",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "texpedia_posts",
+      "entityId": "texpedia_posts",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:50:25.000Z",
+      "details": "Updated data for module texpedia_posts"
+    },
+    {
+      "id": "log-1791471025908-784",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "texpedia_posts",
+      "entityId": "texpedia_posts",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:50:25.000Z",
+      "details": "Updated data for module texpedia_posts"
+    },
+    {
+      "id": "log-1791471025914-305",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "texpedia_posts",
+      "entityId": "texpedia_posts",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:50:25.000Z",
+      "details": "Updated data for module texpedia_posts"
+    },
+    {
+      "id": "log-1791470691382-509",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "traceability_records",
+      "entityId": "traceability_records",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:44:51.000Z",
+      "details": "Updated data for module traceability_records"
+    },
+    {
+      "id": "log-1791470691396-979",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "traceability_records",
+      "entityId": "traceability_records",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:44:51.000Z",
+      "details": "Updated data for module traceability_records"
+    },
+    {
+      "id": "log-1791470615728-791",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "risk_assessment",
+      "entityId": "risk_assessment",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:43:35.000Z",
+      "details": "Updated data for module risk_assessment"
+    },
+    {
+      "id": "log-1791470615739-265",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "risk_assessment",
+      "entityId": "risk_assessment",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:43:35.000Z",
+      "details": "Updated data for module risk_assessment"
+    },
+    {
+      "id": "log-1791470321783-267",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "quality_goals",
+      "entityId": "quality_goals",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:38:41.000Z",
+      "details": "Updated data for module quality_goals"
+    },
+    {
+      "id": "log-1791470321806-595",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "quality_goals",
+      "entityId": "quality_goals",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:38:41.000Z",
+      "details": "Updated data for module quality_goals"
+    },
+    {
+      "id": "log-1791470321817-639",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "quality_goals",
+      "entityId": "quality_goals",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:38:41.000Z",
+      "details": "Updated data for module quality_goals"
+    },
+    {
+      "id": "log-1791470321845-551",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "quality_goals",
+      "entityId": "quality_goals",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:38:41.000Z",
+      "details": "Updated data for module quality_goals"
+    },
+    {
+      "id": "log-1791470320071-34",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:38:40.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791470320044-285",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:38:40.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791470320054-755",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:38:40.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791470320061-408",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-08T14:38:40.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791373144676-132",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "production_lines",
+      "entityId": "production_lines",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-07T11:39:04.000Z",
+      "details": "Updated data for module production_lines"
+    },
+    {
+      "id": "log-1791373143430-746",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "production_lines",
+      "entityId": "production_lines",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-07T11:39:03.000Z",
+      "details": "Updated data for module production_lines"
+    },
+    {
+      "id": "log-1791362574373-571",
       "action": "ROLE_UPSERTED",
       "entity": "RBAC",
       "entityId": "qc_manager",
       "performedBy": "Super Administrator",
       "userRole": "Super Admin",
-      "details": "Saved role \"QC Manager\" with permissions matrix",
+      "timestamp": "2026-10-07T08:42:54.000Z",
+      "details": "Saved role \"QC Manager\" with permissions matrix"
+    },
+    {
+      "id": "log-1791313634793-25",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T19:07:14.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791313634737-121",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T19:07:14.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791313634753-430",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T19:07:14.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791313634772-310",
+      "action": "MODULE_DATA_UPDATE",
+      "entity": "kpi_metrics",
+      "entityId": "kpi_metrics",
+      "performedBy": "Admin User",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T19:07:14.000Z",
+      "details": "Updated data for module kpi_metrics"
+    },
+    {
+      "id": "log-1791312975277-818",
+      "action": "ROLE_UPSERTED",
+      "entity": "RBAC",
+      "entityId": "inspector",
+      "performedBy": "Super Administrator",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T18:56:15.000Z",
+      "details": "Saved role \"Inspector\" with permissions matrix"
+    },
+    {
+      "id": "log-1791312781753-259",
+      "action": "USER_UPDATED",
+      "entity": "UserManagement",
+      "entityId": "usr_operator",
+      "performedBy": "Super Administrator",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T18:53:01.000Z",
+      "details": "Updated attributes for user @shirin.op (Shirin Akter (Line Operator))"
+    },
+    {
+      "id": "log-1791312766869-468",
+      "action": "USER_CREATED",
+      "entity": "UserManagement",
+      "entityId": "usr_1791312766864_743",
+      "performedBy": "Super Administrator",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T18:52:46.000Z",
+      "details": "Created user @test_inspector_user (Test Inspector User) with role Inspector"
+    },
+    {
+      "id": "log-1791312766907-736",
+      "action": "USER_DELETED",
+      "entity": "UserManagement",
+      "entityId": "usr_1791312766864_743",
+      "performedBy": "Super Administrator",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T18:52:46.000Z",
+      "details": "Deleted user usr_1791312766864_743"
+    },
+    {
+      "id": "log-1791312751853-339",
+      "action": "ROLE_UPSERTED",
+      "entity": "RBAC",
+      "entityId": "inspector",
+      "performedBy": "Super Administrator",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T18:52:31.000Z",
+      "details": "Saved role \"Inspector\" with permissions matrix"
+    },
+    {
+      "id": "log-1791312133675-18",
+      "action": "ROLE_DELETED",
+      "entity": "RBAC",
+      "entityId": "test_role",
+      "performedBy": "Super Administrator",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T18:42:13.000Z",
+      "details": "Deleted role test_role"
+    },
+    {
+      "id": "log-1791312113611-506",
+      "action": "ROLE_UPSERTED",
+      "entity": "RBAC",
+      "entityId": "test_role",
+      "performedBy": "Super Administrator",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T18:41:53.000Z",
+      "details": "Saved role \"Test Auditor\" with permissions matrix"
+    },
+    {
       "id": "log-1791311813535-90",
-      "timestamp": "2026-10-06T18:36:53.535Z"
+      "action": "ROLE_UPSERTED",
+      "entity": "RBAC",
+      "entityId": "qc_manager",
+      "performedBy": "Super Administrator",
+      "userRole": "Super Admin",
+      "timestamp": "2026-10-06T18:36:53.000Z",
+      "details": "Saved role \"QC Manager\" with permissions matrix"
     },
     {
       "id": "log-1791309160307-256",
@@ -1064,7 +1454,7 @@
         "isActive": true,
         "isSuperAdmin": true,
         "createdAt": "2026-01-01T00:00:00.000Z",
-        "lastLoginAt": "2026-10-06T19:01:58.898Z",
+        "lastLoginAt": "2026-10-08T15:48:44.871Z",
         "designation": "Director of Quality & Enterprise Compliance",
         "phone": "+880 1711-234567",
         "employeeId": "VG-QMS-2024-001",
@@ -1080,7 +1470,7 @@
         "username": "tania.qa",
         "name": "Tania Ahmed (QA Lead)",
         "email": "qa.lead@garmentserp.com",
-        "role": "QA_MANAGER",
+        "role": "QC Manager",
         "department": "Quality Assurance & AQL",
         "avatarUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100&h=100&fit=crop&crop=face",
         "password": "qa",
@@ -1093,7 +1483,7 @@
         "username": "rafiq.wh",
         "name": "Rafiqul Islam (Warehouse Inspector)",
         "email": "inspector@garmentserp.com",
-        "role": "WAREHOUSE_INSPECTOR",
+        "role": "Inspector",
         "department": "Warehouse & Raw Materials",
         "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
         "password": "wh",
@@ -1138,19 +1528,19 @@
         "styleNumber": "STY-TS-2026",
         "buyer": "H&M Hennes & Mauritz",
         "department": "Sewing Assembly",
-        "processStep": "Fabric Reactive Dyeing & Finishing (Single Jersey 180 GSM)",
-        "potentialFailureMode": "Color Bleeding & Wash Crocking Fastness Failure (< Grade 4)",
-        "potentialEffect": "Staining of contrast collar rib during washing; buyer lot rejection.",
-        "potentialCauses": "Unfixed reactive dye molecules left due to insufficient hot water soaping cycles at textile mill.",
-        "currentControls": "Supplier mill test report review only without factory internal cross-check.",
+        "processStep": "Knit / Woven Fabric Sourcing & Inspection",
+        "potentialFailureMode": "Fabric Shrinkage & Dimensional Distortion After Wash (>5% length/width)",
+        "potentialEffect": "Finished garments undersized after buyer home laundering; widespread consumer returns.",
+        "potentialCauses": "Inadequate fabric compaction during sanforizing / stenter finishing at dyeing mill.",
+        "currentControls": "Standard random 10% 4-point inspection on arrival without pre-wash relaxation.",
         "severity": 8,
-        "occurrence": 4,
-        "detection": 3,
-        "rpn": 96,
-        "riskLevel": "MEDIUM",
-        "mitigationAction": "100% internal lab multi-fiber wash fastness testing (ISO 105-C06) before roll release to cutting floor.",
-        "responsibleLead": "Rehana Begum (Fabric Lab QA)",
-        "targetDate": "2026-10-01",
+        "occurrence": 5,
+        "detection": 4,
+        "rpn": 160,
+        "riskLevel": "CRITICAL",
+        "mitigationAction": "Mandatory 4-hour pre-production wash shrinkage audit for each dye lot + calculate marker shrinkage compensation buffer.",
+        "responsibleLead": "Fabric Lab Head & Cutting In-charge",
+        "targetDate": "2026-10-18",
         "status": "IN_PROGRESS",
         "orderNumber": "PO-HM-99201",
         "buyerOrderId": "ord-1",
@@ -1159,6 +1549,44 @@
         "orderQuantity": 45000,
         "primarySection": "RAW_MATERIAL",
         "sectionRisks": [
+          {
+            "id": "sec-1791470611558-961",
+            "section": "RAW_MATERIAL",
+            "processStep": "Fabric Reactive Dyeing & Shade Assessment",
+            "potentialFailureMode": "Color Bleeding & Wash / Crocking Fastness Failure (< Grade 4)",
+            "potentialEffect": "Contrast trim staining and color bleeding onto lighter panels during consumer wash.",
+            "potentialCauses": "Unfixed reactive dye molecules left due to insufficient hot water soaping cycles at textile mill.",
+            "currentControls": "Supplier mill test report certificate review only; no factory internal cross-check.",
+            "severity": 8,
+            "occurrence": 4,
+            "detection": 3,
+            "rpn": 96,
+            "riskLevel": "HIGH",
+            "mitigationAction": "100% internal lab multi-fiber wash fastness testing (ISO 105-C06) before fabric roll release to cutting floor.",
+            "responsibleLead": "Senior Quality Lab Chemist",
+            "targetDate": "2026-10-18",
+            "status": "IN_PROGRESS",
+            "notes": "Special attention required for dark shades (Navy, Black, Maroon) with white trims."
+          },
+          {
+            "id": "sec-1791470610253-616",
+            "section": "RAW_MATERIAL",
+            "processStep": "Knit / Woven Fabric Sourcing & Inspection",
+            "potentialFailureMode": "Fabric Shrinkage & Dimensional Distortion After Wash (>5% length/width)",
+            "potentialEffect": "Finished garments undersized after buyer home laundering; widespread consumer returns.",
+            "potentialCauses": "Inadequate fabric compaction during sanforizing / stenter finishing at dyeing mill.",
+            "currentControls": "Standard random 10% 4-point inspection on arrival without pre-wash relaxation.",
+            "severity": 8,
+            "occurrence": 5,
+            "detection": 4,
+            "rpn": 160,
+            "riskLevel": "CRITICAL",
+            "mitigationAction": "Mandatory 4-hour pre-production wash shrinkage audit for each dye lot + calculate marker shrinkage compensation buffer.",
+            "responsibleLead": "Fabric Lab Head & Cutting In-charge",
+            "targetDate": "2026-10-18",
+            "status": "IN_PROGRESS",
+            "notes": "Shrinkage tolerance threshold strictly set to max -3.0% / +1.0%."
+          },
           {
             "id": "sec-init-1",
             "section": "RAW_MATERIAL",
@@ -1241,7 +1669,7 @@
         ],
         "notes": "4 section risks evaluated for this style.",
         "createdAt": "2026-09-24T14:40:40.400Z",
-        "updatedAt": "2026-09-24T14:40:40.400Z"
+        "updatedAt": "2026-10-08T14:43:35.717Z"
       },
       {
         "id": "fmea-1",
@@ -1870,6 +2298,317 @@
     ],
     "production_records": [
       {
+        "id": "po-1791481460740",
+        "orderNumber": "PO-HM-99201",
+        "recordDate": "2026-10-08",
+        "shift": "Shift A (Morning 08:00 - 16:30)",
+        "buyer": "H&M Hennes & Mauritz",
+        "styleName": "Men Heavyweight Cotton Crewneck Tee",
+        "styleNumber": "STY-TS-2026",
+        "itemInfo": "100% Combed Cotton Single Jersey 180 GSM",
+        "smvTarget": 11.2,
+        "unit": "Unit 01 (Dhaka Complex)",
+        "section": "Finishing & Packing",
+        "targetQuantity": 45000,
+        "completedQuantity": 110,
+        "totalDefects": 5,
+        "defectRate": 1.15,
+        "dhuRate": 1.15,
+        "rftRate": 98.2,
+        "efficiencyPercent": 84.5,
+        "rejectQuantity": 18,
+        "sewingLine": "Finishing & Packing",
+        "lineId": "FIN-01",
+        "status": "RUNNING",
+        "dueDate": "2026-10-25",
+        "operatorCount": 32,
+        "supervisorName": "Golam Rabbani",
+        "qualityInspector": "Anwar Hossain",
+        "remarks": "",
+        "createdAt": "2026-10-08T17:44:20.740Z",
+        "hourlyReports": [
+          {
+            "id": "hr-init-1791481434904-0",
+            "hourSlot": "08:00 - 09:00",
+            "targetQty": 225,
+            "checkedQty": 110,
+            "passedQty": 110,
+            "defectQty": 5,
+            "rejectQty": 0,
+            "defectRate": 4.55,
+            "rftRate": 95.5,
+            "defectBreakdown": [
+              {
+                "defectType": "Open Seam / Run-off",
+                "count": 5
+              }
+            ],
+            "topDefect": "Open Seam / Run-off",
+            "operatorId": "Station 1",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791481434904-1",
+            "hourSlot": "09:00 - 10:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 2",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791481434904-2",
+            "hourSlot": "10:00 - 11:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 3",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791481434904-3",
+            "hourSlot": "11:00 - 12:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 4",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791481434904-4",
+            "hourSlot": "12:00 - 13:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 5",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791481434904-5",
+            "hourSlot": "14:00 - 15:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 6",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791481434904-6",
+            "hourSlot": "15:00 - 16:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 7",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791481434904-7",
+            "hourSlot": "16:00 - 17:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 8",
+            "remarks": ""
+          }
+        ],
+        "top3Defects": [
+          {
+            "defectType": "Open Seam / Run-off",
+            "count": 5,
+            "percentage": 100
+          }
+        ]
+      },
+      {
+        "id": "po-1791479212362",
+        "orderNumber": "PO-HM-99201",
+        "styleName": "Men Heavyweight Cotton Crewneck Tee",
+        "buyer": "H&M Hennes & Mauritz",
+        "sewingLine": "Sewing Line 01 (Knit Tops)",
+        "lineId": "L-01",
+        "section": "Sewing Line 01 (Knit Tops)",
+        "recordDate": "2026-10-08",
+        "targetQuantity": 45000,
+        "completedQuantity": 208,
+        "totalDefects": 5,
+        "defectRate": 1.15,
+        "dhuRate": 1.15,
+        "rftRate": 98.2,
+        "hourlyReports": [
+          {
+            "id": "hr-init-1791479089712-0",
+            "hourSlot": "08:00 - 09:00",
+            "targetQty": 225,
+            "checkedQty": 100,
+            "passedQty": 99,
+            "defectQty": 5,
+            "rejectQty": 1,
+            "defectRate": 5,
+            "rftRate": 94,
+            "defectBreakdown": [
+              {
+                "defectType": "Broken Stitch",
+                "count": 5
+              }
+            ],
+            "topDefect": "Broken Stitch",
+            "operatorId": "Station 1",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791479089712-1",
+            "hourSlot": "09:00 - 10:00",
+            "targetQty": 225,
+            "checkedQty": 100,
+            "passedQty": 99,
+            "defectQty": 0,
+            "rejectQty": 1,
+            "defectRate": 0,
+            "rftRate": 99,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 2",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791479089712-2",
+            "hourSlot": "10:00 - 11:00",
+            "targetQty": 225,
+            "checkedQty": 10,
+            "passedQty": 9,
+            "defectQty": 0,
+            "rejectQty": 1,
+            "defectRate": 0,
+            "rftRate": 90,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 3",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791479089712-3",
+            "hourSlot": "11:00 - 12:00",
+            "targetQty": 225,
+            "checkedQty": 1,
+            "passedQty": 1,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 4",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791479089712-4",
+            "hourSlot": "12:00 - 13:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 5",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791479089712-5",
+            "hourSlot": "14:00 - 15:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 6",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791479089712-6",
+            "hourSlot": "15:00 - 16:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 7",
+            "remarks": ""
+          },
+          {
+            "id": "hr-init-1791479089712-7",
+            "hourSlot": "16:00 - 17:00",
+            "targetQty": 225,
+            "checkedQty": 0,
+            "passedQty": 0,
+            "defectQty": 0,
+            "rejectQty": 0,
+            "defectRate": 0,
+            "rftRate": 100,
+            "defectBreakdown": [],
+            "topDefect": "None",
+            "operatorId": "Station 8",
+            "remarks": ""
+          }
+        ],
+        "qualityInspector": "Md. Rafiqul Islam",
+        "status": "RUNNING",
+        "dueDate": "2026-10-08T17:41:18.446Z",
+        "createdAt": "2026-10-08T17:41:09.000Z"
+      },
+      {
         "id": "po-202",
         "orderNumber": "PO-HM-2026-14",
         "styleName": "Essential Organic Tee Crew Neck",
@@ -1993,7 +2732,7 @@
         "qualityInspector": "Farhana Yasmin (Floor QC Specialist)",
         "status": "RUNNING",
         "remarks": "High-speed flatlock rib collar attachment running at 105% target pace.",
-        "dueDate": "2026-10-06T18:29:00.828Z",
+        "dueDate": "2026-10-08T17:41:18.446Z",
         "createdAt": "2026-10-06T18:29:00.000Z"
       },
       {
@@ -2120,7 +2859,7 @@
         "qualityInspector": "Nasrin Akter (Inline Quality Inspector)",
         "status": "RUNNING",
         "remarks": "Kangaroo pocket alignment jig in use. Critical metal detection 100% passed.",
-        "dueDate": "2026-10-06T18:29:00.828Z",
+        "dueDate": "2026-10-08T17:41:18.446Z",
         "createdAt": "2026-10-06T18:29:00.000Z"
       },
       {
@@ -2247,7 +2986,7 @@
         "qualityInspector": "Tariqul Anam (QA In-Charge)",
         "status": "COMPLETED",
         "remarks": "All 12,000 pcs inspected and transferred to final finishing carton warehouse.",
-        "dueDate": "2026-10-06T18:29:00.828Z",
+        "dueDate": "2026-10-08T17:41:18.447Z",
         "createdAt": "2026-10-06T18:29:00.000Z"
       },
       {
@@ -2373,7 +3112,7 @@
         ],
         "status": "RUNNING",
         "remarks": "Micro-stitch tolerance within +/- 0.5mm. Zero shade deviation observed.",
-        "dueDate": "2026-10-06T18:29:00.828Z",
+        "dueDate": "2026-10-08T17:41:18.447Z",
         "createdAt": "2026-10-06T18:29:00.000Z"
       }
     ],
@@ -2924,7 +3663,7 @@
           }
         },
         "createdAt": "2026-01-01T00:00:00Z",
-        "updatedAt": "2026-10-06T18:36:53.527Z"
+        "updatedAt": "2026-10-07T08:42:54.368Z"
       },
       {
         "id": "inspector",
@@ -3963,6 +4702,1070 @@
             "loggedBy": "Rashedul Islam"
           }
         ]
+      }
+    ],
+    "production_lines": [
+      {
+        "id": "line-1791215943373",
+        "name": "02",
+        "lineCode": "02",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "sectionId": "sec-01",
+        "sectionName": "Sewing Floor",
+        "lineChief": "41534154",
+        "qualityController": "6456456456",
+        "targetCapacityPerHour": 140,
+        "operatorCount": 48,
+        "machineCount": 52,
+        "status": "INACTIVE",
+        "remarks": "",
+        "createdAt": "2026-10-05"
+      },
+      {
+        "id": "line-01",
+        "name": "Sewing Line 01 (Knit Tops)",
+        "lineCode": "L-01",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "sectionId": "sec-01",
+        "sectionName": "Sewing Floor",
+        "lineChief": "Kabir Hossain",
+        "qualityController": "Md. Rafiqul Islam",
+        "targetCapacityPerHour": 160,
+        "operatorCount": 48,
+        "machineCount": 52,
+        "status": "ACTIVE",
+        "remarks": "Dedicated to Zara and H&M knit tees.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "line-02",
+        "name": "Sewing Line 02 (Knit Polo & Fleece)",
+        "lineCode": "L-02",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "sectionId": "sec-01",
+        "sectionName": "Sewing Floor",
+        "lineChief": "Jahangir Alam",
+        "qualityController": "Mizanur Rahman",
+        "targetCapacityPerHour": 140,
+        "operatorCount": 52,
+        "machineCount": 56,
+        "status": "ACTIVE",
+        "remarks": "Polo collar placket & rib cuff assembly.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "line-03",
+        "name": "Sewing Line 03 (Woven Bottoms)",
+        "lineCode": "L-03",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "sectionId": "sec-01",
+        "sectionName": "Sewing Floor",
+        "lineChief": "Abul Kashem",
+        "qualityController": "Nasir Uddin",
+        "targetCapacityPerHour": 130,
+        "operatorCount": 54,
+        "machineCount": 58,
+        "status": "ACTIVE",
+        "remarks": "Chino pants and twill shorts assembly.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "line-04",
+        "name": "Sewing Line 04 (Heavy Denim)",
+        "lineCode": "L-04",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "sectionId": "sec-01",
+        "sectionName": "Sewing Floor",
+        "lineChief": "Shahidul Islam",
+        "qualityController": "Kamal Ahmed",
+        "targetCapacityPerHour": 120,
+        "operatorCount": 50,
+        "machineCount": 54,
+        "status": "ACTIVE",
+        "remarks": "Heavyweight 12-14oz denim felling & waistband.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "line-05",
+        "name": "Sewing Line 05 (Precision Knit)",
+        "lineCode": "L-05",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "sectionId": "sec-01",
+        "sectionName": "Sewing Floor",
+        "lineChief": "Faruk Ahmed",
+        "qualityController": "Tanvir Hasan",
+        "targetCapacityPerHour": 170,
+        "operatorCount": 44,
+        "machineCount": 48,
+        "status": "ACTIVE",
+        "remarks": "Nike and Adidas seamless performance wear.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "line-06",
+        "name": "Cutting Floor Section 01",
+        "lineCode": "CUT-01",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "sectionId": "sec-02",
+        "sectionName": "Cutting Floor",
+        "lineChief": "Monir Hossain",
+        "qualityController": "Suman Das",
+        "targetCapacityPerHour": 500,
+        "operatorCount": 24,
+        "machineCount": 8,
+        "status": "ACTIVE",
+        "remarks": "Computerized spreading & band knife cutting.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "line-07",
+        "name": "Finishing & Packing Section 01",
+        "lineCode": "FIN-01",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "sectionId": "sec-03",
+        "sectionName": "Finishing & Packing",
+        "lineChief": "Golam Rabbani",
+        "qualityController": "Anwar Hossain",
+        "targetCapacityPerHour": 220,
+        "operatorCount": 32,
+        "machineCount": 16,
+        "status": "ACTIVE",
+        "remarks": "Steam tunnel, hand ironing & metal detection.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "line-08",
+        "name": "Industrial Washing Floor",
+        "lineCode": "WASH-01",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "sectionId": "sec-04",
+        "sectionName": "Industrial Washing",
+        "lineChief": "Shah Alam",
+        "qualityController": "Babul Akter",
+        "targetCapacityPerHour": 300,
+        "operatorCount": 18,
+        "machineCount": 12,
+        "status": "ACTIVE",
+        "remarks": "Hydro-extractors and industrial belly washers.",
+        "createdAt": "2026-01-10"
+      }
+    ],
+    "quality_goals": [
+      {
+        "id": "qg-001",
+        "goalCode": "QG-2026-01",
+        "goalTitle": "Achieve Zero Buyer Major Claims for A/W 2026 Season",
+        "pillar": "CUSTOMER_SATISFACTION",
+        "department": "Executive Quality & Merchandising",
+        "targetMetric": "Customer Complaints Count",
+        "baseline": "7 Claims in 2025",
+        "target": "0 Major Claims (<2 Minor Allowed)",
+        "currentAchievement": "1 Minor Claim (Resolved with Credit Note)",
+        "percentageAchieved": 100,
+        "ownerName": "Tanzim Ahmed (Head of Quality)",
+        "startDate": "2026-01-01",
+        "deadline": "2026-12-31",
+        "status": "ACHIEVED",
+        "priority": "CRITICAL",
+        "reviewCycle": "QUARTERLY",
+        "lastReviewedDate": "2026-09-15",
+        "approvedBy": "Engr. M. A. Jalil (Managing Director)",
+        "description": "Executive mandate aligned with ISO 9001:2015 Clause 6.2 to eliminate commercial claims through rigorous pre-shipment lot verification and real-time shade band approvals.",
+        "milestones": [
+          {
+            "id": "m-1",
+            "title": "Q1 Review: Deploy UV ink lot tracking across all cutting lines",
+            "targetDate": "2026-03-31",
+            "completed": true,
+            "completedDate": "2026-09-25",
+            "weightPercentage": 25
+          },
+          {
+            "id": "m-2",
+            "title": "Q2 Review: Zero shade variance rejections in EU distribution hub",
+            "targetDate": "2026-06-30",
+            "completed": true,
+            "completedDate": "2026-06-25",
+            "weightPercentage": 25
+          },
+          {
+            "id": "m-3",
+            "title": "Q3 Review: Complete customer satisfaction survey (>92% score)",
+            "targetDate": "2026-09-30",
+            "completed": true,
+            "completedDate": "2026-09-20",
+            "weightPercentage": 25
+          },
+          {
+            "id": "m-4",
+            "title": "Q4 Final Audit: Zero open claims at year-end book closure",
+            "targetDate": "2026-12-31",
+            "completed": true,
+            "weightPercentage": 25,
+            "completedDate": "2026-09-25"
+          }
+        ],
+        "actionPlans": [
+          {
+            "id": "ap-1",
+            "task": "Implement mandatory dual-light (D65+TL84) matching for rib-to-body trims",
+            "assignee": "Md. Al-Amin",
+            "department": "Testing Lab",
+            "dueDate": "2026-10-15",
+            "completed": true,
+            "completedDate": "2026-09-18"
+          },
+          {
+            "id": "ap-2",
+            "task": "Establish 24-hour rapid CAPA response protocol for buyer regional alerts",
+            "assignee": "Tanzim Ahmed",
+            "department": "Quality Assurance",
+            "dueDate": "2026-10-31",
+            "completed": false
+          }
+        ],
+        "updatedAt": "2026-09-25"
+      },
+      {
+        "id": "qg-002",
+        "goalCode": "QG-2026-02",
+        "goalTitle": "Reduce Denim Inseam Chainstitch Puckering Defect Rate by 40%",
+        "pillar": "DEFECT_REDUCTION",
+        "department": "Sewing Production (Line 03 & 04)",
+        "targetMetric": "Specific Defect Frequency (DHU)",
+        "baseline": "3.4% on Line 03 (Denim)",
+        "target": "< 1.2% Puckering Rate",
+        "currentAchievement": "1.4% Rate achieved (58% Reduction)",
+        "percentageAchieved": 100,
+        "ownerName": "Sarah Jenkins (Denim Specialist)",
+        "startDate": "2026-04-01",
+        "deadline": "2026-10-31",
+        "status": "ACHIEVED",
+        "priority": "HIGH",
+        "reviewCycle": "MONTHLY",
+        "lastReviewedDate": "2026-09-22",
+        "approvedBy": "Tanzim Ahmed (Head of Quality)",
+        "description": "Targeted technical reduction of sewing feed-dog puckering and needle cut on heavy twill denim styles through mechanical retrofit and thread tension balancing.",
+        "milestones": [
+          {
+            "id": "m-201",
+            "title": "Phase 1: Retrofit differential feed dogs on all 14 double-needle machines",
+            "targetDate": "2026-05-15",
+            "completed": true,
+            "completedDate": "2026-05-12",
+            "weightPercentage": 30
+          },
+          {
+            "id": "m-202",
+            "title": "Phase 2: Switch to Groz-Beckert titanium GEBEDUR needles",
+            "targetDate": "2026-07-31",
+            "completed": true,
+            "completedDate": "2026-07-20",
+            "weightPercentage": 35
+          },
+          {
+            "id": "m-203",
+            "title": "Phase 3: Maintain <1.2% puckering over 60 consecutive bulk production days",
+            "targetDate": "2026-10-31",
+            "completed": true,
+            "weightPercentage": 35,
+            "completedDate": "2026-09-25"
+          }
+        ],
+        "actionPlans": [
+          {
+            "id": "ap-201",
+            "task": "Audit silicone needle thread lubricant dispenser daily before morning shift start",
+            "assignee": "Babul Akter",
+            "department": "Maintenance",
+            "dueDate": "2026-10-01",
+            "completed": true,
+            "completedDate": "2026-09-21"
+          },
+          {
+            "id": "ap-202",
+            "task": "Calibrate tension meters on Line 03 machines 10 through 18",
+            "assignee": "Babul Akter",
+            "department": "Maintenance",
+            "dueDate": "2026-10-10",
+            "completed": false
+          }
+        ],
+        "updatedAt": "2026-09-25"
+      },
+      {
+        "id": "qg-003",
+        "goalCode": "QG-2026-03",
+        "goalTitle": "100% On-Time In-House Lab Test Turnaround (<24 Hours)",
+        "pillar": "LAB_TESTING",
+        "department": "Physical & Chemical Testing Lab",
+        "targetMetric": "Lab Test Turnaround Time (TAT)",
+        "baseline": "36 Hours Average in 2025",
+        "target": "< 24 Hours SLA (100% Compliance)",
+        "currentAchievement": "19.4 Hours Average (Zero Delayed Reports)",
+        "percentageAchieved": 100,
+        "ownerName": "Farhana Akhter (Lab Manager)",
+        "startDate": "2026-01-15",
+        "deadline": "2026-09-30",
+        "status": "ACHIEVED",
+        "priority": "HIGH",
+        "reviewCycle": "MONTHLY",
+        "lastReviewedDate": "2026-09-24",
+        "approvedBy": "Tanzim Ahmed (Head of Quality)",
+        "description": "ISO 17025 accredited laboratory commitment to deliver fabric shrinkage, torque, color fastness, and pull-test reports within 24 hours of fabric arrival.",
+        "milestones": [
+          {
+            "id": "m-301",
+            "title": "Install automated digital barcode sample intake scanner",
+            "targetDate": "2026-03-31",
+            "completed": true,
+            "completedDate": "2026-03-15",
+            "weightPercentage": 30
+          },
+          {
+            "id": "m-302",
+            "title": "Commission second Wascator FOM 71 CLS accelerated washing machine",
+            "targetDate": "2026-06-30",
+            "completed": true,
+            "completedDate": "2026-06-10",
+            "weightPercentage": 40
+          },
+          {
+            "id": "m-303",
+            "title": "Sustain <24 hour turnaround for 3 consecutive months",
+            "targetDate": "2026-09-30",
+            "completed": true,
+            "completedDate": "2026-09-22",
+            "weightPercentage": 30
+          }
+        ],
+        "actionPlans": [
+          {
+            "id": "ap-301",
+            "task": "Publish weekly lab report turnaround statistics on ERP quality portal",
+            "assignee": "Farhana Akhter",
+            "department": "Testing Lab",
+            "dueDate": "2026-09-30",
+            "completed": true,
+            "completedDate": "2026-09-24"
+          }
+        ]
+      },
+      {
+        "id": "qg-004",
+        "goalCode": "QG-2026-04",
+        "goalTitle": "Achieve 98.5% First-Pass Buyer Final Audit Score Across All Brands",
+        "pillar": "COMPLIANCE_STANDARDS",
+        "department": "Final Audit & Quality Assurance",
+        "targetMetric": "First-Pass Pre-Shipment Inspection Pass Rate",
+        "baseline": "96.2% Pass Rate in 2025",
+        "target": "≥ 98.5% First-Pass Rate",
+        "currentAchievement": "98.8% First-Pass Rate across 224 shipments",
+        "percentageAchieved": 100,
+        "ownerName": "Sarah Jenkins (Quality Governance Specialist)",
+        "startDate": "2026-02-01",
+        "deadline": "2026-11-30",
+        "status": "ACHIEVED",
+        "priority": "CRITICAL",
+        "reviewCycle": "MONTHLY",
+        "lastReviewedDate": "2026-09-20",
+        "approvedBy": "Engr. M. A. Jalil (Managing Director)",
+        "description": "Ensure pre-shipment inspections conducted by H&M, Zara, Target, and third parties (SGS, Intertek) pass with AQL 1.5/2.5 on first presentation without re-auditing.",
+        "milestones": [
+          {
+            "id": "m-401",
+            "title": "Standardize 100% pre-final internal carton audit protocol",
+            "targetDate": "2026-04-30",
+            "completed": true,
+            "completedDate": "2026-04-18",
+            "weightPercentage": 35
+          },
+          {
+            "id": "m-402",
+            "title": "Zero AQL critical failures over 100 shipments",
+            "targetDate": "2026-08-31",
+            "completed": true,
+            "completedDate": "2026-08-25",
+            "weightPercentage": 35
+          },
+          {
+            "id": "m-403",
+            "title": "Achieve annual factory gold-tier accreditation from H&M and Next",
+            "targetDate": "2026-11-30",
+            "completed": true,
+            "completedDate": "2026-09-15",
+            "weightPercentage": 30
+          }
+        ],
+        "actionPlans": [
+          {
+            "id": "ap-401",
+            "task": "Implement digital tablet AQL sampling check at carton sealing stage",
+            "assignee": "Md. Al-Amin",
+            "department": "Finishing QA",
+            "dueDate": "2026-10-15",
+            "completed": true,
+            "completedDate": "2026-08-10"
+          }
+        ]
+      },
+      {
+        "id": "qg-005",
+        "goalCode": "QG-2026-05",
+        "goalTitle": "Zero Needle Contamination: 100% Lock & Key Policy Compliance",
+        "pillar": "COMPLIANCE_STANDARDS",
+        "department": "Needle Control & Safety Inspection",
+        "targetMetric": "Broken Needle Reconstitution Rate",
+        "baseline": "98.5% Reconstitution in 2025",
+        "target": "100% Zero-Failure Reconstitution",
+        "currentAchievement": "100% (14 out of 14 pieces reconstituted)",
+        "percentageAchieved": 95,
+        "ownerName": "Md. Delwar Hossain (Needle Controller)",
+        "startDate": "2026-01-01",
+        "deadline": "2026-12-31",
+        "status": "IN_PROGRESS",
+        "priority": "CRITICAL",
+        "reviewCycle": "MONTHLY",
+        "lastReviewedDate": "2026-09-24",
+        "approvedBy": "Tanzim Ahmed (Head of Quality)",
+        "description": "Ensure strict 100% compliance with retailer needle and metal safety policies. Every broken needle must be reconstituted on adhesive tape before issuing a replacement.",
+        "milestones": [
+          {
+            "id": "m-501",
+            "title": "Replace manual logbooks with digital barcode needle dispensing kiosks",
+            "targetDate": "2026-04-30",
+            "completed": true,
+            "completedDate": "2026-04-20",
+            "weightPercentage": 35
+          },
+          {
+            "id": "m-502",
+            "title": "Audit 9-point metal detector calibration logs daily without failure",
+            "targetDate": "2026-08-31",
+            "completed": true,
+            "completedDate": "2026-08-28",
+            "weightPercentage": 35
+          },
+          {
+            "id": "m-503",
+            "title": "Maintain 100% annual broken needle tape audit verification",
+            "targetDate": "2026-12-31",
+            "completed": false,
+            "weightPercentage": 30
+          }
+        ],
+        "actionPlans": [
+          {
+            "id": "ap-501",
+            "task": "Conduct bi-weekly surprise metal detector sensitivity verification using 1.0mm Fe sphere",
+            "assignee": "Md. Delwar Hossain",
+            "department": "Needle Control",
+            "dueDate": "2026-10-15",
+            "completed": false
+          }
+        ]
+      },
+      {
+        "id": "qg-006",
+        "goalCode": "QG-2026-06",
+        "goalTitle": "Reduce Fabric Splicing Loss in Cutting Room Below 1.2%",
+        "pillar": "PROCESS_EFFICIENCY",
+        "department": "Cutting Department",
+        "targetMetric": "Fabric Splicing & End-Bit Wastage (%)",
+        "baseline": "2.4% Loss in 2025",
+        "target": "< 1.2% Splicing Loss",
+        "currentAchievement": "1.6% Loss achieved",
+        "percentageAchieved": 70,
+        "ownerName": "Kabir Hossain (Chief Cutting Master)",
+        "startDate": "2026-03-01",
+        "deadline": "2026-11-30",
+        "status": "BEHIND",
+        "priority": "MEDIUM",
+        "reviewCycle": "MONTHLY",
+        "lastReviewedDate": "2026-09-18",
+        "approvedBy": "Engr. M. A. Jalil (Managing Director)",
+        "description": "Optimize fabric utilization by introducing laser-guided roll-end splicing and automatic nesting algorithms on automated spreading tables.",
+        "milestones": [
+          {
+            "id": "m-601",
+            "title": "Install laser alignment guides on spreader table #3 & #4",
+            "targetDate": "2026-05-31",
+            "completed": true,
+            "completedDate": "2026-05-22",
+            "weightPercentage": 30
+          },
+          {
+            "id": "m-602",
+            "title": "Implement roll-end remnant fabric bundling procedure",
+            "targetDate": "2026-08-31",
+            "completed": true,
+            "completedDate": "2026-08-15",
+            "weightPercentage": 35
+          },
+          {
+            "id": "m-603",
+            "title": "Reach sustained <1.2% splicing loss for knit single jersey styles",
+            "targetDate": "2026-11-30",
+            "completed": false,
+            "weightPercentage": 35
+          }
+        ],
+        "actionPlans": [
+          {
+            "id": "ap-601",
+            "task": "Retrain fabric spreading operators on roll-end overlap tolerances (max 2 inches)",
+            "assignee": "Kabir Hossain",
+            "department": "Cutting Room",
+            "dueDate": "2026-10-05",
+            "completed": false
+          }
+        ]
+      }
+    ],
+    "traceability_records": [
+      {
+        "id": "trc-1",
+        "poNumber": "PO-ZARA-4482",
+        "orderNumber": "PO-ZARA-4482",
+        "cartonBarcode": "CTN-HM-99201-0428",
+        "garmentSerial": "GRM-2026-889104",
+        "styleNumber": "STY-DN-502",
+        "articleName": "Slim Fit Washed Indigo Denim Jeans 12oz",
+        "styleDescription": "Slim Fit Washed Indigo Denim Jeans 12oz",
+        "buyer": "Inditex / Zara",
+        "orderQuantity": 28000,
+        "season": "Autumn 2026",
+        "colorWay": "Jet Black / Melange Grey",
+        "sewingLine": "Sewing Line 01 (Knits)",
+        "cuttingTableLot": "CUT-TB-14",
+        "fabricRollBarcode": "FB-ROL-8840-06",
+        "dyeingBatch": "DYE-PAC-441-A",
+        "yarnLot": "YRN-SPIN-9902",
+        "cottonOrigin": "Texas U.S. Cotton Trust Protocol Certified",
+        "spinningMill": "Square Spinning Mills Ltd (Unit 2)",
+        "fabricMill": "Pacific Knit Composite Ltd",
+        "ginningLocation": "Lubbock Ginning Co-Op, Texas, USA",
+        "passedFinalDate": "2026-09-17 15:42",
+        "status": "VERIFIED",
+        "traceabilityScore": 100,
+        "certificateStandard": "U.S. Cotton Trust Protocol / OEKO-TEX Standard 100",
+        "certificateNumber": "USCTP-88419-TX",
+        "inspectorName": "Md. Tariqul Islam (Lead Auditor)",
+        "metalDetectionStatus": "PASSED",
+        "needlePolicyVerified": true,
+        "notes": "Full backward chain demonstrated from shipping carton to ginning lot in Lubbock, Texas. 100% compliant with H&M sustainability mandate.",
+        "rfidTag": "EPC-96-88A904BC1",
+        "updatedAt": "2026-10-08T14:44:51.373Z",
+        "lifecycleStages": [
+          {
+            "id": "stg-RA4482-1",
+            "stageKey": "RAW_MATERIAL",
+            "stageName": "Raw Material (Fiber / Yarn)",
+            "receiveDate": "2026-08-24",
+            "issueDate": "2026-09-02",
+            "receivedQty": 6468,
+            "issuedQty": 6283,
+            "excessShortQty": 185,
+            "excessShortType": "EXCESS",
+            "unit": "kg",
+            "challanNumber": "CHL-RM-RA4482-01",
+            "challanDate": "2026-08-24",
+            "challanImageUrl": "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80",
+            "challanImageName": "Raw_Material_Delivery_Challan_Verified.jpg",
+            "stationOrSupplier": "Inditex / Zara Nominated Spinning Mill",
+            "status": "COMPLETED",
+            "remarks": "100% virgin ring-spun cotton certified. Raw store balance reconciled with 0 moisture loss."
+          },
+          {
+            "id": "stg-RA4482-2",
+            "stageKey": "FABRIC",
+            "stageName": "Fabric (Knitting / Dyeing)",
+            "receiveDate": "2026-09-03",
+            "issueDate": "2026-09-12",
+            "receivedQty": 13104,
+            "issuedQty": 12726,
+            "excessShortQty": 378,
+            "excessShortType": "EXCESS",
+            "unit": "meters",
+            "challanNumber": "CHL-FAB-RA4482-02",
+            "challanDate": "2026-09-03",
+            "challanImageUrl": "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=600&auto=format&fit=crop&q=80",
+            "challanImageName": "Fabric_Mill_Roll_Challan_Signed.jpg",
+            "stationOrSupplier": "Pacific Knit Composite Ltd (Dye House)",
+            "status": "COMPLETED",
+            "remarks": "Lab dip shade approved. 4-point fabric inspection passed with Grade A compliance score (14 points/100 sq yd)."
+          },
+          {
+            "id": "stg-RA4482-3",
+            "stageKey": "CUTTING",
+            "stageName": "Cutting & Marker Spreading",
+            "receiveDate": "2026-09-13",
+            "issueDate": "2026-09-19",
+            "receivedQty": 28000,
+            "issuedQty": 28728,
+            "excessShortQty": 728,
+            "excessShortType": "EXCESS",
+            "unit": "pcs",
+            "challanNumber": "CUT-SLIP-RA4482-03",
+            "challanDate": "2026-09-19",
+            "challanImageUrl": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&auto=format&fit=crop&q=80",
+            "challanImageName": "Cutting_Floor_Bundle_Slip_CAD.jpg",
+            "stationOrSupplier": "Cutting Table Lot CUT-TB-14 (Auto Spreader)",
+            "status": "COMPLETED",
+            "remarks": "CAD marker efficiency 86.8%. Planned buffer +2.6% overcut to safeguard sewing line yield."
+          },
+          {
+            "id": "stg-RA4482-4",
+            "stageKey": "SEWING",
+            "stageName": "Sewing Assembly Line",
+            "receiveDate": "2026-09-20",
+            "issueDate": "2026-09-29",
+            "receivedQty": 28728,
+            "issuedQty": 28252,
+            "excessShortQty": 476,
+            "excessShortType": "SHORT",
+            "unit": "pcs",
+            "challanNumber": "BUN-SEW-RA4482-04",
+            "challanDate": "2026-09-29",
+            "challanImageUrl": "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=600&auto=format&fit=crop&q=80",
+            "challanImageName": "Sewing_Line_Assembly_Ticket.jpg",
+            "stationOrSupplier": "Sewing Line 01 (Knits Assembly)",
+            "status": "COMPLETED",
+            "remarks": "End-line DHU 1.4%. 765 pcs rejected & defaced under buyer brand protection protocol."
+          },
+          {
+            "id": "stg-RA4482-5",
+            "stageKey": "FINISHING",
+            "stageName": "Finishing & Garment QC",
+            "receiveDate": "2026-09-30",
+            "issueDate": "2026-10-04",
+            "receivedQty": 28252,
+            "issuedQty": 28000,
+            "excessShortQty": 252,
+            "excessShortType": "SHORT",
+            "unit": "pcs",
+            "challanNumber": "QC-FIN-RA4482-05",
+            "challanDate": "2026-10-04",
+            "challanImageUrl": "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600&auto=format&fit=crop&q=80",
+            "challanImageName": "QC_Finishing_Inspection_Passed.jpg",
+            "stationOrSupplier": "Finishing Room Bay 02 (Steam Tunnel)",
+            "status": "COMPLETED",
+            "remarks": "Tunnel steam iron & dimensional stability verified. 405 minor oil/iron reject units isolated for de-branding."
+          },
+          {
+            "id": "stg-RA4482-6",
+            "stageKey": "PACKING",
+            "stageName": "Packing & Carton Box Packaging",
+            "receiveDate": "2026-10-05",
+            "issueDate": "2026-10-07",
+            "receivedQty": 28000,
+            "issuedQty": 28000,
+            "excessShortQty": 0,
+            "excessShortType": "BALANCED",
+            "unit": "pcs",
+            "challanNumber": "PL-PCK-RA4482-06",
+            "challanDate": "2026-10-07",
+            "challanImageUrl": "https://images.unsplash.com/photo-1580674684081-7617fbf3d745?w=600&auto=format&fit=crop&q=80",
+            "challanImageName": "Carton_Packing_List_Manifest.jpg",
+            "stationOrSupplier": "Central Packaging Hall (Station 4)",
+            "status": "COMPLETED",
+            "remarks": "100% order met (28,000 pcs). Dual 9-point metal detector inspection passed."
+          },
+          {
+            "id": "stg-RA4482-7",
+            "stageKey": "SHIPMENT",
+            "stageName": "Shipment & Ex-Factory Clearance",
+            "receiveDate": "2026-10-07",
+            "issueDate": "2026-10-08",
+            "receivedQty": 28000,
+            "issuedQty": 28000,
+            "excessShortQty": 0,
+            "excessShortType": "BALANCED",
+            "unit": "pcs",
+            "challanNumber": "BL-EXP-RA4482-07",
+            "challanDate": "2026-10-08",
+            "challanImageUrl": "https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=600&auto=format&fit=crop&q=80",
+            "challanImageName": "Bill_Of_Lading_Export_Clearance.jpg",
+            "stationOrSupplier": "Ex-Factory Gate 01 / Freight Carrier",
+            "status": "COMPLETED",
+            "remarks": "Commercial invoice & Customs gate pass stamped. Container seal locked and verified for port transit."
+          }
+        ]
+      },
+      {
+        "id": "trc-2",
+        "poNumber": "PO-ZARA-4482",
+        "orderNumber": "PO-ZARA-4482",
+        "cartonBarcode": "CTN-ZARA-4482-0112",
+        "garmentSerial": "GRM-2026-772189",
+        "styleNumber": "STY-DN-502",
+        "articleName": "Slim Fit Washed Indigo Denim Jeans 12oz",
+        "styleDescription": "Slim Fit Washed Indigo Denim Jeans 12oz",
+        "buyer": "Inditex / Zara",
+        "orderQuantity": 28000,
+        "season": "Autumn 2026",
+        "colorWay": "Vintage Deep Indigo Wash",
+        "sewingLine": "Sewing Line 03 (Denim)",
+        "cuttingTableLot": "CUT-TB-08",
+        "fabricRollBarcode": "FB-ROL-2210-18",
+        "dyeingBatch": "DYE-SHENG-882-INDIGO",
+        "yarnLot": "YRN-RING-5541",
+        "cottonOrigin": "Better Cotton Initiative (BCI) Gujarat, India",
+        "spinningMill": "Vardhman Textiles Ltd",
+        "fabricMill": "Envoy Textiles Ltd (LEED Platinum Denim)",
+        "ginningLocation": "Saurashtra Ginning Hub, Gujarat, India",
+        "passedFinalDate": "2026-09-16 11:20",
+        "status": "VERIFIED",
+        "traceabilityScore": 100,
+        "certificateStandard": "BCI Chain of Custody & Inditex The List",
+        "certificateNumber": "BCI-IND-2026-9041",
+        "inspectorName": "Sultan Ahmed (Senior QA)",
+        "metalDetectionStatus": "PASSED",
+        "needlePolicyVerified": true,
+        "notes": "Dual 9-point metal check passed. All fiber lots audited against Inditex Clear to Wear standard.",
+        "rfidTag": "EPC-96-77B201EF9"
+      },
+      {
+        "id": "trc-3",
+        "poNumber": "PO-PVH-7729",
+        "orderNumber": "PO-PVH-7729",
+        "cartonBarcode": "CTN-PVH-7729-0891",
+        "garmentSerial": "GRM-2026-993201",
+        "styleNumber": "STY-PL-889",
+        "articleName": "Pique Cotton Polo with Flat-Knit Collar",
+        "styleDescription": "Pique Cotton Polo with Flat-Knit Collar",
+        "buyer": "PVH Tommy Hilfiger",
+        "orderQuantity": 32000,
+        "season": "Spring/Summer 2027",
+        "colorWay": "Classic Navy / Bright White",
+        "sewingLine": "Sewing Line 05 (Polo Line)",
+        "cuttingTableLot": "CUT-TB-22",
+        "fabricRollBarcode": "FB-ROL-6601-44",
+        "dyeingBatch": "DYE-KNIT-330-B",
+        "yarnLot": "YRN-SUPIMA-1082",
+        "cottonOrigin": "100% American Supima Cotton, San Joaquin Valley, California",
+        "spinningMill": "Buhler Quality Yarns USA",
+        "fabricMill": "Square Fashions Ltd",
+        "ginningLocation": "Corcoran Ginning District, California, USA",
+        "passedFinalDate": "2026-09-19 09:15",
+        "status": "VERIFIED",
+        "traceabilityScore": 98,
+        "certificateStandard": "Supima Licensee Certification & GOTS 6.0",
+        "certificateNumber": "SUPIMA-USA-2026-14",
+        "inspectorName": "Farhan Rahman (QMS Lead)",
+        "metalDetectionStatus": "PASSED",
+        "needlePolicyVerified": true,
+        "notes": "DNA marker isotopic analysis confirmed genuine American Supima extra-long staple fiber.",
+        "rfidTag": "EPC-96-33D4408A2"
+      },
+      {
+        "id": "trc-4",
+        "poNumber": "PO-LEV-1109",
+        "orderNumber": "PO-LEV-1109",
+        "cartonBarcode": "CTN-LEV-1109-0056",
+        "garmentSerial": "GRM-2026-440182",
+        "styleNumber": "STY-JK-440",
+        "articleName": "Sherpa Lined Denim Trucker Jacket",
+        "styleDescription": "Sherpa Lined Denim Trucker Jacket",
+        "buyer": "Levi Strauss & Co",
+        "orderQuantity": 15000,
+        "season": "Winter 2026",
+        "colorWay": "Rinse Dark Stone Wash",
+        "sewingLine": "Sewing Line 02 (Heavy Outerwear)",
+        "cuttingTableLot": "CUT-TB-03",
+        "fabricRollBarcode": "FB-ROL-9912-01",
+        "dyeingBatch": "DYE-CONE-771",
+        "yarnLot": "YRN-OE-3320",
+        "cottonOrigin": "Organic Cotton (GOTS) Izmir, Turkey",
+        "spinningMill": "Sanko Textiles Turkey",
+        "fabricMill": "Ha-Meem Denim Mills Ltd",
+        "ginningLocation": "Aegean Cotton Region, Izmir, Turkey",
+        "passedFinalDate": "2026-09-14 16:50",
+        "status": "VERIFIED",
+        "traceabilityScore": 100,
+        "certificateStandard": "GOTS Organic Certified & Levi Screened Chemistry",
+        "certificateNumber": "GOTS-CU-884210-TUR",
+        "inspectorName": "Nusrat Jahan (Senior Auditor)",
+        "metalDetectionStatus": "PASSED",
+        "needlePolicyVerified": true,
+        "notes": "Sherpa polyester fleece also verified 100% post-consumer recycled fiber (GRS certified).",
+        "rfidTag": "EPC-96-55F9901C4"
+      }
+    ],
+    "texpedia_posts": [
+      {
+        "id": "post-001",
+        "title": "Solving Seam Puckering on 100% Polyester Microfiber (Activewear Seams)",
+        "category": "SEWING_MACHINERY",
+        "tags": [
+          "Needle Heat",
+          "Seam Puckering",
+          "Activewear",
+          "Thread Tension",
+          "Microfiber"
+        ],
+        "summary": "High-speed sewing on dense 75D polyester microfiber caused severe structural puckering. Here is how switching needle point and looper tension completely cured the issue.",
+        "content": "### Problem Statement\nDuring production of 45,000 units of moisture-wicking running tees for Decathlon, Sewing Line 04 experienced a 6.8% defect rate due to puckering along the side seams and raglan sleeves. The fabric is 100% polyester interlock (140 GSM, 75D/72F microfilament).\n\n### Root Cause Analysis (Ishikawa)\n1. **Needle Penetration Heat**: Standard R-point needles (size 75/11) generated frictional heat exceeding 240°C at 4,800 RPM, melting microfilaments inside the stitch channel.\n2. **Excessive Thread Tension**: High needle thread tension caused elastic elongation during stitch formation, which contracted after releasing from the presser foot.\n3. **Feed Dog Tooth Pitch**: Standard coarse feed dogs bruised the filament structure.\n\n### Permanent Floor Fix\n- Switched needle to **Groz-Beckert SAN 10 XS (Extra Slim Ball Point, Size 65/9 with Teflon/Titanium Nitride coating)**.\n- Reduced machine speed from 4,800 RPM to 3,900 RPM.\n- Loosened upper thread tension by 35% and replaced standard polyester sewing thread with **Corespun Polyester/Polyester 120 Ticket**.\n- Adjusted differential feed ratio to 1:1.05 to slightly gather rather than stretch.\n\n### Result\nSeam puckering fell from 6.8% to 0.2% on final inspection. Seam strength passed buyer spec at 180N elongation test.",
+        "author": {
+          "name": "Engr. Zahidul Hassan",
+          "role": "Senior Industrial Engineer & Technical Trainer",
+          "department": "Production Engineering",
+          "badges": [
+            "Master Mechanic",
+            "Verified Contributor"
+          ]
+        },
+        "images": [
+          {
+            "id": "img-1a",
+            "url": "https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=800&auto=format&fit=crop&q=80",
+            "caption": "Defect: Severe seam puckering along side seam caused by excessive needle friction and high thread tension (R-point 75/11).",
+            "highlightDefect": true
+          },
+          {
+            "id": "img-1b",
+            "url": "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=80",
+            "caption": "Solution: Perfectly flat, ripple-free activewear seam achieved after switching to SAN 10 XS 65/9 Titanium needle and corespun thread.",
+            "highlightDefect": false
+          },
+          {
+            "id": "img-1c",
+            "url": "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&auto=format&fit=crop&q=80",
+            "caption": "Machine Setting: Dial gauge set to 1:1.05 differential feed ratio on Juki 4-thread overlock workstation.",
+            "highlightDefect": false
+          }
+        ],
+        "upvotesCount": 38,
+        "hasUpvoted": false,
+        "isBookmarked": true,
+        "isVerifiedSolution": true,
+        "viewsCount": 412,
+        "createdAt": "2026-09-24 10:15",
+        "comments": [
+          {
+            "id": "cmt-1",
+            "authorName": "Farhana Akhter",
+            "authorRole": "Lab Quality Manager",
+            "department": "Testing Lab",
+            "timestamp": "2026-09-24 11:30",
+            "content": "Excellent case study Zahidul bhai! We also noticed wash shrinkage on puckered seams was 2.5% higher before this needle change.",
+            "likesCount": 6
+          },
+          {
+            "id": "cmt-2",
+            "authorName": "Mohammad Rafiq",
+            "authorRole": "Line 04 Supervisor",
+            "department": "Sewing Section",
+            "timestamp": "2026-09-24 14:02",
+            "content": "Applied on Line 04 yesterday; operator comfort improved noticeably because fabric feeds smoothly without pushing.",
+            "likesCount": 4
+          }
+        ]
+      },
+      {
+        "id": "post-002",
+        "title": "Eliminating Metamerism & Shading in Heather Grey Cotton/Poly Fleece",
+        "category": "DYEING_WASHING",
+        "tags": [
+          "Metamerism",
+          "Spectrophotometer",
+          "Heather Grey",
+          "D65 Light",
+          "Dye Shading"
+        ],
+        "summary": "Fabric rolls matched perfectly in the factory daylight booth (D65) but showed severe color mismatch under store lighting (TL84 / Store Fluorescent). Here is the optical solution.",
+        "content": "### Overview of Defect\nDuring cutting inspection of 60% Cotton / 40% Polyester blended brushed fleece (320 GSM, Heather Grey Melange), fabric inspectors observed consistent panel-to-panel color shading when garments were evaluated inside the buyer's store simulation cabinet.\n\n### Investigation\n- Under standard daylight (CIE D65), Delta-E was within tolerance at **0.45**.\n- Under buyer retail store lighting (TL84 / CWF), Delta-E jumped to **1.62**, causing collar rib and body panels to look distinctly two-toned (metameric failure).\n- **Spectrophotometric Curve Analysis**: The dye formulation used for the polyester portion contained disperse yellow with a secondary absorption peak at 440nm, differing from the black fiber melange blend.\n\n### Resolution Protocol\n1. **Dye Dyestuff Reformulation**: Replaced the trichromatic dye combination with CI Disperse Blue 56 and CI Disperse Brown 1 with flat reflectance curve across 400-700nm.\n2. **Dual-Illuminant Pass Criteria**: Standard operating procedure amended so that incoming batches must pass Delta-E < 0.8 under BOTH D65 and TL84 illuminants.\n3. **Roll Segregation**: Implemented QR-barcode tagging indicating dye-lot batch pairing.\n\n### Practical Factory Tip\nNever cut rib collars from a different batch roll than the garment body, even if Delta-E appears low under ambient daylight!",
+        "author": {
+          "name": "Dr. Tanzim Ahmed",
+          "role": "QA General Manager & Colorist",
+          "department": "Central Quality Lab",
+          "badges": [
+            "ISO 17025 Lead Auditor",
+            "Textile Colorist"
+          ]
+        },
+        "images": [
+          {
+            "id": "img-2a",
+            "url": "https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=800&auto=format&fit=crop&q=80",
+            "caption": "Defect: Noticeable two-tone shading between body panel and collar under TL84 store lighting (Metameric mismatch).",
+            "highlightDefect": true
+          },
+          {
+            "id": "img-2b",
+            "url": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800&auto=format&fit=crop&q=80",
+            "caption": "Spectrophotometer Macbeth light booth verification under calibrated D65, TL84, and Illuminant A.",
+            "highlightDefect": false
+          }
+        ],
+        "upvotesCount": 45,
+        "hasUpvoted": true,
+        "isBookmarked": true,
+        "isVerifiedSolution": true,
+        "viewsCount": 520,
+        "createdAt": "2026-09-22 16:45",
+        "comments": [
+          {
+            "id": "cmt-3",
+            "authorName": "Salma Khatun",
+            "authorRole": "Cutting Master",
+            "department": "Cutting Room",
+            "timestamp": "2026-09-23 09:12",
+            "content": "This protocol saved our entire Zara order. We now check every roll with the handheld Datacolor spectrophotometer before spreading.",
+            "likesCount": 8
+          }
+        ]
+      },
+      {
+        "id": "post-003",
+        "title": "Preventing Pocket Bag Abrasion & Hole Damage During Denim Enzyme Stone Wash",
+        "category": "DYEING_WASHING",
+        "tags": [
+          "Denim Washing",
+          "Enzyme Wash",
+          "Pumice Stone",
+          "Pocket Lining",
+          "Abrasion Fix"
+        ],
+        "summary": "Lightweight poplin pocket bags were developing edge fraying and holes during a 45-minute enzyme stone wash cycle. Here is the pocket lining reinforcement and wash parameter fix.",
+        "content": "### Problem Description\nStyle STY-DN-502 (Slim Fit Men's 12oz Denim) undergoes a vintage heavy stone wash cycle. Out of 1,200 pcs washed in the first production trial, 82 garments suffered pocket bag lining tears and hole punctures near the bottom corner rivets.\n\n### Root Causes\n1. **Pocket Lining Fabric Strength**: The pocket lining specified was 65/35 TC poplin (110 GSM), with inadequate wet tensile burst strength (under 80 kPa).\n2. **Pumice Stone Particle Size**: Pumice stones had degraded into sharp gravel shards under 1.5 cm diameter which lodged inside the unbuttoned pocket openings.\n3. **Washer Drum RPM**: Mechanical action speed was 28 RPM, generating excessive kinetic impact.\n\n### Implemented Solutions\n- **Temporary Pocket Tack Seam**: In sewing, a single-chain temporary tack stitch (6 SPI) was introduced to close the front pocket scoop before washing. This prevents stones from entering the bag.\n- **Pumice Stone Screening**: Instituted mandatory stone tumbling screening—all stones smaller than 3.0 cm diameter are discarded daily.\n- **Enzyme Chemistry**: Replaced 30% of physical pumice stone load with high-activity neutral cellulase enzyme (Denimax), reducing wash cycle time from 45 min to 28 min.\n\n### Verification\nZero pocket tears across the remaining 14,000 units. Wash effect and vintage contrast remained 100% true to master buyer sample.",
+        "author": {
+          "name": "Kamal Uddin",
+          "role": "Denim Washing Plant Specialist",
+          "department": "Wet Processing Division",
+          "badges": [
+            "Wet Process Expert"
+          ]
+        },
+        "images": [
+          {
+            "id": "img-3a",
+            "url": "https://images.unsplash.com/photo-1542272604-780c96856592?w=800&auto=format&fit=crop&q=80",
+            "caption": "Defect: Frayed pocket bag edge with stone impact puncture holes after aggressive stone wash.",
+            "highlightDefect": true
+          },
+          {
+            "id": "img-3b",
+            "url": "https://images.unsplash.com/photo-1582533561751-ef6f6ab93a2e?w=800&auto=format&fit=crop&q=80",
+            "caption": "Solution: Temporary pocket tack stitch keeping stones out; clean, unblemished pocket bag after wash removal.",
+            "highlightDefect": false
+          }
+        ],
+        "upvotesCount": 29,
+        "hasUpvoted": false,
+        "isBookmarked": false,
+        "isVerifiedSolution": true,
+        "viewsCount": 308,
+        "createdAt": "2026-09-20 14:20",
+        "comments": []
+      },
+      {
+        "id": "post-004",
+        "title": "Overcoming Bowing & Skewing in Plaid / Check Fabric Spreading",
+        "category": "CUTTING_PATTERN",
+        "tags": [
+          "Fabric Spreading",
+          "Plaid Matching",
+          "Bowing Defect",
+          "Tension-Free Spreader"
+        ],
+        "summary": "Yarn-dyed check flannel shirts require 100% horizontal stripe alignment across front plackets. Here is how we solved spreading distortion and bowing.",
+        "content": "### The Challenge\nWhen spreading 100% cotton yarn-dyed flannel (180 GSM, Tartan Check) across a 12-meter cutting table, fabric tension created a parabolic bow in the center of the lay, causing up to 1.5 cm misalignment between front left and right chest stripes.\n\n### Key Factors\n- Traditional automatic spreading machine pulled the roll with positive roll unwind tension, stretching the center more than the selvedges.\n- Table vacuum was engaged before the fabric had fully relaxed after unwinding.\n\n### The Fix\n1. **48-Hour Relaxation**: Fabric rolls must be unwrapped and rested in loose loops on roll racks for a minimum of 24 to 48 hours before cutting.\n2. **Optical Stripe Guide Laser**: Mounted dual green crosshair lasers on the spreader carriage to align the check grid against table reference marks every 2 meters.\n3. **Needling Table Pins**: Installed vertical retractable alignment pins along the table edge to pin repeat squares in place during multi-ply spreading.\n\n### Result\nCheck matching pass rate improved from 88% to 99.4%, meeting Ralph Lauren and Tommy Hilfiger strict zero-tolerance plaid matching criteria.",
+        "author": {
+          "name": "Salma Khatun",
+          "role": "Chief Pattern & Spreading Master",
+          "department": "Automated Cutting Room",
+          "badges": [
+            "Pattern Master"
+          ]
+        },
+        "images": [
+          {
+            "id": "img-4a",
+            "url": "https://images.unsplash.com/photo-1520006403909-838d6b92c22e?w=800&auto=format&fit=crop&q=80",
+            "caption": "Defect: Severe center bowing curve causing front placket horizontal check lines to mismatch by 12mm.",
+            "highlightDefect": true
+          },
+          {
+            "id": "img-4b",
+            "url": "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=800&auto=format&fit=crop&q=80",
+            "caption": "Solution: Laser-aligned tension-free spreading yielding millimeter-perfect horizontal plaid line matching across chest and sleeves.",
+            "highlightDefect": false
+          }
+        ],
+        "upvotesCount": 31,
+        "hasUpvoted": false,
+        "isBookmarked": false,
+        "isVerifiedSolution": true,
+        "viewsCount": 275,
+        "createdAt": "2026-09-18 11:10",
+        "comments": []
+      }
+    ],
+    "production_sections": [
+      {
+        "id": "sec-01",
+        "name": "Sewing Floor",
+        "sectionCode": "SEC-SEW",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "inchargeName": "Kabir Hossain",
+        "status": "ACTIVE",
+        "description": "Primary sewing assembly floor featuring high-speed lockstitch & overlock lines.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "sec-02",
+        "name": "Cutting Floor",
+        "sectionCode": "SEC-CUT",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "inchargeName": "Monir Hossain",
+        "status": "ACTIVE",
+        "description": "Automated spreading tables, Gerber CNC computerized cutters, and bundling stations.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "sec-03",
+        "name": "Finishing & Packing",
+        "sectionCode": "SEC-FIN",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "inchargeName": "Golam Rabbani",
+        "status": "ACTIVE",
+        "description": "Thread trimming, steam tunnel pressing, needle detectors, and carton packaging.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "sec-04",
+        "name": "Industrial Washing",
+        "sectionCode": "SEC-WASH",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "inchargeName": "Shah Alam",
+        "status": "ACTIVE",
+        "description": "Enzyme wash, stone wash, laser whisker patterning, and ozone eco-bleaching.",
+        "createdAt": "2026-01-10"
+      },
+      {
+        "id": "sec-05",
+        "name": "Quality Assurance (AQL)",
+        "sectionCode": "SEC-QA",
+        "unitId": "unit-01",
+        "unitName": "Unit 01 (Dhaka Complex)",
+        "inchargeName": "Md. Rafiqul Islam",
+        "status": "ACTIVE",
+        "description": "AQL 1.5/2.5 pre-final & final audit room, shade checking & measurement calibration.",
+        "createdAt": "2026-01-10"
       }
     ]
   }

@@ -38,11 +38,13 @@ import {
   ArrowRight,
   TrendingUp,
   TrendingDown,
+  FileDown,
 } from 'lucide-react';
 import { TraceabilityChain, BuyerOrder, TraceabilityStageRecord } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { TraceabilityOrderSelectorModal } from './TraceabilityOrderSelectorModal';
 import { TraceabilityImageModal } from './TraceabilityImageModal';
+import { TraceabilitySingleExportModal } from './TraceabilitySingleExportModal';
 import {
   createDefaultLifecycleStages,
   STAGE_CONFIGS,
@@ -66,7 +68,8 @@ export function TraceabilityDetailsPage({
   onUpdateRecord,
   showToast,
 }: TraceabilityDetailsPageProps) {
-  const { canCreate, canEdit, canDelete } = useModulePermission('traceability');
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('traceability');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   // Primary default tab is the 7-stage start-to-end lifecycle tracker
   const [activeTab, setActiveTab] = useState<
     'lifecycle' | 'reconciliation' | 'evidence' | 'disposal' | 'genealogy' | 'passport'
@@ -331,6 +334,18 @@ export function TraceabilityDetailsPage({
                 <Copy className="w-3.5 h-3.5" />
                 <span>{copiedKey === 'PO / Barcode' ? 'Copied!' : 'Copy PO'}</span>
               </button>
+
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => setIsExportModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors cursor-pointer"
+                  title="Export Traceability Dossier (PDF / Excel / CSV)"
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  <span>Export Dossier</span>
+                </button>
+              )}
 
               {canEdit && (
                 <button
@@ -1479,6 +1494,13 @@ export function TraceabilityDetailsPage({
             challanDate={imageModal.challanDate}
           />
         )}
+
+        {/* Single Dossier Export Modal */}
+        <TraceabilitySingleExportModal
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          record={record}
+        />
       </div>
     </div>
   );

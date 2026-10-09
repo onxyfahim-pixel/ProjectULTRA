@@ -29,6 +29,10 @@ import {
   Award,
   FileDown,
   Smartphone,
+  Scissors,
+  Shirt,
+  PackageCheck,
+  Droplets,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -50,8 +54,14 @@ import {
   getProductionRecords,
   saveProductionRecords,
   deleteProductionRecordFromBackend,
+  syncProductionRecordToBuyerOrders,
   syncSewingRecordToBuyerOrders,
   isSewingSectionRecord,
+  isCuttingSectionRecord,
+  isFinishingSectionRecord,
+  isPackingSectionRecord,
+  isWashingSectionRecord,
+  isQualitySectionRecord,
   calculateRecordCheckedQty,
 } from '@/lib/db/production-records-store';
 
@@ -133,6 +143,7 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
   // Filters & Dropdowns
   const [unitFilter, setUnitFilter] = useState('ALL');
   const [sectionFilter, setSectionFilter] = useState('ALL');
+  const [lineFilter, setLineFilter] = useState('ALL');
   const [buyerFilter, setBuyerFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
@@ -232,8 +243,113 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
     });
   }, [orders, startDateFilter, endDateFilter]);
 
-  // Real dynamic KPIs linked directly from matching production records in date filter
-  const summaryOrders = dateFilteredOrders;
+  // Real dynamic KPIs linked directly from matching production records in date + unit + section + line filters
+  const summaryOrders = useMemo(() => {
+    return dateFilteredOrders.filter((o) => {
+      const matchesUnit = unitFilter === 'ALL' || (o.unit || 'Unit 01') === unitFilter;
+      const secText = (o.section || o.sewingLine || '').toLowerCase();
+      const matchesSection =
+        sectionFilter === 'ALL' ||
+        secText.includes(sectionFilter.toLowerCase()) ||
+        sectionFilter.toLowerCase().includes(secText);
+      const lineText = `${o.lineId || ''} ${o.sewingLine || ''}`.toLowerCase();
+      const matchesLine =
+        lineFilter === 'ALL' ||
+        lineText.includes(lineFilter.toLowerCase()) ||
+        lineFilter.toLowerCase().includes((o.lineId || '').toLowerCase());
+      return matchesUnit && matchesSection && matchesLine;
+    });
+  }, [dateFilteredOrders, unitFilter, sectionFilter, lineFilter]);
+
+  // Section Quantities Breakdown (Sewing, Finishing, Cutting, Packing, Other)
+  const sectionBreakdown = useMemo(() => {
+    // 1. Sewing
+    const sewingList = summaryOrders.filter((o) => isSewingSectionRecord(o));
+    const sewingQty = sewingList.reduce((s, o) => s + calculateRecordCheckedQty(o), 0);
+    const sewingTarget = sewingList.reduce((s, o) => s + (o.targetQuantity || 0), 0);
+    const sewingEff = sewingList.length > 0 ? (sewingList.reduce((s, o) => s + (o.efficiencyPercent || 82), 0) / sewingList.length).toFixed(1) : '0';
+    const sewingRej = sewingList.reduce((s, o) => s + (o.rejectQuantity || 0), 0);
+    const sewingDefects = sewingList.reduce((s, o) => s + (o.totalDefects || 0), 0);
+    const sewingDHU = sewingQty > 0 ? ((sewingDefects / sewingQty) * 100).toFixed(2) : '0.00';
+
+    // 2. Finishing
+    const finishingList = summaryOrders.filter((o) => isFinishingSectionRecord(o));
+    const finishingQty = finishingList.reduce((s, o) => s + calculateRecordCheckedQty(o), 0);
+    const finishingTarget = finishingList.reduce((s, o) => s + (o.targetQuantity || 0), 0);
+    const finishingEff = finishingList.length > 0 ? (finishingList.reduce((s, o) => s + (o.efficiencyPercent || 85), 0) / finishingList.length).toFixed(1) : '0';
+    const finishingRej = finishingList.reduce((s, o) => s + (o.rejectQuantity || 0), 0);
+
+    // 3. Cutting
+    const cuttingList = summaryOrders.filter((o) => isCuttingSectionRecord(o));
+    const cuttingQty = cuttingList.reduce((s, o) => s + calculateRecordCheckedQty(o), 0);
+    const cuttingTarget = cuttingList.reduce((s, o) => s + (o.targetQuantity || 0), 0);
+    const cuttingEff = cuttingList.length > 0 ? (cuttingList.reduce((s, o) => s + (o.efficiencyPercent || 90), 0) / cuttingList.length).toFixed(1) : '0';
+    const cuttingRej = cuttingList.reduce((s, o) => s + (o.rejectQuantity || 0), 0);
+
+    // 4. Packing
+    const packingList = summaryOrders.filter((o) => isPackingSectionRecord(o));
+    const packingQty = packingList.reduce((s, o) => s + calculateRecordCheckedQty(o), 0);
+    const packingTarget = packingList.reduce((s, o) => s + (o.targetQuantity || 0), 0);
+    const packingCartons = Math.ceil(packingQty / 24);
+
+    // 5. Washing & Other
+    const otherList = summaryOrders.filter(
+      (o) =>
+        isWashingSectionRecord(o) ||
+        isQualitySectionRecord(o) ||
+        (!isSewingSectionRecord(o) &&
+          !isFinishingSectionRecord(o) &&
+          !isCuttingSectionRecord(o) &&
+          !isPackingSectionRecord(o))
+    );
+    const otherQty = otherList.reduce((s, o) => s + calculateRecordCheckedQty(o), 0);
+    const otherTarget = otherList.reduce((s, o) => s + (o.targetQuantity || 0), 0);
+
+    const totalAllSectionQty = sewingQty + finishingQty + cuttingQty + packingQty + otherQty;
+
+    return {
+      sewing: {
+        qty: sewingQty,
+        target: sewingTarget,
+        eff: sewingEff,
+        rejects: sewingRej,
+        dhu: sewingDHU,
+        recordsCount: sewingList.length,
+        pct: totalAllSectionQty > 0 ? Math.round((sewingQty / totalAllSectionQty) * 100) : 0,
+      },
+      finishing: {
+        qty: finishingQty,
+        target: finishingTarget,
+        eff: finishingEff,
+        rejects: finishingRej,
+        recordsCount: finishingList.length,
+        pct: totalAllSectionQty > 0 ? Math.round((finishingQty / totalAllSectionQty) * 100) : 0,
+      },
+      cutting: {
+        qty: cuttingQty,
+        target: cuttingTarget,
+        eff: cuttingEff,
+        rejects: cuttingRej,
+        recordsCount: cuttingList.length,
+        pct: totalAllSectionQty > 0 ? Math.round((cuttingQty / totalAllSectionQty) * 100) : 0,
+      },
+      packing: {
+        qty: packingQty,
+        target: packingTarget,
+        cartons: packingCartons,
+        recordsCount: packingList.length,
+        pct: totalAllSectionQty > 0 ? Math.round((packingQty / totalAllSectionQty) * 100) : 0,
+      },
+      other: {
+        qty: otherQty,
+        target: otherTarget,
+        recordsCount: otherList.length,
+        pct: totalAllSectionQty > 0 ? Math.round((otherQty / totalAllSectionQty) * 100) : 0,
+      },
+      totalAllSectionQty,
+    };
+  }, [summaryOrders]);
+
   const totalOrders = summaryOrders.length;
   const totalTarget = summaryOrders.reduce((sum, o) => sum + (o.targetQuantity || 0), 0);
   const totalCompleted = summaryOrders.reduce((sum, o) => sum + (o.completedQuantity || 0), 0);
@@ -293,7 +409,7 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
 
   const totalRejectRate = totalCompleted > 0 ? ((totalRejects / totalCompleted) * 100).toFixed(2) : '0.00';
 
-  // Real Top Defects aggregated from records in this date filter
+  // Real Top Defects aggregated from records in this filter
   const topDefectsInDateRange = useMemo(() => {
     const defectMap = new Map<string, number>();
     summaryOrders.forEach((o) => {
@@ -329,21 +445,28 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
   // Unique lists for filters
   const uniqueUnits = Array.from(new Set(orders.map((o) => o.unit || 'Unit 01'))).filter(Boolean);
   const uniqueSections = Array.from(
-    new Set(orders.map((o) => o.section || o.sewingLine || 'Sewing Line 01'))
+    new Set(orders.map((o) => o.section || o.sewingLine || 'Sewing Floor'))
+  ).filter(Boolean);
+  const uniqueLines = Array.from(
+    new Set(orders.map((o) => o.lineId || o.sewingLine || 'Line 01'))
   ).filter(Boolean);
   const uniqueBuyers = Array.from(new Set(orders.map((o) => o.buyer))).filter(Boolean);
 
-  // Filtered Orders for the DataTable (combines date filter + unit/section/buyer/status)
+  // Filtered Orders for the DataTable (combines date filter + unit/section/line/buyer/status)
   const filteredOrders = useMemo(() => {
     return dateFilteredOrders.filter((o) => {
       const matchesUnit = unitFilter === 'ALL' || (o.unit || 'Unit 01') === unitFilter;
       const matchesSection =
         sectionFilter === 'ALL' || (o.section || o.sewingLine) === sectionFilter;
+      const matchesLine =
+        lineFilter === 'ALL' ||
+        o.lineId === lineFilter ||
+        (o.sewingLine || '').toLowerCase().includes(lineFilter.toLowerCase());
       const matchesBuyer = buyerFilter === 'ALL' || o.buyer === buyerFilter;
       const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
-      return matchesUnit && matchesSection && matchesBuyer && matchesStatus;
+      return matchesUnit && matchesSection && matchesLine && matchesBuyer && matchesStatus;
     });
-  }, [dateFilteredOrders, unitFilter, sectionFilter, buyerFilter, statusFilter]);
+  }, [dateFilteredOrders, unitFilter, sectionFilter, lineFilter, buyerFilter, statusFilter]);
 
   // Save / Update Handler
   const handleSaveOrder = (data: NewProductionOrderData) => {
@@ -380,10 +503,12 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
         return o;
       });
       updateOrders(updated);
-      if (savedOrder! && isSewingSectionRecord(savedOrder)) {
-        const syncRes = syncSewingRecordToBuyerOrders(savedOrder);
+      if (savedOrder!) {
+        const syncRes = syncProductionRecordToBuyerOrders(savedOrder);
+        const checkedQty = calculateRecordCheckedQty(savedOrder);
+        const sectionName = savedOrder.section || savedOrder.sewingLine || 'Production';
         showToast(
-          `✓ Updated record & auto-added ${syncRes.totalCheckedQty.toLocaleString()} checked pcs to PO ${data.orderNumber} Sewing track`
+          `✓ Updated ${sectionName} record & synced ${checkedQty.toLocaleString()} pcs to PO ${data.orderNumber} (WIP & Order Tracking updated)`
         );
       } else {
         showToast(`Updated production & quality record ${data.orderNumber}`);
@@ -417,14 +542,12 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
       };
       const updated = [savedOrder, ...orders];
       updateOrders(updated);
-      if (isSewingSectionRecord(savedOrder)) {
-        const syncRes = syncSewingRecordToBuyerOrders(savedOrder);
-        showToast(
-          `✓ Created record & auto-added ${syncRes.totalCheckedQty.toLocaleString()} checked pcs to PO ${data.orderNumber} Sewing track`
-        );
-      } else {
-        showToast(`Created production & quality record ${data.orderNumber}`);
-      }
+      const syncRes = syncProductionRecordToBuyerOrders(savedOrder);
+      const checkedQty = calculateRecordCheckedQty(savedOrder);
+      const sectionName = savedOrder.section || savedOrder.sewingLine || 'Production';
+      showToast(
+        `✓ Created ${sectionName} record & synced ${checkedQty.toLocaleString()} pcs to PO ${data.orderNumber} (WIP & Order Tracking updated)`
+      );
     }
     setIsAddOrderOpen(false);
     setRecordToEdit(null);
@@ -448,20 +571,15 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
       body: JSON.stringify({ record: savedOrder }),
     }).catch(() => {});
 
-    // Auto-sync Sewing section record to Buyer & Order module's Sewing production track record
-    if (isSewingSectionRecord(savedOrder)) {
-      const syncResult = syncSewingRecordToBuyerOrders(savedOrder);
-      const checkedQty = calculateRecordCheckedQty(savedOrder);
-      showToast(
-        `✓ Saved record & auto-added ${checkedQty.toLocaleString()} checked pcs to PO ${savedOrder.orderNumber} Sewing track (Total: ${syncResult.totalCheckedQty.toLocaleString()} pcs)`
-      );
-    } else {
-      showToast(
-        existingIdx >= 0
-          ? `✓ Updated production record ${savedOrder.orderNumber}`
-          : `✓ Created production record ${savedOrder.orderNumber}`
-      );
-    }
+    // Auto-sync section record to Buyer & Order module's stages, WIP and Planning
+    const syncResult = syncProductionRecordToBuyerOrders(savedOrder);
+    const checkedQty = calculateRecordCheckedQty(savedOrder);
+    const sectionName = savedOrder.section || savedOrder.sewingLine || 'Production';
+    showToast(
+      existingIdx >= 0
+        ? `✓ Updated ${sectionName} record & synced ${checkedQty.toLocaleString()} pcs to PO ${savedOrder.orderNumber} (WIP & Tracking updated)`
+        : `✓ Saved ${sectionName} record & synced ${checkedQty.toLocaleString()} pcs to PO ${savedOrder.orderNumber} (WIP & Tracking updated)`
+    );
   };
 
   // Output Log Save Handler
@@ -944,72 +1062,145 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
           {/* TAB 1: SUMMARY (WITH DATE FILTER TOOLBAR & REAL DATA LINKED FROM RECORDS) */}
           {viewMode === 'summary' && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              {/* DATE RANGE FILTER TOOLBAR (SUMMARY TAB) */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 mr-2">
-                    <Calendar className="w-4 h-4 text-blue-600" />
-                    Summary Date Filter:
-                  </span>
-                  {[
-                    { id: 'ALL', label: 'All Dates' },
-                    { id: 'TODAY', label: 'Today' },
-                    { id: 'YESTERDAY', label: 'Yesterday' },
-                    { id: 'LAST_7_DAYS', label: 'Last 7 Days' },
-                    { id: 'THIS_MONTH', label: 'This Month' },
-                  ].map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleSelectDatePreset(p.id)}
-                      className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                        dateRangePreset === p.id
-                          ? 'bg-blue-600 text-white shadow-xs font-bold'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+              {/* DATE RANGE & SECTION / UNIT / LINE FILTER TOOLBAR (SUMMARY TAB) */}
+              <div className="flex flex-col gap-3 p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
+                {/* Top Row: Date Presets & Custom Pickers */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 mr-2">
+                      <Calendar className="w-4 h-4 text-blue-600" />
+                      Date Range:
+                    </span>
+                    {[
+                      { id: 'ALL', label: 'All Dates' },
+                      { id: 'TODAY', label: 'Today' },
+                      { id: 'YESTERDAY', label: 'Yesterday' },
+                      { id: 'LAST_7_DAYS', label: 'Last 7 Days' },
+                      { id: 'THIS_MONTH', label: 'This Month' },
+                    ].map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleSelectDatePreset(p.id)}
+                        className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                          dateRangePreset === p.id
+                            ? 'bg-blue-600 text-white shadow-xs font-bold'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <span className="font-semibold text-slate-600">From:</span>
+                      <input
+                        type="date"
+                        value={startDateFilter}
+                        onChange={(e) => {
+                          setStartDateFilter(e.target.value);
+                          setDateRangePreset('CUSTOM');
+                        }}
+                        className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <span className="font-semibold text-slate-600">To:</span>
+                      <input
+                        type="date"
+                        value={endDateFilter}
+                        onChange={(e) => {
+                          setEndDateFilter(e.target.value);
+                          setDateRangePreset('CUSTOM');
+                        }}
+                        className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <span className="font-semibold text-slate-600">From:</span>
-                    <input
-                      type="date"
-                      value={startDateFilter}
-                      onChange={(e) => {
-                        setStartDateFilter(e.target.value);
-                        setDateRangePreset('CUSTOM');
-                      }}
-                      className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                    />
+                {/* Bottom Row: Section, Unit, and Line Filters - CRITICAL REQUIREMENT */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 mr-1">
+                      <Filter className="w-3.5 h-3.5 text-indigo-600" />
+                      Floor Filter:
+                    </span>
+
+                    {/* Unit Filter */}
+                    <div className="flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                      <select
+                        value={unitFilter}
+                        onChange={(e) => setUnitFilter(e.target.value)}
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      >
+                        <option value="ALL">All Units ({uniqueUnits.length})</option>
+                        {uniqueUnits.map((u) => (
+                          <option key={u} value={u}>
+                            {u}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Section Filter */}
+                    <div className="flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                      <select
+                        value={sectionFilter}
+                        onChange={(e) => setSectionFilter(e.target.value)}
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      >
+                        <option value="ALL">All Sections ({uniqueSections.length})</option>
+                        {uniqueSections.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Line Filter */}
+                    <div className="flex items-center gap-1.5">
+                      <Factory className="w-3.5 h-3.5 text-blue-500" />
+                      <select
+                        value={lineFilter}
+                        onChange={(e) => setLineFilter(e.target.value)}
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      >
+                        <option value="ALL">All Lines ({uniqueLines.length})</option>
+                        {uniqueLines.map((l) => (
+                          <option key={l} value={l}>
+                            {l}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {(unitFilter !== 'ALL' || sectionFilter !== 'ALL' || lineFilter !== 'ALL' || startDateFilter || endDateFilter || dateRangePreset !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUnitFilter('ALL');
+                          setSectionFilter('ALL');
+                          setLineFilter('ALL');
+                          handleSelectDatePreset('ALL');
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Reset All Filters
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <span className="font-semibold text-slate-600">To:</span>
-                    <input
-                      type="date"
-                      value={endDateFilter}
-                      onChange={(e) => {
-                        setEndDateFilter(e.target.value);
-                        setDateRangePreset('CUSTOM');
-                      }}
-                      className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                    />
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
+                      {summaryOrders.length} matching record{summaryOrders.length === 1 ? '' : 's'}
+                    </span>
                   </div>
-                  {(startDateFilter || endDateFilter || dateRangePreset !== 'ALL') && (
-                    <button
-                      type="button"
-                      onClick={() => handleSelectDatePreset('ALL')}
-                      className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Clear Filter
-                    </button>
-                  )}
-                  <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
-                    {summaryOrders.length} record{summaryOrders.length === 1 ? '' : 's'} linked
-                  </span>
                 </div>
               </div>
 
@@ -1061,6 +1252,329 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                   icon={AlertTriangle}
                   tone="amber"
                 />
+              </div>
+
+              {/* Section Quantities Floor Breakdown Cards */}
+              <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-5 rounded-2xl text-white shadow-md border border-slate-700/60 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-700/60">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/30">
+                      <Layers className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold tracking-wide text-white uppercase flex items-center gap-2">
+                        Floor Section Quantities Summary
+                        <span className="text-[10px] normal-case bg-blue-500/20 text-blue-300 font-semibold px-2 py-0.5 rounded-full border border-blue-400/30">
+                          {sectionBreakdown.totalAllSectionQty.toLocaleString()} Total Output Pcs
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Real-time output across Sewing, Finishing, Cutting, Packing & Other Sections
+                        {unitFilter !== 'ALL' && ` • Filtered by Unit: ${unitFilter}`}
+                        {sectionFilter !== 'ALL' && ` • Filtered by Section: ${sectionFilter}`}
+                        {lineFilter !== 'ALL' && ` • Filtered by Line: ${lineFilter}`}
+                      </p>
+                    </div>
+                  </div>
+                  {sectionFilter !== 'ALL' && (
+                    <button
+                      type="button"
+                      onClick={() => setSectionFilter('ALL')}
+                      className="text-xs text-blue-400 hover:text-blue-300 underline font-medium self-start sm:self-auto cursor-pointer"
+                    >
+                      Clear Section Filter ({sectionFilter})
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                  {/* 1. Sewing Section */}
+                  <div
+                    onClick={() => setSectionFilter(sectionFilter === 'Sewing' ? 'ALL' : 'Sewing')}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
+                      sectionFilter === 'Sewing'
+                        ? 'bg-blue-600/30 border-blue-400 ring-2 ring-blue-500/50 shadow-lg'
+                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-blue-500/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg">
+                          <Shirt className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-bold text-blue-200 uppercase tracking-wider">Sewing</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
+                        {sectionBreakdown.sewing.recordsCount} runs
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black text-white tracking-tight">
+                      {sectionBreakdown.sewing.qty.toLocaleString()}{' '}
+                      <span className="text-xs font-semibold text-slate-400">pcs</span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Target:</span>
+                        <span className="font-semibold text-slate-200">
+                          {sectionBreakdown.sewing.target.toLocaleString()} pcs
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Efficiency:</span>
+                        <span className="font-bold text-emerald-400">{sectionBreakdown.sewing.eff}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">DHU Rate:</span>
+                        <span className="font-bold text-purple-300">{sectionBreakdown.sewing.dhu}%</span>
+                      </div>
+                    </div>
+                    {/* Share bar */}
+                    <div className="mt-3 pt-2 border-t border-slate-700/60">
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>Floor Share</span>
+                        <span className="font-bold text-blue-400">{sectionBreakdown.sewing.pct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-blue-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, sectionBreakdown.sewing.pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Finishing Section */}
+                  <div
+                    onClick={() => setSectionFilter(sectionFilter === 'Finishing' ? 'ALL' : 'Finishing')}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
+                      sectionFilter === 'Finishing'
+                        ? 'bg-emerald-600/30 border-emerald-400 ring-2 ring-emerald-500/50 shadow-lg'
+                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-emerald-500/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Finishing</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
+                        {sectionBreakdown.finishing.recordsCount} runs
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black text-white tracking-tight">
+                      {sectionBreakdown.finishing.qty.toLocaleString()}{' '}
+                      <span className="text-xs font-semibold text-slate-400">pcs</span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Target:</span>
+                        <span className="font-semibold text-slate-200">
+                          {sectionBreakdown.finishing.target.toLocaleString()} pcs
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Efficiency:</span>
+                        <span className="font-bold text-emerald-400">{sectionBreakdown.finishing.eff}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Rejects:</span>
+                        <span className="font-semibold text-amber-300">
+                          {sectionBreakdown.finishing.rejects.toLocaleString()} pcs
+                        </span>
+                      </div>
+                    </div>
+                    {/* Share bar */}
+                    <div className="mt-3 pt-2 border-t border-slate-700/60">
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>Floor Share</span>
+                        <span className="font-bold text-emerald-400">{sectionBreakdown.finishing.pct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, sectionBreakdown.finishing.pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Cutting Section */}
+                  <div
+                    onClick={() => setSectionFilter(sectionFilter === 'Cutting' ? 'ALL' : 'Cutting')}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
+                      sectionFilter === 'Cutting'
+                        ? 'bg-indigo-600/30 border-indigo-400 ring-2 ring-indigo-500/50 shadow-lg'
+                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-indigo-500/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg">
+                          <Scissors className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-bold text-indigo-200 uppercase tracking-wider">Cutting</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
+                        {sectionBreakdown.cutting.recordsCount} runs
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black text-white tracking-tight">
+                      {sectionBreakdown.cutting.qty.toLocaleString()}{' '}
+                      <span className="text-xs font-semibold text-slate-400">pcs</span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Target:</span>
+                        <span className="font-semibold text-slate-200">
+                          {sectionBreakdown.cutting.target.toLocaleString()} pcs
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Efficiency:</span>
+                        <span className="font-bold text-emerald-400">{sectionBreakdown.cutting.eff}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Scrap/Loss:</span>
+                        <span className="font-semibold text-amber-300">
+                          {sectionBreakdown.cutting.rejects.toLocaleString()} pcs
+                        </span>
+                      </div>
+                    </div>
+                    {/* Share bar */}
+                    <div className="mt-3 pt-2 border-t border-slate-700/60">
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>Floor Share</span>
+                        <span className="font-bold text-indigo-400">{sectionBreakdown.cutting.pct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-indigo-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, sectionBreakdown.cutting.pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4. Packing Section */}
+                  <div
+                    onClick={() => setSectionFilter(sectionFilter === 'Packing' ? 'ALL' : 'Packing')}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
+                      sectionFilter === 'Packing'
+                        ? 'bg-amber-600/30 border-amber-400 ring-2 ring-amber-500/50 shadow-lg'
+                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-amber-500/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg">
+                          <PackageCheck className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-bold text-amber-200 uppercase tracking-wider">Packing</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
+                        {sectionBreakdown.packing.recordsCount} runs
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black text-white tracking-tight">
+                      {sectionBreakdown.packing.qty.toLocaleString()}{' '}
+                      <span className="text-xs font-semibold text-slate-400">pcs</span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Target:</span>
+                        <span className="font-semibold text-slate-200">
+                          {sectionBreakdown.packing.target.toLocaleString()} pcs
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Cartons:</span>
+                        <span className="font-bold text-amber-400">
+                          {sectionBreakdown.packing.cartons.toLocaleString()} ctn
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Status:</span>
+                        <span className="font-semibold text-emerald-400">Ready to Ship</span>
+                      </div>
+                    </div>
+                    {/* Share bar */}
+                    <div className="mt-3 pt-2 border-t border-slate-700/60">
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>Floor Share</span>
+                        <span className="font-bold text-amber-400">{sectionBreakdown.packing.pct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-amber-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, sectionBreakdown.packing.pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Other Sections (Washing, QA, Store) */}
+                  <div
+                    onClick={() => {
+                      if (['Washing', 'Quality', 'QA', 'Other'].includes(sectionFilter)) {
+                        setSectionFilter('ALL');
+                      } else {
+                        setSectionFilter('Washing');
+                      }
+                    }}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
+                      ['Washing', 'Quality', 'QA', 'Other'].includes(sectionFilter)
+                        ? 'bg-rose-600/30 border-rose-400 ring-2 ring-rose-500/50 shadow-lg'
+                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-rose-500/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg">
+                          <Droplets className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-bold text-rose-200 uppercase tracking-wider">Other Sections</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
+                        {sectionBreakdown.other.recordsCount} runs
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black text-white tracking-tight">
+                      {sectionBreakdown.other.qty.toLocaleString()}{' '}
+                      <span className="text-xs font-semibold text-slate-400">pcs</span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Target:</span>
+                        <span className="font-semibold text-slate-200">
+                          {sectionBreakdown.other.target.toLocaleString()} pcs
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Scope:</span>
+                        <span className="font-semibold text-slate-200">Washing & QA</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Efficiency:</span>
+                        <span className="font-semibold text-emerald-400">Active</span>
+                      </div>
+                    </div>
+                    {/* Share bar */}
+                    <div className="mt-3 pt-2 border-t border-slate-700/60">
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>Floor Share</span>
+                        <span className="font-bold text-rose-400">{sectionBreakdown.other.pct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-rose-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, sectionBreakdown.other.pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Comprehensive Section & Record Performance Table inside Summary */}

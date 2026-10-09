@@ -32,6 +32,7 @@ import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/u
 import { QualityGoal, GoalPillar, GoalStatus, GoalPriority } from '@/lib/types/modules';
 import { INITIAL_QUALITY_GOALS, GOAL_PILLAR_CONFIG } from '../modules/quality-goals/quality-goals-data';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { QualityGoalDetailsPage } from '../modules/quality-goals/QualityGoalDetailsPage';
 import { QualityGoalEntryPage } from '../modules/quality-goals/QualityGoalEntryPage';
 import { DeleteGoalModal } from '../modules/quality-goals/DeleteGoalModal';
@@ -45,6 +46,7 @@ type GoalSubView =
   | { type: 'edit'; goal: QualityGoal };
 
 export function QualityGoalsView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('quality_goals');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [subView, setSubView] = useState<GoalSubView>({ type: 'none' });
   const [goals, setGoals] = useLiveModuleData<QualityGoal[]>(
@@ -355,38 +357,46 @@ export function QualityGoalsView() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', goal: item })}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Goal"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setSingleExportGoal(item)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Export Goal Charter"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDuplicateGoal(item)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
-            title="Duplicate Objective"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleteModalState({ isOpen: true, goals: [item] })}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Delete Objective"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', goal: item })}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Goal"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setSingleExportGoal(item)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Export Goal Charter"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateGoal(item)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
+              title="Duplicate Objective"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModalState({ isOpen: true, goals: [item] })}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Delete Objective"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -394,25 +404,33 @@ export function QualityGoalsView() {
 
   // Batch actions
   const batchActions: BatchAction<QualityGoal>[] = [
-    {
-      label: 'Delete Selected',
-      variant: 'danger',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setDeleteModalState({
-          isOpen: true,
-          goals: selected,
-        });
-      },
-    },
-    {
-      label: 'Export Selected',
-      icon: <FileDown className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setExportSelectedGoals(selected);
-        setIsGlobalExportOpen(true);
-      },
-    },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            variant: 'danger' as const,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            onClick: (selected: QualityGoal[]) => {
+              setDeleteModalState({
+                isOpen: true,
+                goals: selected,
+              });
+            },
+          },
+        ]
+      : []),
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected',
+            icon: <FileDown className="w-3.5 h-3.5" />,
+            onClick: (selected: QualityGoal[]) => {
+              setExportSelectedGoals(selected);
+              setIsGlobalExportOpen(true);
+            },
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -686,29 +704,38 @@ export function QualityGoalsView() {
                   </div>
                 }
                 primaryAction={
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExportSelectedGoals([]);
-                        setIsGlobalExportOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
-                    >
-                      <FileDown className="w-3.5 h-3.5 text-slate-600" />
-                      <span>Export</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSubView({ type: 'add' })}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Objective</span>
-                    </button>
-                  </div>
+                  (canExport || canCreate) ? (
+                    <div className="flex items-center gap-2">
+                      {canExport && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExportSelectedGoals([]);
+                            setIsGlobalExportOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                        >
+                          <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Export</span>
+                        </button>
+                      )}
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => setSubView({ type: 'add' })}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Objective</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : undefined
                 }
                 batchActions={batchActions}
+                moduleKey="quality_goals"
+                canExport={canExport}
+                canDelete={canDelete}
               />
             </div>
           )}

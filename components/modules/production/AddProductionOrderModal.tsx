@@ -44,19 +44,49 @@ const MANUFACTURING_UNITS = [
   'Unit 04 (Gazipur Export Zone)',
 ];
 
-const SECTIONS_AND_LINES = [
-  { id: 'Line 01', label: 'Sewing Line 01 (Knit Tops)' },
-  { id: 'Line 02', label: 'Sewing Line 02 (Knit Polo & Fleece)' },
-  { id: 'Line 03', label: 'Sewing Line 03 (Woven Bottoms)' },
-  { id: 'Line 04', label: 'Sewing Line 04 (Heavy Denim)' },
-  { id: 'Line 05', label: 'Sewing Line 05 (Precision Knit)' },
-  { id: 'Line 06', label: 'Sewing Line 06 (Fleece Assembly)' },
-  { id: 'Line 07', label: 'Sewing Line 07 (Cargo & Utility)' },
-  { id: 'Line 08', label: 'Sewing Line 08 (Intimates & Activewear)' },
-  { id: 'Cutting', label: 'Cutting Floor Section 01' },
-  { id: 'Finishing', label: 'Finishing & Packing Section 01' },
-  { id: 'Washing', label: 'Industrial Washing Floor' },
+const STANDARD_SECTIONS = [
+  'Sewing Floor',
+  'Cutting Floor',
+  'Finishing & Packing',
+  'Industrial Washing',
+  'Packing & Warehouse',
+  'Quality Assurance (QA)',
 ];
+
+const SECTION_LINE_PRESETS: Record<string, Array<{ id: string; name: string; chief: string; operators: number }>> = {
+  'Sewing Floor': [
+    { id: 'Line 01', name: 'Sewing Line 01 (Knit Tops)', chief: 'Kabir Hossain', operators: 48 },
+    { id: 'Line 02', name: 'Sewing Line 02 (Knit Polo & Fleece)', chief: 'Jahangir Alam', operators: 52 },
+    { id: 'Line 03', name: 'Sewing Line 03 (Woven Bottoms)', chief: 'Abul Kashem', operators: 54 },
+    { id: 'Line 04', name: 'Sewing Line 04 (Heavy Denim)', chief: 'Mahbubur Rahman', operators: 50 },
+    { id: 'Line 05', name: 'Sewing Line 05 (Precision Knit)', chief: 'Shahinur Islam', operators: 46 },
+    { id: 'Line 06', name: 'Sewing Line 06 (Fleece Assembly)', chief: 'Delowar Hossain', operators: 48 },
+    { id: 'Line 07', name: 'Sewing Line 07 (Cargo & Utility)', chief: 'Kamrul Hasan', operators: 52 },
+    { id: 'Line 08', name: 'Sewing Line 08 (Intimates & Activewear)', chief: 'Shahadat Hossain', operators: 44 },
+  ],
+  'Cutting Floor': [
+    { id: 'CUT-01', name: 'Cutting Table 01 (Gerber CNC Auto-Cutter)', chief: 'Monir Hossain', operators: 18 },
+    { id: 'CUT-02', name: 'Cutting Table 02 (Manual Spreader & Band Knife)', chief: 'Selim Reza', operators: 16 },
+    { id: 'CUT-03', name: 'Cutting Table 03 (Precision Laser Cutter)', chief: 'Tanvir Ahmed', operators: 12 },
+  ],
+  'Finishing & Packing': [
+    { id: 'FIN-01', name: 'Finishing Line 01 (Steam Tunnel Pressing)', chief: 'Golam Rabbani', operators: 32 },
+    { id: 'FIN-02', name: 'Finishing Line 02 (Thread Trimming & Ironing)', chief: 'Moklesur Rahman', operators: 28 },
+    { id: 'FIN-03', name: 'Needle & Metal Detection Station 01', chief: 'Anwar Parvez', operators: 14 },
+  ],
+  'Industrial Washing': [
+    { id: 'WASH-01', name: 'Industrial Washing Bay 01 (Enzyme & Stone)', chief: 'Shah Alam', operators: 22 },
+    { id: 'WASH-02', name: 'Industrial Washing Bay 02 (Ozone & Laser)', chief: 'Nurul Islam', operators: 18 },
+  ],
+  'Packing & Warehouse': [
+    { id: 'PACK-01', name: 'Carton Boxing & Barcode Packing Line 01', chief: 'Saiful Islam', operators: 24 },
+    { id: 'PACK-02', name: 'Polybag & Retail Hanger Line 02', chief: 'Belal Hossain', operators: 20 },
+  ],
+  'Quality Assurance (QA)': [
+    { id: 'QA-01', name: 'AQL Pre-Final & Final Audit Chamber 01', chief: 'Md. Rafiqul Islam', operators: 12 },
+    { id: 'QA-02', name: 'End-Line 100% Quality Inspection Post', chief: 'Tareq Mahmud', operators: 15 },
+  ],
+};
 
 const BUYERS = [
   'Inditex (Zara)',
@@ -173,7 +203,8 @@ export function AddProductionOrderModal({
       return;
     }
 
-    const matchedLine = SECTIONS_AND_LINES.find((s) => s.id === form.lineId || s.label === form.section);
+    const currentLines = SECTION_LINE_PRESETS[form.section || 'Sewing Floor'] || SECTION_LINE_PRESETS['Sewing Floor'];
+    const matchedLine = currentLines.find((s) => s.id === form.lineId || s.name === form.lineId);
 
     onSave({
       id: form.id,
@@ -182,7 +213,7 @@ export function AddProductionOrderModal({
       styleName: form.styleName.trim(),
       styleNumber: form.styleNumber?.trim() || `STY-${Math.floor(1000 + Math.random() * 9000)}`,
       unit: form.unit || 'Unit 01 (Dhaka Complex)',
-      section: form.section || matchedLine?.label || 'Sewing Line 01 (Knit Tops)',
+      section: form.section || 'Sewing Floor',
       targetQuantity: Number(form.targetQuantity) || 10000,
       completedQuantity: Number(form.completedQuantity) || 0,
       totalDefects: Number(form.totalDefects) || 0,
@@ -190,8 +221,8 @@ export function AddProductionOrderModal({
       rftRate: Number(form.rftRate) || 98.0,
       efficiencyPercent: Number(form.efficiencyPercent) || 82,
       rejectQuantity: Number(form.rejectQuantity) || 0,
-      sewingLine: matchedLine?.label || form.section || 'Line 01',
-      lineId: form.lineId || 'Line 01',
+      sewingLine: matchedLine?.name || form.lineId || 'Line 01',
+      lineId: matchedLine?.id || form.lineId || 'Line 01',
       status: (form.status as LineStatus) || 'RUNNING',
       dueDate: form.dueDate,
       operatorCount: Number(form.operatorCount) || 45,
@@ -266,39 +297,56 @@ export function AddProductionOrderModal({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Section & Production Line (From Management) *
+                  Manufacturing Section *
                 </label>
                 <select
-                  value={form.section || ''}
+                  value={form.section || 'Sewing Floor'}
                   onChange={(e) => {
-                    const selManaged = managedLines.find((l) => l.name === e.target.value || l.id === e.target.value);
-                    if (selManaged) {
-                      set('section', selManaged.name);
-                      set('lineId', selManaged.lineCode || selManaged.id);
-                      if (selManaged.unitName) set('unit', selManaged.unitName);
-                      if (selManaged.lineChief) set('supervisorName', selManaged.lineChief);
-                      if (selManaged.operatorCount) set('operatorCount', selManaged.operatorCount);
-                    } else {
-                      const sel = SECTIONS_AND_LINES.find((s) => s.label === e.target.value);
-                      set('section', e.target.value);
-                      if (sel) set('lineId', sel.id);
+                    const sec = e.target.value;
+                    set('section', sec);
+                    const presets = SECTION_LINE_PRESETS[sec] || [];
+                    if (presets.length > 0) {
+                      set('lineId', presets[0].id);
+                      set('sewingLine', presets[0].name);
+                      if (presets[0].chief) set('supervisorName', presets[0].chief);
+                      if (presets[0].operators) set('operatorCount', presets[0].operators);
                     }
                   }}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
                 >
-                  {managedLines.length > 0 ? (
-                    managedLines.map((l) => (
-                      <option key={l.id} value={l.name}>
-                        {l.name} ({l.lineCode}) • Chief: {l.lineChief} • QC: {l.qualityController}
-                      </option>
-                    ))
-                  ) : (
-                    SECTIONS_AND_LINES.map((s) => (
-                      <option key={s.id} value={s.label}>
-                        {s.label}
-                      </option>
-                    ))
-                  )}
+                  {STANDARD_SECTIONS.map((sec) => (
+                    <option key={sec} value={sec}>
+                      {sec}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Production Line / Station *
+                </label>
+                <select
+                  value={form.lineId || 'Line 01'}
+                  onChange={(e) => {
+                    const selId = e.target.value;
+                    const curSec = form.section || 'Sewing Floor';
+                    const presets = SECTION_LINE_PRESETS[curSec] || Object.values(SECTION_LINE_PRESETS).flat();
+                    const found = presets.find((p) => p.id === selId);
+                    set('lineId', selId);
+                    if (found) {
+                      set('sewingLine', found.name);
+                      if (found.chief) set('supervisorName', found.chief);
+                      if (found.operators) set('operatorCount', found.operators);
+                    }
+                  }}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
+                >
+                  {(SECTION_LINE_PRESETS[form.section || 'Sewing Floor'] || SECTION_LINE_PRESETS['Sewing Floor']).map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name} • Chief: {l.chief}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

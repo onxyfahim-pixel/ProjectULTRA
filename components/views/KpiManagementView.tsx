@@ -40,6 +40,7 @@ import { KpiEntryPage } from '../modules/kpi-management/KpiEntryPage';
 import { DeleteKpiModal } from '../modules/kpi-management/DeleteKpiModal';
 import { KpiExportModal } from '../modules/kpi-management/KpiExportModal';
 import { KpiSingleExportModal } from '../modules/kpi-management/KpiSingleExportModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 type KpiSubView =
   | { type: 'none' }
@@ -48,6 +49,7 @@ type KpiSubView =
   | { type: 'edit'; kpi: KpiMetric };
 
 export function KpiManagementView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('kpi_management');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [subView, setSubView] = useState<KpiSubView>({ type: 'none' });
   const [kpis, setKpis] = useLiveModuleData<KpiMetric[]>(
@@ -348,38 +350,46 @@ export function KpiManagementView() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => setSubView({ type: 'edit', kpi: item })}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Edit Metric"
-          >
-            <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setSingleExportKpi(item)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Export Performance Dossier (PDF / Excel)"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDuplicateKpi(item)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
-            title="Duplicate Metric"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleteModalState({ isOpen: true, kpis: [item] })}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
-            title="Delete Metric"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setSubView({ type: 'edit', kpi: item })}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Edit Metric"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setSingleExportKpi(item)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Export Performance Dossier (PDF / Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => handleDuplicateKpi(item)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 transition-colors cursor-pointer hidden sm:inline-flex"
+              title="Duplicate Metric"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setDeleteModalState({ isOpen: true, kpis: [item] })}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors cursor-pointer"
+              title="Delete Metric"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -387,25 +397,33 @@ export function KpiManagementView() {
 
   // Batch actions
   const batchActions: BatchAction<KpiMetric>[] = [
-    {
-      label: 'Delete Selected',
-      variant: 'danger',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setDeleteModalState({
-          isOpen: true,
-          kpis: selected,
-        });
-      },
-    },
-    {
-      label: 'Export Selected',
-      icon: <FileDown className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        setSelectedForExport(selected);
-        setIsGlobalExportOpen(true);
-      },
-    },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            variant: 'danger' as const,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            onClick: (selected: KpiMetric[]) => {
+              setDeleteModalState({
+                isOpen: true,
+                kpis: selected,
+              });
+            },
+          },
+        ]
+      : []),
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected',
+            icon: <FileDown className="w-3.5 h-3.5" />,
+            onClick: (selected: KpiMetric[]) => {
+              setSelectedForExport(selected);
+              setIsGlobalExportOpen(true);
+            },
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -677,28 +695,35 @@ export function KpiManagementView() {
                 }
                 primaryAction={
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedForExport([]);
-                        setIsGlobalExportOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
-                    >
-                      <FileDown className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Export</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSubView({ type: 'add' })}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Metric</span>
-                    </button>
+                    {canExport && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedForExport([]);
+                          setIsGlobalExportOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                      >
+                        <FileDown className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Export</span>
+                      </button>
+                    )}
+                    {canCreate && (
+                      <button
+                        type="button"
+                        onClick={() => setSubView({ type: 'add' })}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Metric</span>
+                      </button>
+                    )}
                   </div>
                 }
                 batchActions={batchActions}
+                moduleKey="kpi_management"
+                canExport={canExport}
+                canDelete={canDelete}
               />
             </div>
           )}
@@ -759,10 +784,11 @@ export function KpiManagementView() {
                               <td className="py-3 px-3 text-center">
                                 <button
                                   type="button"
+                                  disabled={!canEdit}
                                   onClick={() =>
                                     handleToggleActionAcrossKpis(act.kpiId, act.id)
                                   }
-                                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer mx-auto ${
+                                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer mx-auto disabled:cursor-not-allowed disabled:opacity-60 ${
                                     act.completed
                                       ? 'bg-emerald-600 border-emerald-600 text-white'
                                       : 'border-slate-300 hover:border-blue-500 bg-white'

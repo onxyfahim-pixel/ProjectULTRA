@@ -36,6 +36,7 @@ import {
 } from '@/lib/types/modules';
 import { GOAL_PILLAR_CONFIG } from './quality-goals-data';
 import { QualityGoalSingleExportModal } from './QualityGoalSingleExportModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface QualityGoalDetailsPageProps {
   goal: QualityGoal;
@@ -56,6 +57,7 @@ export function QualityGoalDetailsPage({
   onUpdateGoal,
   showToast,
 }: QualityGoalDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('quality_goals');
   const [currentGoal, setCurrentGoal] = useState<QualityGoal>(goal);
   const [milestones, setMilestones] = useState<GoalMilestone[]>(goal.milestones || []);
   const [actionPlans, setActionPlans] = useState<GoalActionPlan[]>(goal.actionPlans || []);
@@ -306,46 +308,54 @@ export function QualityGoalDetailsPage({
 
 
           {/* Export Button */}
-          <button
-            type="button"
-            onClick={() => setIsExportOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
-            title="Export Goal Charter"
-          >
-            <FileDown className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden md:inline">Export</span>
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Export Goal Charter"
+            >
+              <FileDown className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden md:inline">Export</span>
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => onDuplicate(currentGoal)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
-            title="Duplicate Objective Template"
-          >
-            <Copy className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden md:inline">Duplicate</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(currentGoal)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Duplicate Objective Template"
+            >
+              <Copy className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden md:inline">Duplicate</span>
+            </button>
+          )}
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => onEdit(currentGoal)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Goal</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(currentGoal)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Goal</span>
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => onDelete(currentGoal)}
-            className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Objective"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(currentGoal)}
+              className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Objective"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 

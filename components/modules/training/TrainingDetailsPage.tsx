@@ -21,8 +21,11 @@ import {
   XCircle,
   HelpCircle,
   FileCheck,
+  FileDown,
 } from 'lucide-react';
 import { TrainingMatrixItem, TrainingStatus, TrainingAttendee } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
+import { TrainingSingleExportModal } from './TrainingSingleExportModal';
 
 interface TrainingDetailsPageProps {
   course: TrainingMatrixItem;
@@ -45,6 +48,8 @@ export function TrainingDetailsPage({
   onUpdateAttendees,
   showToast,
 }: TrainingDetailsPageProps) {
+  const { canExport } = useModulePermission('training');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [attendees, setAttendees] = useState<TrainingAttendee[]>(course.attendees || []);
 
   // Quick add trainee form state
@@ -169,6 +174,19 @@ export function TrainingDetailsPage({
             <option value="CANCELLED">CANCELLED</option>
           </select>
 
+
+          {/* Export Course Dossier */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors cursor-pointer"
+              title="Export Course Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Export Dossier</span>
+            </button>
+          )}
 
           {/* Duplicate Button */}
           <button
@@ -523,6 +541,13 @@ export function TrainingDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Individual Training Program Export Modal */}
+      <TrainingSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        course={course}
+      />
       </div>
     </div>
   );

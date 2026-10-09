@@ -20,6 +20,7 @@ import {
   Filter,
   Check,
   Download,
+  FileDown,
   ExternalLink,
   ChevronRight,
   Layers,
@@ -46,6 +47,8 @@ import { AuditCalendarView } from '../modules/audit/AuditCalendarView';
 import { DeleteAuditModal } from '../modules/audit/DeleteAuditModal';
 import { AuditManagementTab } from '../modules/audit/AuditManagementTab';
 import { AuditSummaryDashboard } from '../modules/audit/AuditSummaryDashboard';
+import { AuditExportModal } from '../modules/audit/AuditExportModal';
+import { AuditSingleExportModal } from '../modules/audit/AuditSingleExportModal';
 
 type AuditSubView =
   | { type: 'none' }
@@ -80,6 +83,12 @@ export function AuditView() {
     isOpen: boolean;
     audits: QualityAudit[];
   } | null>(null);
+
+  // Global & Individual Export States
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedAuditsForExport, setSelectedAuditsForExport] = useState<QualityAudit[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [auditForSingleExport, setAuditForSingleExport] = useState<QualityAudit | null>(null);
 
   // Filters & Search
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('ALL');
@@ -404,6 +413,21 @@ export function AuditView() {
       align: 'right',
       render: (item) => (
         <div className="flex items-center justify-end gap-1">
+          {/* Export Button (FileDown) */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setAuditForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 border border-emerald-200 transition-colors cursor-pointer"
+              title="Export Audit Report (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Details Button (Eye) */}
           <button
             type="button"
@@ -444,6 +468,18 @@ export function AuditView() {
 
   // Batch actions
   const batchActions: BatchAction<QualityAudit>[] = [
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected (PDF/Excel)',
+            icon: <FileDown className="w-3.5 h-3.5" />,
+            onClick: (selected: QualityAudit[]) => {
+              setSelectedAuditsForExport(selected);
+              setIsGlobalExportModalOpen(true);
+            },
+          },
+        ]
+      : []),
     ...(canDelete
       ? [
           {
@@ -534,16 +570,33 @@ export function AuditView() {
           },
         ]}
         actions={
-          canCreate ? (
-            <button
-              type="button"
-              onClick={() => setSubView({ type: 'add' })}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Conduct New Audit</span>
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAuditsForExport([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
+                title="Global Export: Quality & Compliance Audit Register (PDF or Excel)"
+              >
+                <FileDown className="w-4 h-4 text-blue-600" />
+                <span className="hidden sm:inline">Export Records</span>
+                <span className="sm:hidden">Export</span>
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => setSubView({ type: 'add' })}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Conduct New Audit</span>
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -703,6 +756,24 @@ export function AuditView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global Export Modal */}
+      <AuditExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allAudits={filteredAudits}
+        selectedAudits={selectedAuditsForExport}
+      />
+
+      {/* Single Audit Export Modal */}
+      <AuditSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setAuditForSingleExport(null);
+        }}
+        audit={auditForSingleExport}
+      />
     </div>
   );
 }

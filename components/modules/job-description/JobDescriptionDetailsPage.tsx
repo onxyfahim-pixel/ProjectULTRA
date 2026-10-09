@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   Edit,
@@ -22,8 +22,11 @@ import {
   Shield,
   Target,
   Users,
+  FileDown,
 } from 'lucide-react';
 import { JobDescriptionItem, JobDescriptionStatus } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
+import { JobDescriptionSingleExportModal } from './JobDescriptionSingleExportModal';
 
 interface JobDescriptionDetailsPageProps {
   job: JobDescriptionItem;
@@ -44,6 +47,8 @@ export function JobDescriptionDetailsPage({
   onUpdateStatus,
   showToast,
 }: JobDescriptionDetailsPageProps) {
+  const { canExport } = useModulePermission('job_description');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const handleStatusChange = (newStatus: JobDescriptionStatus) => {
     const updated: JobDescriptionItem = {
       ...job,
@@ -116,6 +121,19 @@ export function JobDescriptionDetailsPage({
             <Copy className="w-3.5 h-3.5 text-slate-600" />
             <span className="hidden sm:inline">Duplicate</span>
           </button>
+
+          {/* Export Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+              title="Export Job Description Specification"
+            >
+              <FileDown className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden sm:inline">Export Profile</span>
+            </button>
+          )}
 
           {/* Edit Button */}
           <button
@@ -481,6 +499,13 @@ export function JobDescriptionDetailsPage({
         </div>
       </div>
       </div>
+
+      {/* Single Job Description Export Modal */}
+      <JobDescriptionSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        job={job}
+      />
     </div>
   );
 }

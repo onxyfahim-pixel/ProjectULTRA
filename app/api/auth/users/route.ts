@@ -6,9 +6,8 @@ import { Role } from '@/lib/types/erp';
 export async function GET() {
   try {
     const users = UserStorageManager.getUsers();
-    // Return sanitized users list
-    const sanitized = users.map(({ password: _, ...rest }) => rest);
-    return NextResponse.json({ success: true, users: sanitized });
+    // Return users including passwords and avatarUrls for Super Admin viewing/managing in settings
+    return NextResponse.json({ success: true, users });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -17,7 +16,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { username, name, email, password, role, department, avatarUrl } = body;
+    const { username, name, email, password, role, department, avatarUrl, isSuperAdmin } = body;
 
     if (!username || !password || !name || !email || !role) {
       return NextResponse.json(
@@ -25,6 +24,13 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const isSuper = Boolean(
+      isSuperAdmin ||
+      role === 'ADMIN' ||
+      role === 'Super Admin' ||
+      (role as string) === 'super_admin'
+    );
 
     const result = UserStorageManager.createUser({
       username,
@@ -34,6 +40,7 @@ export async function POST(req: NextRequest) {
       role: role as Role,
       department: department || 'Operations',
       avatarUrl,
+      isSuperAdmin: isSuper,
     });
 
     if (!result.success || !result.user) {
@@ -49,8 +56,7 @@ export async function POST(req: NextRequest) {
       details: `Created user @${result.user.username} (${result.user.name}) with role ${result.user.role}`,
     });
 
-    const { password: _, ...safeUser } = result.user;
-    return NextResponse.json({ success: true, user: safeUser }, { status: 201 });
+    return NextResponse.json({ success: true, user: result.user }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -59,11 +65,15 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, username, password, role, department, isActive, name, avatarUrl } = body;
+    const { id, username, password, role, department, isActive, name, avatarUrl, isSuperAdmin } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'User ID is required.' }, { status: 400 });
     }
+
+    const isSuper = (role === 'Super Admin' || role === 'ADMIN' || (role as string) === 'super_admin')
+      ? true
+      : isSuperAdmin;
 
     const result = UserStorageManager.updateUser(id, {
       ...(username && { username }),
@@ -73,6 +83,7 @@ export async function PATCH(req: NextRequest) {
       ...(isActive !== undefined && { isActive }),
       ...(name && { name }),
       ...(avatarUrl && { avatarUrl }),
+      ...(isSuper !== undefined && { isSuperAdmin: isSuper }),
     });
 
     if (!result.success || !result.user) {
@@ -88,8 +99,7 @@ export async function PATCH(req: NextRequest) {
       details: `Updated attributes for user @${result.user.username} (${result.user.name})`,
     });
 
-    const { password: _, ...safeUser } = result.user;
-    return NextResponse.json({ success: true, user: safeUser });
+    return NextResponse.json({ success: true, user: result.user });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

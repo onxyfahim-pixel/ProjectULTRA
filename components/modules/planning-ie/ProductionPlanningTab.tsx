@@ -13,6 +13,7 @@ import {
   ArrowRight,
   TrendingUp,
   Download,
+  FileDown,
   Plus,
   Play,
   RotateCcw,
@@ -25,6 +26,7 @@ import {
   ShieldCheck,
   Zap,
 } from 'lucide-react';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import {
   ProductionPlanSchedule,
   ProductionOrderPlan,
@@ -38,6 +40,8 @@ interface ProductionPlanningTabProps {
   onAddSchedule: (schedule: ProductionPlanSchedule) => void;
   onUpdateScheduleStatus: (id: string, newStatus: any) => void;
   onExportCsv: (filename: string, rows: any[]) => void;
+  onExportSingleSchedule?: (schedule: ProductionPlanSchedule) => void;
+  onOpenGlobalExport?: () => void;
 }
 
 type ViewMode = 'mps' | 'gantt' | 'tna' | 'loading';
@@ -49,7 +53,10 @@ export function ProductionPlanningTab({
   onAddSchedule,
   onUpdateScheduleStatus,
   onExportCsv,
+  onExportSingleSchedule,
+  onOpenGlobalExport,
 }: ProductionPlanningTabProps) {
+  const { canExport } = useModulePermission('planning_ie');
   const [viewMode, setViewMode] = useState<ViewMode>('mps');
   const [selectedPeriod, setSelectedPeriod] = useState<'MONTHLY' | 'WEEKLY' | 'DAILY'>('MONTHLY');
   const [pushedMessage, setPushedMessage] = useState<string | null>(null);
@@ -322,6 +329,18 @@ export function ProductionPlanningTab({
             <Plus className="w-3.5 h-3.5" />
             <span>Schedule Line</span>
           </button>
+
+          {/* GLOBAL EXPORT BUTTON */}
+          {canExport && onOpenGlobalExport && (
+            <button
+              onClick={onOpenGlobalExport}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Global Export: Production Orders, MPS & Operation Bulletins (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-blue-600" />
+              <span>Export Register</span>
+            </button>
+          )}
 
           <button
             onClick={() => onExportCsv('Master_Production_Schedules.csv', schedules)}

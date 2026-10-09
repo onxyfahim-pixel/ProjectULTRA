@@ -28,6 +28,7 @@ import {
   Sparkles,
   Check,
   Eye,
+  FileDown,
 } from 'lucide-react';
 import {
   SopItem,
@@ -36,7 +37,9 @@ import {
   SopTrainingRecord,
   DocumentAttachment,
 } from '@/lib/types/modules';
+import { useModulePermission } from '@/hooks/use-module-permission';
 import { DeleteSopModal } from './DeleteSopModal';
+import { SopSingleExportModal } from './SopSingleExportModal';
 
 interface SopDetailsPageProps {
   sop: SopItem;
@@ -56,6 +59,8 @@ export function SopDetailsPage({
   showToast,
 }: SopDetailsPageProps) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const { canExport } = useModulePermission('sop_management');
 
   // Quick Modal: Add SOP Acknowledgement Sign-off
   const [isAckModalOpen, setIsAckModalOpen] = useState(false);
@@ -250,6 +255,19 @@ export function SopDetailsPage({
             <Edit className="w-3.5 h-3.5" />
             <span>Edit SOP</span>
           </button>
+
+          {/* Export SOP Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
+              title="Export SOP Procedure Manual"
+            >
+              <FileDown className="w-3.5 h-3.5 text-blue-600" />
+              <span>Export SOP</span>
+            </button>
+          )}
 
           {/* Delete SOP Button */}
           {onDelete && (
@@ -917,6 +935,13 @@ export function SopDetailsPage({
         </div>
       )}
       </div>
+
+      {/* Single SOP Export Modal */}
+      <SopSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        sop={sop}
+      />
     </div>
   );
 }

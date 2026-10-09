@@ -33,6 +33,7 @@ import {
   FileSpreadsheet,
   Sparkles,
   Paperclip,
+  Palette,
 } from 'lucide-react';
 import {
   BuyerOrder,
@@ -41,6 +42,7 @@ import {
   ProductionStageDetail,
   LogisticsDetail,
   BuyerOrderWIPRecord,
+  OrderColorSizeBreakdown,
 } from '@/lib/types/modules';
 import {
   computeWIPRecordForPO,
@@ -48,6 +50,9 @@ import {
   calculateWIPPipelineMetrics,
 } from '@/lib/db/wip-record-store';
 import { OrderAttachmentsUploader } from './OrderAttachmentsUploader';
+import { OrderColorSizeSection } from './OrderColorSizeSection';
+import { generateDefaultBreakdown, calculateBreakdownTotal } from './order-breakdown-utils';
+import { NotificationService } from '@/lib/notifications/notification-service';
 
 interface BuyerOrderAddPageProps {
   buyerNames: string[];
@@ -143,7 +148,7 @@ export function BuyerOrderAddPage({
   showToast,
 }: BuyerOrderAddPageProps) {
   const [activeTab, setActiveTab] = useState<
-    'general' | 'upload' | 'stages' | 'bom' | 'logistics'
+    'general' | 'breakdown' | 'upload' | 'stages' | 'bom' | 'logistics'
   >('general');
 
   // Find initial buyer profile if available
@@ -173,6 +178,7 @@ export function BuyerOrderAddPage({
     merchandiserName: initialBuyer?.merchandiserName || 'Farhan Rahman (Senior Merchandiser)',
     merchandiserEmail: initialBuyer?.merchandiserEmail || 'farhan.merchandising@texexport.com',
     merchandiserPhone: initialBuyer?.merchandiserPhone || '+880 1711 982341',
+    colorSizeBreakdown: generateDefaultBreakdown(10000, ''),
     productionTracking: {
       currentStage: 'PLANNED',
       overallProgressPercent: 10,
@@ -462,6 +468,37 @@ export function BuyerOrderAddPage({
 
     onSave(finalOrder);
     showToast(`Created new purchase order ${formData.orderNumber}`);
+
+    // Real-time notification dispatch
+    try {
+      const cfg = NotificationService.getConfig();
+      NotificationService.triggerAlert({
+        alertTypeId: 'new_order_added',
+        title: `New Order Added: ${formData.orderNumber}`,
+        message: `Buyer "${formData.buyerName}" registered new purchase order ${formData.orderNumber} for ${formData.orderQuantity.toLocaleString()} pcs of style "${formData.styleNumber}" ($${(formData.orderQuantity * formData.fobPrice).toLocaleString()} FOB).`,
+        severity: 'info',
+        module: 'buyer_order',
+        linkId: formData.orderNumber,
+      });
+
+      if (formData.shipDate) {
+        const crdDate = new Date(formData.shipDate);
+        const diffDays = Math.ceil((crdDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        const thresholdDays = cfg.nearbyCrdDays ?? 14;
+        if (diffDays <= thresholdDays && diffDays >= 0) {
+          NotificationService.triggerAlert({
+            alertTypeId: 'nearby_crd_order',
+            title: `Nearby CRD Order: ${formData.orderNumber} (${diffDays}d left)`,
+            message: `Order ${formData.orderNumber} for buyer ${formData.buyerName} has CRD in ${diffDays} days (${formData.shipDate}). Inline QC inspections & packing status audit prioritized.`,
+            severity: 'warning',
+            module: 'buyer_order',
+            linkId: formData.orderNumber,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to dispatch buyer order notification:', err);
+    }
   };
 
   const calculatedTotalValue = formData.orderQuantity * formData.fobPrice;
@@ -520,10 +557,11 @@ export function BuyerOrderAddPage({
       <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200 text-xs font-semibold">
         {[
           { id: 'general', label: '1. Commercial & Style Specs', icon: Tag },
-          { id: 'upload', label: '2. Style Image & Attachments', icon: Paperclip },
-          { id: 'stages', label: '3. WIP Record & Pipeline Setup', icon: Activity },
-          { id: 'bom', label: '4. Bill of Materials (BOM)', icon: Layers },
-          { id: 'logistics', label: '5. Logistics & Shipping', icon: Truck },
+          { id: 'breakdown', label: '2. Color & Size Breakdown', icon: Palette },
+          { id: 'upload', label: '3. Style Image & Attachments', icon: Paperclip },
+          { id: 'stages', label: '4. WIP Record & Pipeline Setup', icon: Activity },
+          { id: 'bom', label: '5. Bill of Materials (BOM)', icon: Layers },
+          { id: 'logistics', label: '6. Logistics & Shipping', icon: Truck },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -823,10 +861,56 @@ export function BuyerOrderAddPage({
               />
             </div>
           </div>
+
+          {/* Quick Color & Size Breakdown Overview in General Tab */}
+          <div className="mt-4 p-4 rounded-xl bg-purple-50/50 border border-purple-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                <Palette className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900 flex items-center gap-2">
+                  <span>Color &amp; Size Breakdown Matrix</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                    {calculateBreakdownTotal(formData.colorSizeBreakdown).toLocaleString()} / {formData.orderQuantity.toLocaleString()} pcs Allocated
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {(formData.colorSizeBreakdown?.length || 0)} Colorway{(formData.colorSizeBreakdown?.length || 0) === 1 ? '' : 's'} configured with size-wise ratios
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('breakdown')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all shadow-2xs cursor-pointer self-start sm:self-auto text-xs"
+            >
+              <span>Open Color &amp; Size Matrix</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* TAB 2: STYLE IMAGE & DOCUMENT ATTACHMENTS */}
+      {/* TAB 2: COLOR & SIZE BREAKDOWN MATRIX */}
+      {activeTab === 'breakdown' && (
+        <OrderColorSizeSection
+          breakdown={formData.colorSizeBreakdown}
+          orderQuantity={formData.orderQuantity}
+          fobPrice={formData.fobPrice}
+          readOnly={false}
+          onChange={(newBreakdown) =>
+            setFormData((prev) => ({ ...prev, colorSizeBreakdown: newBreakdown }))
+          }
+          onSyncOrderQuantity={(newQty) =>
+            setFormData((prev) => ({ ...prev, orderQuantity: newQty }))
+          }
+          showToast={showToast}
+        />
+      )}
+
+      {/* TAB 3: STYLE IMAGE & DOCUMENT ATTACHMENTS */}
       {activeTab === 'upload' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

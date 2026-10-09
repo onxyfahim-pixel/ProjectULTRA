@@ -114,6 +114,50 @@ const QUICK_NOTES = [
   'Operator guided on seam',
 ];
 
+const STANDARD_SECTIONS = [
+  'Sewing Floor',
+  'Cutting Floor',
+  'Finishing & Packing',
+  'Industrial Washing',
+  'Packing & Warehouse',
+  'Quality Assurance (QA)',
+];
+
+const SECTION_LINE_PRESETS: Record<string, Array<{ id: string; name: string; chief: string; qc: string }>> = {
+  'Sewing Floor': [
+    { id: 'Line 01', name: 'Sewing Line 01 (Knit Tops)', chief: 'Kabir Hossain', qc: 'Md. Rafiqul Islam' },
+    { id: 'Line 02', name: 'Sewing Line 02 (Knit Polo & Fleece)', chief: 'Jahangir Alam', qc: 'Mizanur Rahman' },
+    { id: 'Line 03', name: 'Sewing Line 03 (Woven Bottoms)', chief: 'Abul Kashem', qc: 'Nasir Uddin' },
+    { id: 'Line 04', name: 'Sewing Line 04 (Heavy Denim)', chief: 'Mahbubur Rahman', qc: 'Al-Amin Hossain' },
+    { id: 'Line 05', name: 'Sewing Line 05 (Precision Knit)', chief: 'Shahinur Islam', qc: 'Suman Roy' },
+    { id: 'Line 06', name: 'Sewing Line 06 (Fleece Assembly)', chief: 'Delowar Hossain', qc: 'Rokonuzzaman' },
+    { id: 'Line 07', name: 'Sewing Line 07 (Cargo & Utility)', chief: 'Kamrul Hasan', qc: 'Mehedi Hasan' },
+    { id: 'Line 08', name: 'Sewing Line 08 (Intimates & Activewear)', chief: 'Shahadat Hossain', qc: 'Anisur Rahman' },
+  ],
+  'Cutting Floor': [
+    { id: 'CUT-01', name: 'Cutting Table 01 (Gerber CNC Auto-Cutter)', chief: 'Monir Hossain', qc: 'Harunur Rashid' },
+    { id: 'CUT-02', name: 'Cutting Table 02 (Manual Spreader & Band Knife)', chief: 'Selim Reza', qc: 'Biplob Hossain' },
+    { id: 'CUT-03', name: 'Cutting Table 03 (Precision Laser Cutter)', chief: 'Tanvir Ahmed', qc: 'Faruk Hossain' },
+  ],
+  'Finishing & Packing': [
+    { id: 'FIN-01', name: 'Finishing Line 01 (Steam Tunnel Pressing)', chief: 'Golam Rabbani', qc: 'Zahirul Islam' },
+    { id: 'FIN-02', name: 'Finishing Line 02 (Thread Trimming & Ironing)', chief: 'Moklesur Rahman', qc: 'Shakil Khan' },
+    { id: 'FIN-03', name: 'Needle & Metal Detection Station 01', chief: 'Anwar Parvez', qc: 'Nazrul Islam' },
+  ],
+  'Industrial Washing': [
+    { id: 'WASH-01', name: 'Industrial Washing Bay 01 (Enzyme & Stone)', chief: 'Shah Alam', qc: 'Habibur Rahman' },
+    { id: 'WASH-02', name: 'Industrial Washing Bay 02 (Ozone & Laser)', chief: 'Nurul Islam', qc: 'Mamunur Rashid' },
+  ],
+  'Packing & Warehouse': [
+    { id: 'PACK-01', name: 'Automatic Carton Packing Line 01', chief: 'Abdul Halim', qc: 'Ashraful Alam' },
+    { id: 'PACK-02', name: 'Barcode Scanning & Palletizer Station 02', chief: 'Rezaul Karim', qc: 'Kawsar Ahmed' },
+  ],
+  'Quality Assurance (QA)': [
+    { id: 'QA-01', name: 'Inline Roving QC Audit Station', chief: 'Tareq Rahman', qc: 'Masud Rana' },
+    { id: 'QA-02', name: 'End-Line 100% Traffic Inspection Table', chief: 'Zillur Rahman', qc: 'Md. Enamul Haque' },
+  ],
+};
+
 // Virtual Click Sound generator for tactile hardware feel
 function playVirtualClick(freq = 680, duration = 0.03) {
   try {
@@ -220,9 +264,11 @@ export function MobileProductionEntryPage({
     initialOrder?.unit || 'Unit 01 (Dhaka Complex)'
   );
   const [section, setSection] = useState<string>(
-    initialOrder?.section || initialOrder?.sewingLine || 'Sewing Line 01 (Knit Tops)'
+    initialOrder?.section || 'Sewing Floor'
   );
-  const [lineId, setLineId] = useState<string>(initialOrder?.lineId || 'Line 01');
+  const [lineId, setLineId] = useState<string>(
+    initialOrder?.lineId || initialOrder?.sewingLine || 'Sewing Line 01 (Knit Tops)'
+  );
   const [status, setStatus] = useState<LineStatus>(initialOrder?.status || 'RUNNING');
   const [targetQuantity, setTargetQuantity] = useState<number>(
     initialOrder?.targetQuantity || 1200
@@ -231,10 +277,10 @@ export function MobileProductionEntryPage({
     initialOrder?.operatorCount || 24
   );
   const [supervisorName, setSupervisorName] = useState<string>(
-    initialOrder?.supervisorName || 'Floor Supervisor'
+    initialOrder?.supervisorName || 'Kabir Hossain'
   );
   const [qualityInspector, setQualityInspector] = useState<string>(
-    initialOrder?.qualityInspector || 'Rahim Uddin (QC Inspector)'
+    initialOrder?.qualityInspector || 'Md. Rafiqul Islam'
   );
   const [dueDate, setDueDate] = useState<string>(
     initialOrder?.dueDate
@@ -258,36 +304,41 @@ export function MobileProductionEntryPage({
       setManagedUnits(u);
       setManagedSections(s);
       setManagedLines(l);
-
-      if (!initialOrder && l.length > 0 && !section) {
-        const firstLine = l[0];
-        setSection(firstLine.name);
-        setLineId(firstLine.lineCode || firstLine.id);
-        if (firstLine.unitName) setUnit(firstLine.unitName);
-        if (firstLine.lineChief) setSupervisorName(firstLine.lineChief);
-        if (firstLine.qualityController) setQualityInspector(firstLine.qualityController);
-        if (firstLine.operatorCount) setOperatorCount(firstLine.operatorCount);
-      }
     };
     loadManagedData();
     window.addEventListener('erp_production_management_updated', loadManagedData);
     return () => window.removeEventListener('erp_production_management_updated', loadManagedData);
-  }, [initialOrder, section]);
+  }, []);
+
+  const handleSelectSection = (newSec: string) => {
+    setSection(newSec);
+    const presets = SECTION_LINE_PRESETS[newSec];
+    if (presets && presets.length > 0) {
+      setLineId(presets[0].name);
+      setSupervisorName(presets[0].chief);
+      setQualityInspector(presets[0].qc);
+      showToast(`Selected section: ${newSec}`);
+    }
+  };
 
   const handleSelectLine = (selectedLineName: string) => {
+    setLineId(selectedLineName);
     const found = managedLines.find(
       (l) => l.name === selectedLineName || l.id === selectedLineName || l.lineCode === selectedLineName
     );
     if (found) {
-      setSection(found.name);
-      setLineId(found.lineCode || found.id);
       if (found.unitName) setUnit(found.unitName);
       if (found.lineChief) setSupervisorName(found.lineChief);
       if (found.qualityController) setQualityInspector(found.qualityController);
       if (found.operatorCount) setOperatorCount(found.operatorCount);
       showToast(`Linked line: ${found.name}`);
-    } else {
-      setSection(selectedLineName);
+      return;
+    }
+    const currentPresets = SECTION_LINE_PRESETS[section] || [];
+    const presetFound = currentPresets.find((p) => p.name === selectedLineName || p.id === selectedLineName);
+    if (presetFound) {
+      setSupervisorName(presetFound.chief);
+      setQualityInspector(presetFound.qc);
     }
   };
 
@@ -640,7 +691,7 @@ export function MobileProductionEntryPage({
       itemInfo: itemInfo.trim(),
       unit: unit,
       section: section,
-      sewingLine: section,
+      sewingLine: lineId,
       lineId: lineId,
       targetQuantity: shiftTotals.totalTarget,
       completedQuantity: shiftTotals.totalPassed,
@@ -1180,42 +1231,15 @@ export function MobileProductionEntryPage({
               )}
             </div>
 
-            {/* Line Selection */}
+            {/* 1. Manufacturing Unit */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700">
-                Sewing Line / Floor Section *
-              </label>
-              <select
-                value={section}
-                onChange={(e) => handleSelectLine(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-semibold rounded-xl bg-slate-50 border border-slate-300 text-slate-900 outline-none focus:border-blue-600 focus:bg-white cursor-pointer"
-              >
-                {managedLines.length > 0 ? (
-                  managedLines.map((l) => (
-                    <option key={l.id} value={l.name}>
-                      {l.name} ({l.lineChief || 'Chief Unassigned'})
-                    </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="Sewing Line 01 (Knit Tops)">Sewing Line 01 (Knit Tops)</option>
-                    <option value="Sewing Line 02 (Knit Polo & Fleece)">Sewing Line 02 (Knit Polo & Fleece)</option>
-                    <option value="Sewing Line 03 (Woven Bottoms)">Sewing Line 03 (Woven Bottoms)</option>
-                    <option value="Sewing Line 04 (Heavy Denim)">Sewing Line 04 (Heavy Denim)</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            {/* Manufacturing Unit */}
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">
-                Manufacturing Unit
+                1. Manufacturing Unit *
               </label>
               <select
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 outline-none focus:border-blue-600 focus:bg-white cursor-pointer"
+                className="w-full px-3 py-2 text-xs font-semibold rounded-xl bg-slate-50 border border-slate-300 text-slate-900 outline-none focus:border-blue-600 focus:bg-white cursor-pointer"
               >
                 {managedUnits.length > 0 ? (
                   managedUnits.map((u) => (
@@ -1231,6 +1255,44 @@ export function MobileProductionEntryPage({
                     <option value="Unit 04 (Gazipur Export Zone)">Unit 04 (Gazipur Export Zone)</option>
                   </>
                 )}
+              </select>
+            </div>
+
+            {/* 2. Manufacturing Section */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">
+                2. Manufacturing Section *
+              </label>
+              <select
+                value={section}
+                onChange={(e) => handleSelectSection(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-bold text-blue-700 rounded-xl bg-blue-50/60 border border-blue-200 outline-none focus:border-blue-600 focus:bg-white cursor-pointer"
+              >
+                {STANDARD_SECTIONS.map((sec) => (
+                  <option key={sec} value={sec}>
+                    {sec}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Production Line / Workstation */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">
+                3. Production Line / Workstation *
+              </label>
+              <select
+                value={lineId}
+                onChange={(e) => handleSelectLine(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-bold rounded-xl bg-slate-50 border border-slate-300 text-slate-900 outline-none focus:border-blue-600 focus:bg-white cursor-pointer"
+              >
+                {(
+                  SECTION_LINE_PRESETS[section] || SECTION_LINE_PRESETS['Sewing Floor']
+                ).map((l) => (
+                  <option key={l.id} value={l.name}>
+                    {l.name}
+                  </option>
+                ))}
               </select>
             </div>
 

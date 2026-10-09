@@ -21,11 +21,13 @@ import {
   Edit,
   MapPin,
   FileText,
+  FileDown,
 } from 'lucide-react';
 import { IncomingQCLot } from '@/lib/types/modules';
 import { GradeBadge } from '@/components/ui/Badge';
 import { InventoryItem } from '@/lib/types/erp';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { IncomingQcSingleExportModal } from './IncomingQcSingleExportModal';
 
 interface IncomingQcDetailsPageProps {
   lot: IncomingQCLot;
@@ -44,8 +46,9 @@ export function IncomingQcDetailsPage({
   inventoryItem,
   showToast,
 }: IncomingQcDetailsPageProps) {
-  const { canEdit } = useModulePermission('incoming_qc');
+  const { canEdit, canExport } = useModulePermission('incoming_qc');
   const [activeTab, setActiveTab] = useState<'parameters' | 'defects' | 'traceability'>('parameters');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const isPass = lot.result === 'ACCEPTED';
   const isQuarantine = lot.result === 'REJECTED';
@@ -123,6 +126,19 @@ export function IncomingQcDetailsPage({
             >
               <Edit className="w-3.5 h-3.5" />
               <span>Edit</span>
+            </button>
+          )}
+
+          {/* Export Certificate Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Export Material Inspection Certificate (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export Certificate</span>
             </button>
           )}
 
@@ -571,6 +587,13 @@ export function IncomingQcDetailsPage({
         )}
       </div>
       </div>
+
+      {/* SINGLE QC CERTIFICATE EXPORT MODAL */}
+      <IncomingQcSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        lot={lot}
+      />
     </div>
   );
 }

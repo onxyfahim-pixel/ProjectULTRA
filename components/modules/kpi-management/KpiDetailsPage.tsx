@@ -40,6 +40,7 @@ import {
 } from '@/lib/types/modules';
 import { KPI_CATEGORY_CONFIG } from './kpi-management-data';
 import { KpiSingleExportModal } from './KpiSingleExportModal';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface KpiDetailsPageProps {
   kpi: KpiMetric;
@@ -60,6 +61,7 @@ export function KpiDetailsPage({
   onUpdateKpi,
   showToast,
 }: KpiDetailsPageProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('kpi_management');
   const [currentKpi, setCurrentKpi] = useState<KpiMetric>(kpi);
   const [history, setHistory] = useState<KpiHistoryPoint[]>(kpi.history || []);
   const [actionItems, setActionItems] = useState<KpiActionItem[]>(kpi.actionItems || []);
@@ -268,8 +270,9 @@ export function KpiDetailsPage({
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Health:</span>
             <select
               value={currentKpi.status}
+              disabled={!canEdit}
               onChange={(e) => handleStatusChange(e.target.value as KpiStatus)}
-              className="text-xs font-bold bg-transparent border-none text-slate-800 focus:outline-hidden cursor-pointer"
+              className="text-xs font-bold bg-transparent border-none text-slate-800 focus:outline-hidden cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="ON_TRACK">On Track</option>
               <option value="AT_RISK">At Risk</option>
@@ -283,8 +286,9 @@ export function KpiDetailsPage({
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Trend:</span>
             <select
               value={currentKpi.trend}
+              disabled={!canEdit}
               onChange={(e) => handleTrendChange(e.target.value as KpiTrend)}
-              className="text-xs font-bold bg-transparent border-none text-slate-800 focus:outline-hidden cursor-pointer"
+              className="text-xs font-bold bg-transparent border-none text-slate-800 focus:outline-hidden cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="UP">Upward</option>
               <option value="DOWN">Downward</option>
@@ -292,48 +296,55 @@ export function KpiDetailsPage({
             </select>
           </div>
 
-
           {/* Export Button */}
-          <button
-            type="button"
-            onClick={() => setIsExportOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
-            title="Export Performance Dossier (PDF / Excel)"
-          >
-            <FileDown className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden md:inline">Export</span>
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Export Performance Dossier (PDF / Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden md:inline">Export</span>
+            </button>
+          )}
 
           {/* Duplicate Button */}
-          <button
-            type="button"
-            onClick={() => onDuplicate(currentKpi)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
-            title="Duplicate Indicator"
-          >
-            <Copy className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden md:inline">Duplicate</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(currentKpi)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="Duplicate Indicator"
+            >
+              <Copy className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden md:inline">Duplicate</span>
+            </button>
+          )}
 
           {/* Edit Button */}
-          <button
-            type="button"
-            onClick={() => onEdit(currentKpi)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
-          >
-            <Edit className="w-3.5 h-3.5" />
-            <span>Edit Metric</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(currentKpi)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Metric</span>
+            </button>
+          )}
 
           {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => onDelete(currentKpi)}
-            className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
-            title="Delete Metric"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(currentKpi)}
+              className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Delete Metric"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -429,14 +440,16 @@ export function KpiDetailsPage({
                   Performance History &amp; Monthly Trajectory ({history.length} Readings)
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowLogForm(!showLogForm)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Log Measurement</span>
-              </button>
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setShowLogForm(!showLogForm)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Log Measurement</span>
+                </button>
+              )}
             </div>
 
             {/* Quick Log Form */}
@@ -563,14 +576,16 @@ export function KpiDetailsPage({
                   Corrective Actions &amp; Remediation Plan ({actionItems.length})
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAddAction(!showAddAction)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Assign Action</span>
-              </button>
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddAction(!showAddAction)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Assign Action</span>
+                </button>
+              )}
             </div>
 
             {/* Quick Add Action Form */}
@@ -668,8 +683,9 @@ export function KpiDetailsPage({
                     <div className="flex items-start gap-3">
                       <button
                         type="button"
+                        disabled={!canEdit}
                         onClick={() => handleToggleAction(idx)}
-                        className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                        className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer shrink-0 disabled:cursor-not-allowed disabled:opacity-60 ${
                           act.completed
                             ? 'bg-emerald-600 border-emerald-600 text-white'
                             : 'border-slate-300 hover:border-blue-500 bg-white'

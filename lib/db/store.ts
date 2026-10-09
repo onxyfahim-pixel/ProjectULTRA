@@ -164,21 +164,30 @@ class ErpDataStore {
   // --- Buyer Orders (With WIP Record) ---
   public getBuyerOrders(): BuyerOrder[] {
     return this.buyerOrders.map((bo) => {
+      let updated = bo;
+      const mockMatch = MOCK_BUYER_ORDERS.find((m) => m.orderNumber === bo.orderNumber || m.id === bo.id);
       if (
         !bo.wipRecord ||
         Object.keys(bo.wipRecord).length <= 2 ||
         (!bo.wipRecord.cuttingActual && !bo.wipRecord.sewingComplete && !bo.wipRecord.packedQuantity)
       ) {
-        const mockMatch = MOCK_BUYER_ORDERS.find((m) => m.orderNumber === bo.orderNumber || m.id === bo.id);
         if (mockMatch && mockMatch.wipRecord) {
-          return {
-            ...bo,
-            productionTracking: bo.productionTracking || mockMatch.productionTracking,
+          updated = {
+            ...updated,
+            productionTracking: updated.productionTracking || mockMatch.productionTracking,
             wipRecord: mockMatch.wipRecord,
           };
         }
       }
-      return bo;
+      if (!updated.colorSizeBreakdown || updated.colorSizeBreakdown.length === 0) {
+        if (mockMatch && mockMatch.colorSizeBreakdown) {
+          updated = {
+            ...updated,
+            colorSizeBreakdown: mockMatch.colorSizeBreakdown,
+          };
+        }
+      }
+      return updated;
     });
   }
 

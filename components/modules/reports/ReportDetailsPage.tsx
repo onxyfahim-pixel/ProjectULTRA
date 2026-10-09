@@ -21,12 +21,15 @@ import {
   Clock,
   Send,
   BadgeCheck,
+  FileDown,
 } from 'lucide-react';
 import {
   ReportRecord,
   REPORT_CATEGORY_CONFIG,
   ReportStatus,
 } from './reports-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
+import { ReportSingleExportModal } from './ReportSingleExportModal';
 
 interface ReportDetailsPageProps {
   report: ReportRecord;
@@ -41,6 +44,8 @@ export function ReportDetailsPage({
   onUpdateStatus,
   onExportCsv,
 }: ReportDetailsPageProps) {
+  const { canEdit, canExport } = useModulePermission('report_analysis');
+  const [isExportModalOpen, setIsExportModalOpen] = React.useState(false);
   // ESC key listener to exit full-screen view
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -155,24 +160,28 @@ export function ReportDetailsPage({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            <button
-              type="button"
-              onClick={handleQuickStatusCycle}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-2xs transition-colors cursor-pointer"
-              title="Cycle status: Draft -> Under Review -> Approved -> Published"
-            >
-              <BadgeCheck className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Update Status</span>
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={handleQuickStatusCycle}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-2xs transition-colors cursor-pointer"
+                title="Cycle status: Draft -> Under Review -> Approved -> Published"
+              >
+                <BadgeCheck className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Update Status</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-2xs transition-colors cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-600" />
-              <span>Export CSV</span>
-            </button>
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>Export Report</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -445,6 +454,13 @@ export function ReportDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Individual Report Export Modal */}
+      <ReportSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        report={report}
+      />
     </div>
   );
 }

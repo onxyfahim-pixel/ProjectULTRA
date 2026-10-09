@@ -141,10 +141,16 @@ export function BuyerOrderSingleExportModal({
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-200/80 grid grid-cols-3 gap-2 text-[10px] text-slate-600">
+            <div className="pt-2 border-t border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-600">
               <div>
                 <span className="text-slate-400 block">Ex-Factory:</span>
                 <span className="font-mono font-semibold text-slate-800">{order.shipDate}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">Breakdown:</span>
+                <span className="font-semibold text-indigo-700">
+                  {order.colorSizeBreakdown?.length || 0} Colors / {order.colorSizeBreakdown?.reduce((acc, c) => acc + (c.sizeBreakdown?.length || 0), 0) || 0} Sizes
+                </span>
               </div>
               <div>
                 <span className="text-slate-400 block">BOM Items:</span>
@@ -244,7 +250,7 @@ export function BuyerOrderSingleExportModal({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Specification sheet with BOM requirements &amp; live floor WIP.
+                    Specification sheet with Color &amp; Size matrix, BOM requirements &amp; live floor WIP.
                   </p>
                 </div>
               </div>
@@ -275,7 +281,7 @@ export function BuyerOrderSingleExportModal({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Full PO workbook with BOM items, WIP tracking &amp; inward GRNs.
+                    Full PO workbook with Color &amp; Size breakdown, BOM items, WIP tracking &amp; inward GRNs.
                   </p>
                 </div>
               </div>

@@ -34,10 +34,12 @@ import { PostCard } from '../modules/texpedia/PostCard';
 import { CreatePostModal } from '../modules/texpedia/CreatePostModal';
 import { PostDetailsModal } from '../modules/texpedia/PostDetailsModal';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 const STORAGE_KEY = 'erp_texpedia_posts_v1';
 
 export function TexpediaView() {
+  const { canCreate } = useModulePermission('texpedia');
   const [activeTab, setActiveTab] = useState<'feed' | 'verified' | 'bookmarks'>('feed');
   const [posts, setPosts] = useLiveModuleData<TexpediaPost[]>(
     'texpedia_posts',
@@ -228,14 +230,16 @@ export function TexpediaView() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsCreateOpen(true)}
-          className="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Share Knowledge / Create Post</span>
-        </button>
+        {canCreate && (
+          <button
+            type="button"
+            onClick={() => setIsCreateOpen(true)}
+            className="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Share Knowledge / Create Post</span>
+          </button>
+        )}
       </div>
 
       {/* SEARCH, CATEGORY PILLS & SORT CONTROLS */}
@@ -311,14 +315,16 @@ export function TexpediaView() {
           <p className="text-xs text-slate-500 max-w-md mx-auto">
             Try adjusting your search terms or category filter. You can also be the first to share a case study for this topic!
           </p>
-          <button
-            type="button"
-            onClick={() => setIsCreateOpen(true)}
-            className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors inline-flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create First Post with Pictures</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => setIsCreateOpen(true)}
+              className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition-colors inline-flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create First Post with Pictures</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5 animate-in fade-in duration-200">

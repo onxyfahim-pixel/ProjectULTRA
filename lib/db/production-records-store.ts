@@ -12,10 +12,67 @@ const STORAGE_KEYS = {
 // Custom event dispatched when sewing records change
 export const SEWING_TRACK_UPDATED_EVENT = 'erp_sewing_track_updated';
 
+export function isCuttingSectionRecord(record: ProductionOrder): boolean {
+  const sec = (record.section || '').toLowerCase();
+  const line = (record.sewingLine || '').toLowerCase();
+  const lineId = (record.lineId || '').toLowerCase();
+  return sec.includes('cut') || line.includes('cut') || lineId.includes('cut') || sec.includes('spread');
+}
+
+export function isFinishingSectionRecord(record: ProductionOrder): boolean {
+  const sec = (record.section || '').toLowerCase();
+  const line = (record.sewingLine || '').toLowerCase();
+  const lineId = (record.lineId || '').toLowerCase();
+  return (
+    sec.includes('finish') ||
+    sec.includes('iron') ||
+    sec.includes('press') ||
+    line.includes('finish') ||
+    lineId.includes('fin')
+  );
+}
+
+export function isPackingSectionRecord(record: ProductionOrder): boolean {
+  const sec = (record.section || '').toLowerCase();
+  const line = (record.sewingLine || '').toLowerCase();
+  const lineId = (record.lineId || '').toLowerCase();
+  return sec.includes('pack') || line.includes('pack') || lineId.includes('pack') || sec.includes('carton');
+}
+
+export function isWashingSectionRecord(record: ProductionOrder): boolean {
+  const sec = (record.section || '').toLowerCase();
+  const line = (record.sewingLine || '').toLowerCase();
+  const lineId = (record.lineId || '').toLowerCase();
+  return sec.includes('wash') || line.includes('wash') || lineId.includes('wash');
+}
+
+export function isQualitySectionRecord(record: ProductionOrder): boolean {
+  const sec = (record.section || '').toLowerCase();
+  const line = (record.sewingLine || '').toLowerCase();
+  return sec.includes('qa') || sec.includes('qc') || sec.includes('quality') || sec.includes('audit');
+}
+
+export function getRecordSectionCategory(
+  record: ProductionOrder
+): 'Sewing' | 'Cutting' | 'Finishing' | 'Packing' | 'Washing' | 'QA' {
+  if (isCuttingSectionRecord(record)) return 'Cutting';
+  if (isFinishingSectionRecord(record)) return 'Finishing';
+  if (isPackingSectionRecord(record)) return 'Packing';
+  if (isWashingSectionRecord(record)) return 'Washing';
+  if (isQualitySectionRecord(record)) return 'QA';
+  return 'Sewing';
+}
+
 export function isSewingSectionRecord(record: ProductionOrder): boolean {
   const sec = (record.section || '').toLowerCase();
   const line = (record.sewingLine || '').toLowerCase();
   const lineId = (record.lineId || '').toLowerCase();
+
+  if (isCuttingSectionRecord(record)) return false;
+  if (isFinishingSectionRecord(record)) return false;
+  if (isPackingSectionRecord(record)) return false;
+  if (isWashingSectionRecord(record)) return false;
+  if (isQualitySectionRecord(record)) return false;
 
   return (
     sec.includes('sew') ||
@@ -23,7 +80,7 @@ export function isSewingSectionRecord(record: ProductionOrder): boolean {
     line.includes('sew') ||
     line.includes('line') ||
     lineId.includes('line') ||
-    (!sec.includes('cut') && !sec.includes('wash') && !sec.includes('finish') && !sec.includes('qa'))
+    sec === ''
   );
 }
 
@@ -58,6 +115,8 @@ export function saveProductionRecords(orders: ProductionOrder[]): void {
   try {
     localStorage.setItem(STORAGE_KEYS.PRODUCTION_ORDERS, JSON.stringify(orders));
     window.dispatchEvent(new CustomEvent('erp_production_records_updated'));
+    window.dispatchEvent(new CustomEvent('erp_production_orders_updated'));
+    window.dispatchEvent(new CustomEvent('erp_wip_records_updated'));
 
     // Cross-tab live broadcast
     if ('BroadcastChannel' in window) {
@@ -218,10 +277,10 @@ export function getSewingProductionTrackForPO(
 }
 
 /**
- * Automatically syncs an uploaded sewing section record to the corresponding Buyer Order's
- * Sewing production track record in Buyer & Order module
+ * Automatically syncs an uploaded production section record (Sewing, Finishing, Cutting, Packing)
+ * to the corresponding Buyer Order's stages and WIP record in Buyer & Order module
  */
-export function syncSewingRecordToBuyerOrders(savedRecord: ProductionOrder): {
+export function syncProductionRecordToBuyerOrders(savedRecord: ProductionOrder): {
   synced: boolean;
   poNumber: string;
   totalCheckedQty: number;
@@ -241,13 +300,34 @@ export function syncSewingRecordToBuyerOrders(savedRecord: ProductionOrder): {
   }
   saveProductionRecords(updatedRecords);
 
+  const cleanPO = savedRecord.orderNumber.trim().toLowerCase();
+
+  // Aggregate quantities for this PO across all sections
+  const matchingRecords = updatedRecords.filter((rec) => {
+    const recPO = (rec.orderNumber || '').trim().toLowerCase();
+    return recPO === cleanPO || cleanPO.includes(recPO) || recPO.includes(cleanPO);
+  });
+
+  const sewingRecords = matchingRecords.filter((r) => isSewingSectionRecord(r));
+  const totalSewingQty = sewingRecords.reduce((s, r) => s + calculateRecordCheckedQty(r), 0);
+
+  const cuttingRecords = matchingRecords.filter((r) => isCuttingSectionRecord(r));
+  const totalCuttingQty = cuttingRecords.reduce((s, r) => s + calculateRecordCheckedQty(r), 0);
+
+  const finishingRecords = matchingRecords.filter((r) => isFinishingSectionRecord(r));
+  const totalFinishingQty = finishingRecords.reduce((s, r) => s + calculateRecordCheckedQty(r), 0);
+
+  const packingRecords = matchingRecords.filter((r) => isPackingSectionRecord(r));
+  const totalPackingQty = packingRecords.reduce((s, r) => s + calculateRecordCheckedQty(r), 0);
+
+  const currentSection = getRecordSectionCategory(savedRecord);
   const sewingTrack = getSewingProductionTrackForPO(savedRecord.orderNumber);
 
   if (typeof window === 'undefined') {
     return {
       synced: true,
       poNumber: savedRecord.orderNumber,
-      totalCheckedQty: sewingTrack.totalCheckedQty,
+      totalCheckedQty: totalSewingQty || calculateRecordCheckedQty(savedRecord),
     };
   }
 
@@ -266,7 +346,6 @@ export function syncSewingRecordToBuyerOrders(savedRecord: ProductionOrder): {
       }
     }
 
-    const cleanPO = savedRecord.orderNumber.trim().toLowerCase();
     let orderFound = false;
 
     const updatedBuyerOrders = buyerOrders.map((bo) => {
@@ -276,60 +355,140 @@ export function syncSewingRecordToBuyerOrders(savedRecord: ProductionOrder): {
       if (isMatch) {
         orderFound = true;
         const currentStages = bo.productionTracking?.stages || [];
-        const hasSewingStage = currentStages.some((st) => st.stage === 'SEWING');
+        let updatedStages = [...currentStages];
 
-        let updatedStages = currentStages;
-        if (hasSewingStage) {
-          updatedStages = currentStages.map((st) => {
-            if (st.stage === 'SEWING') {
-              return {
-                ...st,
-                // Automatically set the Sewing Total Checked Quantity
-                actualPcs: sewingTrack.totalCheckedQty,
-                status:
-                  sewingTrack.totalCheckedQty >= (st.plannedPcs || bo.orderQuantity)
-                    ? ('COMPLETED' as const)
-                    : sewingTrack.totalCheckedQty > 0
-                    ? ('IN_PROGRESS' as const)
-                    : st.status,
-                assignedLines: sewingTrack.lines.length > 0 ? sewingTrack.lines : st.assignedLines,
-                inspector:
-                  savedRecord.qualityInspector ||
-                  (sewingTrack.inspectors[0] ? sewingTrack.inspectors[0] : st.inspector),
-                notes: `Auto-linked from sewing records (${sewingTrack.totalCheckedQty.toLocaleString()} pcs checked across ${sewingTrack.recordsCount} record${sewingTrack.recordsCount > 1 ? 's' : ''})`,
-              };
-            }
-            return st;
+        // 1. UPDATE OR INSERT SEWING STAGE
+        const sewingIndex = updatedStages.findIndex((st) => st.stage === 'SEWING');
+        const effectiveSewingQty = totalSewingQty > 0 ? totalSewingQty : (updatedStages[sewingIndex]?.actualPcs || 0);
+        if (sewingIndex >= 0) {
+          updatedStages[sewingIndex] = {
+            ...updatedStages[sewingIndex],
+            actualPcs: effectiveSewingQty,
+            status:
+              effectiveSewingQty >= (updatedStages[sewingIndex].plannedPcs || bo.orderQuantity)
+                ? 'COMPLETED'
+                : effectiveSewingQty > 0
+                ? 'IN_PROGRESS'
+                : updatedStages[sewingIndex].status,
+            assignedLines: sewingTrack.lines.length > 0 ? sewingTrack.lines : updatedStages[sewingIndex].assignedLines,
+            inspector: savedRecord.qualityInspector || updatedStages[sewingIndex].inspector,
+            notes: `Auto-linked from sewing records (${effectiveSewingQty.toLocaleString()} pcs checked)`,
+          };
+        } else if (totalSewingQty > 0) {
+          updatedStages.push({
+            stage: 'SEWING',
+            startDate: savedRecord.recordDate || new Date().toISOString().split('T')[0],
+            plannedPcs: bo.orderQuantity,
+            actualPcs: totalSewingQty,
+            status: totalSewingQty >= bo.orderQuantity ? 'COMPLETED' : 'IN_PROGRESS',
+            assignedLines: sewingTrack.lines,
+            inspector: savedRecord.qualityInspector || sewingTrack.inspectors[0],
+            notes: `Auto-linked from sewing records (${totalSewingQty.toLocaleString()} pcs checked)`,
           });
-        } else {
-          // If no sewing stage exists yet, insert standard sewing stage with total checked quantity
-          updatedStages = [
-            ...currentStages,
-            {
-              stage: 'SEWING',
-              startDate: savedRecord.recordDate || new Date().toISOString().split('T')[0],
-              plannedPcs: bo.orderQuantity,
-              actualPcs: sewingTrack.totalCheckedQty,
-              status:
-                sewingTrack.totalCheckedQty >= bo.orderQuantity
-                  ? ('COMPLETED' as const)
-                  : ('IN_PROGRESS' as const),
-              assignedLines: sewingTrack.lines,
-              inspector: savedRecord.qualityInspector || sewingTrack.inspectors[0],
-              notes: `Auto-linked from sewing records (${sewingTrack.totalCheckedQty.toLocaleString()} pcs checked)`,
-            },
-          ];
         }
+
+        // 2. UPDATE OR INSERT CUTTING STAGE
+        const cuttingIndex = updatedStages.findIndex((st) => st.stage === 'CUTTING');
+        const effectiveCuttingQty = totalCuttingQty > 0 ? totalCuttingQty : (updatedStages[cuttingIndex]?.actualPcs || 0);
+        if (cuttingIndex >= 0) {
+          if (totalCuttingQty > 0) {
+            updatedStages[cuttingIndex] = {
+              ...updatedStages[cuttingIndex],
+              actualPcs: effectiveCuttingQty,
+              status:
+                effectiveCuttingQty >= (updatedStages[cuttingIndex].plannedPcs || bo.orderQuantity)
+                  ? 'COMPLETED'
+                  : 'IN_PROGRESS',
+              notes: `Auto-linked from cutting records (${effectiveCuttingQty.toLocaleString()} pcs cut)`,
+            };
+          }
+        } else if (totalCuttingQty > 0) {
+          updatedStages.push({
+            stage: 'CUTTING',
+            startDate: savedRecord.recordDate || new Date().toISOString().split('T')[0],
+            plannedPcs: bo.orderQuantity,
+            actualPcs: totalCuttingQty,
+            status: totalCuttingQty >= bo.orderQuantity ? 'COMPLETED' : 'IN_PROGRESS',
+            notes: `Auto-linked from cutting records (${totalCuttingQty.toLocaleString()} pcs cut)`,
+          });
+        }
+
+        // 3. UPDATE OR INSERT PACKING / FINISHING STAGE
+        const packingIndex = updatedStages.findIndex((st) => st.stage === 'PACKING');
+        const effectivePackingQty = Math.max(totalFinishingQty, totalPackingQty);
+        if (packingIndex >= 0) {
+          if (effectivePackingQty > 0) {
+            updatedStages[packingIndex] = {
+              ...updatedStages[packingIndex],
+              actualPcs: effectivePackingQty,
+              status:
+                effectivePackingQty >= (updatedStages[packingIndex].plannedPcs || bo.orderQuantity)
+                  ? 'COMPLETED'
+                  : 'IN_PROGRESS',
+              notes: `Auto-linked from finishing/packing records (${effectivePackingQty.toLocaleString()} pcs)`,
+            };
+          }
+        } else if (effectivePackingQty > 0) {
+          updatedStages.push({
+            stage: 'PACKING',
+            startDate: savedRecord.recordDate || new Date().toISOString().split('T')[0],
+            plannedPcs: bo.orderQuantity,
+            actualPcs: effectivePackingQty,
+            status: effectivePackingQty >= bo.orderQuantity ? 'COMPLETED' : 'IN_PROGRESS',
+            notes: `Auto-linked from finishing/packing records (${effectivePackingQty.toLocaleString()} pcs)`,
+          });
+        }
+
+        // 4. UPDATE WIP RECORD
+        const prevWip = bo.wipRecord || {
+          orderNumber: bo.orderNumber,
+          buyerName: bo.buyerName,
+          styleNumber: bo.styleNumber,
+          orderQuantity: bo.orderQuantity,
+          cuttingPlanned: Math.round(bo.orderQuantity * 1.01),
+          cuttingActual: 0,
+          sewingInput: bo.orderQuantity,
+          sewingComplete: 0,
+          finishingQuantity: 0,
+          packedQuantity: 0,
+          inspectionCompletedQuantity: 0,
+          shippedQuantity: 0,
+          lastUpdated: new Date().toISOString(),
+        };
+
+        const updatedWip = {
+          ...prevWip,
+          cuttingActual: totalCuttingQty > 0 ? totalCuttingQty : prevWip.cuttingActual,
+          sewingComplete: totalSewingQty > 0 ? totalSewingQty : prevWip.sewingComplete,
+          finishingQuantity: totalFinishingQty > 0 ? totalFinishingQty : prevWip.finishingQuantity,
+          packedQuantity: totalPackingQty > 0 ? totalPackingQty : prevWip.packedQuantity,
+          lastUpdated: new Date().toISOString(),
+        };
+
+        // Determine current production stage
+        let activeStageName: any = bo.productionTracking?.currentStage || 'SEWING';
+        if (totalPackingQty >= bo.orderQuantity * 0.9) activeStageName = 'READY_AUDIT';
+        else if (totalFinishingQty > 0 || totalPackingQty > 0) activeStageName = 'PACKING';
+        else if (totalSewingQty > 0) activeStageName = 'SEWING';
+        else if (totalCuttingQty > 0) activeStageName = 'CUTTING';
+
+        const leadQty = Math.max(
+          updatedWip.packedQuantity || 0,
+          updatedWip.finishingQuantity || 0,
+          updatedWip.sewingComplete || 0,
+          updatedWip.cuttingActual || 0
+        );
 
         const overallProgress = Math.min(
           100,
-          Math.round((sewingTrack.totalCheckedQty / (bo.orderQuantity || 1)) * 100)
+          Math.round((leadQty / (bo.orderQuantity || 1)) * 100)
         );
 
         return {
           ...bo,
+          wipRecord: updatedWip,
           productionTracking: {
-            currentStage: bo.productionTracking?.currentStage || 'SEWING',
+            currentStage: activeStageName,
             overallProgressPercent: overallProgress,
             stages: updatedStages,
           },
@@ -342,29 +501,40 @@ export function syncSewingRecordToBuyerOrders(savedRecord: ProductionOrder): {
     if (orderFound) {
       localStorage.setItem(STORAGE_KEYS.BUYER_ORDERS, JSON.stringify(updatedBuyerOrders));
       localStorage.setItem(STORAGE_KEYS.BUYER_ORDERS_LEGACY, JSON.stringify(updatedBuyerOrders));
+
       window.dispatchEvent(
         new CustomEvent(SEWING_TRACK_UPDATED_EVENT, {
           detail: {
             poNumber: savedRecord.orderNumber,
-            totalCheckedQty: sewingTrack.totalCheckedQty,
-            recordsCount: sewingTrack.recordsCount,
+            totalCheckedQty: totalSewingQty,
+            recordsCount: sewingRecords.length,
           },
         })
       );
+      window.dispatchEvent(new CustomEvent('erp_wip_records_updated'));
       window.dispatchEvent(new CustomEvent('erp_buyer_orders_updated'));
+      window.dispatchEvent(new CustomEvent('erp_production_orders_updated'));
     }
 
     return {
       synced: orderFound,
       poNumber: savedRecord.orderNumber,
-      totalCheckedQty: sewingTrack.totalCheckedQty,
+      totalCheckedQty: totalSewingQty || calculateRecordCheckedQty(savedRecord),
     };
   } catch (err) {
-    console.error('Error syncing sewing record to buyer orders:', err);
+    console.error('Error syncing production record to buyer orders:', err);
     return {
       synced: false,
       poNumber: savedRecord.orderNumber,
-      totalCheckedQty: sewingTrack.totalCheckedQty,
+      totalCheckedQty: totalSewingQty || calculateRecordCheckedQty(savedRecord),
     };
   }
 }
+
+/**
+ * Backward-compatible alias for syncProductionRecordToBuyerOrders
+ */
+export function syncSewingRecordToBuyerOrders(savedRecord: ProductionOrder) {
+  return syncProductionRecordToBuyerOrders(savedRecord);
+}
+

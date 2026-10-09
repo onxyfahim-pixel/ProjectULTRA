@@ -26,10 +26,12 @@ import {
   AlertCircle,
   Truck,
   TrendingUp,
+  FileDown,
 } from 'lucide-react';
 import { SubSupplier } from '@/lib/types/modules';
 import { StatusBadge } from '@/components/ui/Badge';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { SubSupplierSingleExportModal } from './SubSupplierSingleExportModal';
 
 interface SubSupplierDetailsPageProps {
   supplier: SubSupplier;
@@ -48,8 +50,9 @@ export function SubSupplierDetailsPage({
   onDelete,
   showToast,
 }: SubSupplierDetailsPageProps) {
-  const { canCreate, canEdit, canDelete } = useModulePermission('sub_supplier');
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('sub_supplier');
   const [activeTab, setActiveTab] = useState<'overview' | 'materials' | 'audits'>('overview');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const categoryLabel = supplier.category.replace(/_/g, ' ');
 
@@ -90,6 +93,19 @@ export function SubSupplierDetailsPage({
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
+          {/* Export Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors shadow-2xs cursor-pointer"
+              title="Export Supplier Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export Dossier</span>
+            </button>
+          )}
+
           {/* Edit Button */}
           {canEdit && (
             <button
@@ -428,6 +444,12 @@ export function SubSupplierDetailsPage({
         )}
       </div>
       </div>
+
+      <SubSupplierSingleExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        supplier={supplier}
+      />
     </div>
   );
 }

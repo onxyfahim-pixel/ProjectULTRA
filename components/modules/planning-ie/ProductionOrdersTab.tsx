@@ -7,6 +7,7 @@ import {
   Filter,
   Plus,
   Download,
+  FileDown,
   Calendar,
   AlertCircle,
   CheckCircle2,
@@ -35,6 +36,7 @@ import {
 } from '@/lib/types/planning-ie';
 import { BuyerOrder } from '@/lib/types/modules';
 import { ProductionLine } from '@/lib/types/production-management';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface ProductionOrdersTabProps {
   orders: ProductionOrderPlan[];
@@ -46,6 +48,9 @@ interface ProductionOrdersTabProps {
   onDuplicateOrder: (order: ProductionOrderPlan) => void;
   onExportCsv: (filename: string, rows: any[]) => void;
   onPrintOrders: () => void;
+  onExportSingleOrder?: (order: ProductionOrderPlan) => void;
+  onExportOrdersBatch?: (selectedOrders: ProductionOrderPlan[]) => void;
+  onOpenGlobalExport?: () => void;
 }
 
 export function ProductionOrdersTab({
@@ -58,7 +63,11 @@ export function ProductionOrdersTab({
   onDuplicateOrder,
   onExportCsv,
   onPrintOrders,
+  onExportSingleOrder,
+  onExportOrdersBatch,
+  onOpenGlobalExport,
 }: ProductionOrdersTabProps) {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('planning_ie');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
@@ -494,32 +503,56 @@ export function ProductionOrdersTab({
             )}
           </button>
 
+          {/* Global Export Register (PDF / Excel) */}
+          {canExport && (
+            <button
+              onClick={() => {
+                if (onOpenGlobalExport) {
+                  onOpenGlobalExport();
+                } else {
+                  onExportCsv('Production_Orders_Register.csv', filteredOrders);
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Global Export: Production Orders Register (PDF or Excel)"
+            >
+              <FileDown className="w-3.5 h-3.5 text-blue-600" />
+              <span>Export Register</span>
+            </button>
+          )}
+
           {/* Export CSV */}
-          <button
-            onClick={() => onExportCsv('Production_Orders_Register.csv', filteredOrders)}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Export CSV</span>
-          </button>
+          {canExport && (
+            <button
+              onClick={() => onExportCsv('Production_Orders_Register.csv', filteredOrders)}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Export CSV</span>
+            </button>
+          )}
 
           {/* Print */}
-          <button
-            onClick={onPrintOrders}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span>Print</span>
-          </button>
+          {canExport && (
+            <button
+              onClick={onPrintOrders}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span>Print</span>
+            </button>
+          )}
 
           {/* New Production Order Button */}
-          <button
-            onClick={openAddModal}
-            className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Production Order</span>
-          </button>
+          {canCreate && (
+            <button
+              onClick={openAddModal}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Production Order</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -530,26 +563,36 @@ export function ProductionOrdersTab({
             {selectedIds.size} production orders selected
           </span>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const selected = orders.filter((o) => selectedIds.has(o.id));
-                onExportCsv('Selected_Production_Orders.csv', selected);
-              }}
-              className="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-800 font-semibold hover:bg-blue-100 cursor-pointer"
-            >
-              Export Selected
-            </button>
-            <button
-              onClick={() => {
-                if (confirm(`Are you sure you want to delete ${selectedIds.size} selected orders?`)) {
-                  selectedIds.forEach((id) => onDeleteOrder(id));
-                  setSelectedIds(new Set());
-                }
-              }}
-              className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-semibold hover:bg-rose-700 cursor-pointer"
-            >
-              Delete Selected
-            </button>
+            {canExport && (
+              <button
+                onClick={() => {
+                  const selected = orders.filter((o) => selectedIds.has(o.id));
+                  if (onExportOrdersBatch) {
+                    onExportOrdersBatch(selected);
+                  } else {
+                    onExportCsv('Selected_Production_Orders.csv', selected);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-800 font-semibold hover:bg-blue-100 cursor-pointer shadow-2xs"
+                title="Export Selected Orders (PDF or Excel)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Export Selected (PDF/Excel)</span>
+              </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={() => {
+                  if (confirm(`Are you sure you want to delete ${selectedIds.size} selected orders?`)) {
+                    selectedIds.forEach((id) => onDeleteOrder(id));
+                    setSelectedIds(new Set());
+                  }
+                }}
+                className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-semibold hover:bg-rose-700 cursor-pointer"
+              >
+                Delete Selected
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -669,31 +712,46 @@ export function ProductionOrdersTab({
                       <td className="p-3 text-center">{renderStatusBadge(ord.status)}</td>
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => onDuplicateOrder(ord)}
-                            title="1-Click Duplicate Order"
-                            className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-700 cursor-pointer"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => openEditModal(ord)}
-                            title="Edit Production Order"
-                            className="p-1 hover:bg-slate-100 rounded text-blue-600 hover:text-blue-800 cursor-pointer"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm(`Delete production order ${ord.orderNumber}?`)) {
-                                onDeleteOrder(ord.id);
-                              }
-                            }}
-                            title="Delete Order"
-                            className="p-1 hover:bg-rose-50 rounded text-rose-500 hover:text-rose-700 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canExport && onExportSingleOrder && (
+                            <button
+                              onClick={() => onExportSingleOrder(ord)}
+                              title="Export Order Plan (PDF or Excel)"
+                              className="p-1 hover:bg-emerald-50 rounded text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                            >
+                              <FileDown className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {canCreate && (
+                            <button
+                              onClick={() => onDuplicateOrder(ord)}
+                              title="1-Click Duplicate Order"
+                              className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-700 cursor-pointer"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {canEdit && (
+                            <button
+                              onClick={() => openEditModal(ord)}
+                              title="Edit Production Order"
+                              className="p-1 hover:bg-slate-100 rounded text-blue-600 hover:text-blue-800 cursor-pointer"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              onClick={() => {
+                                if (confirm(`Delete production order ${ord.orderNumber}?`)) {
+                                  onDeleteOrder(ord.id);
+                                }
+                              }}
+                              title="Delete Order"
+                              className="p-1 hover:bg-rose-50 rounded text-rose-500 hover:text-rose-700 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

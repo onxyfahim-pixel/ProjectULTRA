@@ -38,6 +38,7 @@ import {
   ArrowRight,
   ChevronRight,
   SlidersHorizontal,
+  FileDown,
 } from 'lucide-react';
 import { ModuleHeader, SwitchToListBanner, ModuleViewMode } from '@/components/ui/ModuleHeader';
 import { StatCard } from '@/components/ui/StatCard';
@@ -54,6 +55,8 @@ import {
 } from '../modules/reports/reports-data';
 import { ReportDetailsPage } from '../modules/reports/ReportDetailsPage';
 import { NewReportModal } from '../modules/reports/NewReportModal';
+import { ReportExportModal } from '../modules/reports/ReportExportModal';
+import { ReportSingleExportModal } from '../modules/reports/ReportSingleExportModal';
 import {
   ReportTypeKey,
   ALL_REPORT_DEFINITIONS,
@@ -69,6 +72,7 @@ import {
   PrintableReportConfig,
 } from '../modules/reports/reports-export-utils';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
+import { useModulePermission } from '@/hooks/use-module-permission';
 
 type ReportSubView =
   | { type: 'none' }
@@ -78,6 +82,7 @@ type ReportSubView =
 type MainNavigationTab = 'hub' | 'summary' | 'ledger';
 
 export function ReportAndAnalysisView() {
+  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('report_analysis');
   const [activeTab, setActiveTab] = useState<MainNavigationTab>('hub');
   const [subView, setSubView] = useState<ReportSubView>({ type: 'none' });
   const [reports, setReports] = useLiveModuleData<ReportRecord[]>(
@@ -87,6 +92,12 @@ export function ReportAndAnalysisView() {
   );
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Global & Single Export Modals
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedReportsForExport, setSelectedReportsForExport] = useState<ReportRecord[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [reportForSingleExport, setReportForSingleExport] = useState<ReportRecord | null>(null);
 
   // Hub Category Filter & Search
   const [hubCategory, setHubCategory] = useState<'ALL' | 'PRODUCTION' | 'QUALITY' | 'COMPLIANCE' | 'EXECUTIVE'>('ALL');
@@ -164,23 +175,13 @@ export function ReportAndAnalysisView() {
     showToast(`Exported ${rpt.id} CSV`);
   };
 
+  const handleOpenGlobalExport = (preselected?: ReportRecord[]) => {
+    setSelectedReportsForExport(preselected || []);
+    setIsGlobalExportModalOpen(true);
+  };
+
   const handleExportAllReports = () => {
-    const rows = reports.map((r) => [
-      r.id,
-      r.title,
-      r.category,
-      r.period,
-      r.department,
-      r.generatedBy,
-      r.status,
-      r.format,
-    ]);
-    downloadCsv(
-      `all_quality_reports_${new Date().toISOString().split('T')[0]}`,
-      ['ID', 'Title', 'Category', 'Period', 'Department', 'Author', 'Status', 'Format'],
-      rows
-    );
-    showToast(`Exported ${reports.length} reports to CSV`);
+    handleOpenGlobalExport([]);
   };
 
   // Quick direct downloads for any catalog report directly from the hub cards
@@ -425,47 +426,69 @@ export function ReportAndAnalysisView() {
           >
             <Eye className="w-4 h-4" />
           </button>
-          <button
-            type="button"
-            onClick={() => handleExportCsv(rpt)}
-            className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-            title="Export CSV"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDeleteReport(rpt.id)}
-            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-            title="Delete Report"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setReportForSingleExport(rpt);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              title="Export Report (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-4 h-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => handleDeleteReport(rpt.id)}
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+              title="Delete Report"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       ),
     },
   ];
 
   const batchActions: BatchAction<ReportRecord>[] = [
-    {
-      label: 'Export Selected CSV',
-      icon: <Download className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        const rows = selected.map((s) => [s.id, s.title, s.category, s.period, s.status]);
-        downloadCsv(`selected_reports_${selected.length}`, ['ID', 'Title', 'Category', 'Period', 'Status'], rows);
-        showToast(`Exported ${selected.length} reports`);
-      },
-    },
-    {
-      label: 'Delete Selected',
-      variant: 'danger',
-      icon: <Trash2 className="w-3.5 h-3.5" />,
-      onClick: (selected) => {
-        const ids = new Set(selected.map((s) => s.id));
-        setReports((prev) => prev.filter((r) => !ids.has(r.id)));
-        showToast(`Deleted ${selected.length} reports`);
-      },
-    },
+    ...(canExport
+      ? [
+          {
+            label: 'Export Selected (PDF/Excel)',
+            icon: <FileDown className="w-3.5 h-3.5" />,
+            onClick: (selected: ReportRecord[]) => {
+              handleOpenGlobalExport(selected);
+            },
+          },
+          {
+            label: 'Export Selected CSV',
+            icon: <Download className="w-3.5 h-3.5" />,
+            onClick: (selected: ReportRecord[]) => {
+              const rows = selected.map((s) => [s.id, s.title, s.category, s.period, s.status]);
+              downloadCsv(`selected_reports_${selected.length}`, ['ID', 'Title', 'Category', 'Period', 'Status'], rows);
+              showToast(`Exported ${selected.length} reports`);
+            },
+          },
+        ]
+      : []),
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete Selected',
+            variant: 'danger' as const,
+            icon: <Trash2 className="w-3.5 h-3.5" />,
+            onClick: (selected: ReportRecord[]) => {
+              const ids = new Set(selected.map((s) => s.id));
+              setReports((prev) => prev.filter((r) => !ids.has(r.id)));
+              showToast(`Deleted ${selected.length} reports`);
+            },
+          },
+        ]
+      : []),
   ];
 
   // SUBVIEW 1: Interactive Fullscreen Synced Report Viewer (for any of the 22 reports)
@@ -524,23 +547,27 @@ export function ReportAndAnalysisView() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleExportAllReports}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 transition-colors cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-600" />
-              <span>Export Ledger</span>
-            </button>
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => handleOpenGlobalExport([])}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 transition-colors cursor-pointer"
+              >
+                <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                <span>Export Ledger</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => setIsNewModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Custom Report</span>
-            </button>
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => setIsNewModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Custom Report</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -724,34 +751,36 @@ export function ReportAndAnalysisView() {
                     </button>
 
                     {/* Quick Direct Download Action Icons */}
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleQuickDownloadCatalogCsv(def)}
-                        className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                        title="Quick Download CSV"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
+                    {canExport && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleQuickDownloadCatalogCsv(def)}
+                          className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                          title="Quick Download CSV"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleQuickDownloadCatalogExcel(def)}
-                        className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                        title="Quick Download Excel (.xls)"
-                      >
-                        <FileSpreadsheet className="w-3.5 h-3.5" />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickDownloadCatalogExcel(def)}
+                          className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                          title="Quick Download Excel (.xls)"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleQuickPrintCatalogPdf(def)}
-                        className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                        title="Quick Print or Save PDF"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickPrintCatalogPdf(def)}
+                          className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                          title="Quick Print or Save PDF"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -792,16 +821,18 @@ export function ReportAndAnalysisView() {
               ))}
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleExportAllReports}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-600" />
-                <span>Export Master Ledger</span>
-              </button>
-            </div>
+            {canExport && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenGlobalExport([])}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs transition-colors cursor-pointer"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Export Master Ledger</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 4 StatCards */}
@@ -1118,14 +1149,16 @@ export function ReportAndAnalysisView() {
                 <option value="DRAFT">Draft</option>
               </select>
 
-              <button
-                type="button"
-                onClick={handleExportAllReports}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-600" />
-                <span>Export Ledger</span>
-              </button>
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenGlobalExport([])}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs transition-colors cursor-pointer"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Export Ledger</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1136,6 +1169,9 @@ export function ReportAndAnalysisView() {
             batchActions={batchActions}
             dense
             emptyMessage="No reports found matching your current filter criteria."
+            moduleKey="report_analysis"
+            canExport={canExport}
+            canDelete={canDelete}
           />
         </div>
       )}
@@ -1145,6 +1181,24 @@ export function ReportAndAnalysisView() {
         isOpen={isNewModalOpen}
         onClose={() => setIsNewModalOpen(false)}
         onSave={handleSaveNewReport}
+      />
+
+      {/* Global Export Modal */}
+      <ReportExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allReports={reports}
+        selectedReports={selectedReportsForExport}
+      />
+
+      {/* Single Report Export Modal */}
+      <ReportSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setReportForSingleExport(null);
+        }}
+        report={reportForSingleExport}
       />
     </div>
   );

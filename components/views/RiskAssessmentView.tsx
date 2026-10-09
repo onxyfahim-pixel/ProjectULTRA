@@ -28,6 +28,7 @@ import {
   ArrowUpDown,
   RefreshCw,
   Package,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -39,6 +40,8 @@ import { MOCK_RISK_FMEAS } from '@/lib/db/modules-mock-data';
 import { RiskAssessmentEntryPage } from '../modules/risk-assessment/RiskAssessmentEntryPage';
 import { RiskAssessmentDetailsPage } from '../modules/risk-assessment/RiskAssessmentDetailsPage';
 import { DeleteRiskAssessmentModal } from '../modules/risk-assessment/DeleteRiskAssessmentModal';
+import { RiskAssessmentExportModal } from '../modules/risk-assessment/RiskAssessmentExportModal';
+import { RiskAssessmentSingleExportModal } from '../modules/risk-assessment/RiskAssessmentSingleExportModal';
 import { getRiskLevel, getRiskLevelBadge } from '../modules/risk-assessment/riskAssessmentData';
 import { RISK_SECTIONS, RISK_SECTION_ORDER } from '../modules/risk-assessment/riskAssessmentSections';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
@@ -61,6 +64,12 @@ export function RiskAssessmentView() {
     MOCK_RISK_FMEAS,
     STORAGE_KEY
   );
+
+  // Export Modals State
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedRecordsForExport, setSelectedRecordsForExport] = useState<RiskFmeaItem[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [recordForSingleExport, setRecordForSingleExport] = useState<RiskFmeaItem | null>(null);
 
   // Dedicated Separate Pages (Details, Add, Edit)
   const [subView, setSubView] = useState<RiskSubView>({ type: 'none' });
@@ -451,6 +460,21 @@ export function RiskAssessmentView() {
             <Eye className="w-3.5 h-3.5" />
           </button>
 
+          {/* Export Individual Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setRecordForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+              title="Export FMEA Report (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Edit Button (Pencil) */}
           {canEdit && (
             <button
@@ -490,6 +514,14 @@ export function RiskAssessmentView() {
           isOpen: true,
           records: selected,
         });
+      },
+    }] : []),
+    ...(canExport ? [{
+      label: 'Export Selected (PDF/Excel)',
+      icon: <FileDown className="w-3.5 h-3.5" />,
+      onClick: (selected: RiskFmeaItem[]) => {
+        setSelectedRecordsForExport(selected);
+        setIsGlobalExportModalOpen(true);
       },
     }] : []),
   ];
@@ -561,16 +593,32 @@ export function RiskAssessmentView() {
           },
         ]}
         actions={
-          canCreate ? (
-            <button
-              type="button"
-              onClick={() => setSubView({ type: 'add' })}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Conduct Risk Assessment</span>
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRecordsForExport(records);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs"
+                title="Export Risk Assessment Register (PDF / Excel / CSV)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span>Export Register</span>
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => setSubView({ type: 'add' })}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Conduct Risk Assessment</span>
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -922,6 +970,24 @@ export function RiskAssessmentView() {
           />
         </div>
       )}
+
+      {/* GLOBAL EXPORT MODAL */}
+      <RiskAssessmentExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allRecords={records}
+        selectedRecords={selectedRecordsForExport}
+      />
+
+      {/* INDIVIDUAL EXPORT MODAL */}
+      <RiskAssessmentSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setRecordForSingleExport(null);
+        }}
+        record={recordForSingleExport}
+      />
     </div>
   );
 }

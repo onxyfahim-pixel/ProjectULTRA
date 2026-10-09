@@ -1,5 +1,9 @@
 import { InventoryItem, ReceiveRecord, IssueRecord } from '@/lib/types/erp';
-import { loadPdfHeaderSettings, renderPdfHeaderHtml } from '@/lib/pdf/pdf-header-store';
+import {
+  loadPdfHeaderSettings,
+  renderPdfHeaderHtml,
+  getModuleExportConfig,
+} from '@/lib/pdf/pdf-header-store';
 
 export type FooterSignatureMode = 'dual' | 'single' | 'none';
 
@@ -127,12 +131,13 @@ export function exportStockSummaryPdf(
 
     const today = new Date().toISOString().split('T')[0];
     const pdfSettings = loadPdfHeaderSettings();
+    const config = getModuleExportConfig(pdfSettings, 'inventory', 'register');
     const dynamicHeaderHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'MASTER STOCK LEDGER & MATERIAL INVENTORY BALANCE',
-      `INV-STK-${today.replace(/-/g, '')}`,
+      config.title,
+      config.fullDocCode,
       today,
-      'Central Raw Material Stores & Warehouse Logistics'
+      config.department
     );
 
     const kpis = computeStockKpis(items);
@@ -424,12 +429,13 @@ export function exportSingleStockItemPdf(
 
     const today = new Date().toISOString().split('T')[0];
     const pdfSettings = loadPdfHeaderSettings();
+    const config = getModuleExportConfig(pdfSettings, 'inventory', 'single', item.sku);
     const dynamicHeaderHtml = renderPdfHeaderHtml(
       pdfSettings,
-      `RAW MATERIAL SPECIFICATION & STOCK TAG: SKU ${item.sku}`,
-      `SPEC-${item.sku}`,
+      config.title,
+      config.fullDocCode,
       today,
-      'Warehouse Inventory Control & Quality Audit'
+      config.department
     );
 
     const val = (item.quantityMeters || 0) * (item.unitCost || 0);

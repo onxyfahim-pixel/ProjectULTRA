@@ -1,5 +1,9 @@
 import { QualityGoal } from '@/lib/types/modules';
-import { loadPdfHeaderSettings, renderPdfHeaderHtml } from '@/lib/pdf/pdf-header-store';
+import {
+  loadPdfHeaderSettings,
+  renderPdfHeaderHtml,
+  getModuleExportConfig,
+} from '@/lib/pdf/pdf-header-store';
 
 export type FooterSignatureMode = 'dual' | 'single' | 'none';
 
@@ -69,6 +73,7 @@ export function exportQualityGoalsSummaryPdf(
 ): void {
   try {
     const pdfSettings = loadPdfHeaderSettings();
+    const config = getModuleExportConfig(pdfSettings, 'quality_goals', 'register');
     const metrics = computeGoalsReportKpis(goals);
     const dateStr = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
@@ -76,13 +81,12 @@ export function exportQualityGoalsSummaryPdf(
       day: 'numeric',
     });
 
-    const today = new Date().toISOString().split('T')[0];
     const headerHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'QUALITY GOALS & STRATEGIC OBJECTIVES REGISTER',
-      `QG-REG-${today.replace(/-/g, '')}`,
+      config.title,
+      config.fullDocCode,
       dateStr,
-      'ISO 9001:2015 Clause 6.2 Quality Policy & Strategic Mandates'
+      config.department
     );
 
     const rowsHtml = goals
@@ -512,6 +516,8 @@ export function exportQualityGoalsSummaryExcel(goals: QualityGoal[], scopeLabel:
 export function exportSingleQualityGoalPdf(goal: QualityGoal): void {
   try {
     const pdfSettings = loadPdfHeaderSettings();
+    const config = getModuleExportConfig(pdfSettings, 'quality_goals', 'single', goal.goalCode);
+
     const dateStr = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -520,10 +526,10 @@ export function exportSingleQualityGoalPdf(goal: QualityGoal): void {
 
     const headerHtml = renderPdfHeaderHtml(
       pdfSettings,
-      'QUALITY GOAL CHARTER & ACHIEVEMENT REPORT',
-      goal.goalCode || 'QG-2026',
+      config.title,
+      config.fullDocCode,
       dateStr,
-      'Strategic Quality Objective Implementation Charter'
+      config.department
     );
 
     const badge = getGoalStatusBadgeStyle(goal.status);

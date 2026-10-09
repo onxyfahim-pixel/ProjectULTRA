@@ -25,6 +25,7 @@ import {
   UserCheck,
   Wrench,
   GraduationCap,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -38,6 +39,8 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { SopDetailsPage } from '../modules/sop/SopDetailsPage';
 import { SopEntryPage } from '../modules/sop/SopEntryPage';
 import { DeleteSopModal } from '../modules/sop/DeleteSopModal';
+import { SopExportModal } from '../modules/sop/SopExportModal';
+import { SopSingleExportModal } from '../modules/sop/SopSingleExportModal';
 
 type SopSubView =
   | { type: 'none' }
@@ -73,6 +76,12 @@ export function SopManagementView() {
     isOpen: boolean;
     sops: SopItem[];
   } | null>(null);
+
+  // Export Modals State
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedSopsForExport, setSelectedSopsForExport] = useState<SopItem[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [sopForSingleExport, setSopForSingleExport] = useState<SopItem | null>(null);
 
   // Filters & Search
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
@@ -383,6 +392,21 @@ export function SopManagementView() {
             <Eye className="w-3.5 h-3.5" />
           </button>
 
+          {/* Export Single SOP Modal Button */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setSopForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1 rounded-md text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors cursor-pointer"
+              title="Export SOP Procedure Manual"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Edit Button (Pencil) - Exactly styled like Document Control Module */}
           {canEdit && (
             <button
@@ -425,6 +449,14 @@ export function SopManagementView() {
 
   // Batch actions
   const batchActions: BatchAction<SopItem>[] = [
+    ...(canExport ? [{
+      label: 'Export SOP Register',
+      icon: <FileDown className="w-4 h-4" />,
+      onClick: (selected: SopItem[]) => {
+        setSelectedSopsForExport(selected);
+        setIsGlobalExportModalOpen(true);
+      },
+    }] : []),
     ...(canDelete ? [{
       label: 'Delete Selected',
       variant: 'danger' as const,
@@ -495,16 +527,32 @@ export function SopManagementView() {
           },
         ]}
         actions={
-          canCreate ? (
-            <button
-              type="button"
-              onClick={() => setSubView({ type: 'add' })}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New SOP</span>
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSopsForExport([]);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+                title="Export SOP Master Register"
+              >
+                <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                <span className="hidden sm:inline">Export Register</span>
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => setSubView({ type: 'add' })}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New SOP</span>
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -780,6 +828,24 @@ export function SopManagementView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global SOP Export Modal */}
+      <SopExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allSops={sops}
+        selectedSops={selectedSopsForExport}
+      />
+
+      {/* Single SOP Export Modal */}
+      <SopSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setSopForSingleExport(null);
+        }}
+        sop={sopForSingleExport}
+      />
     </div>
   );
 }

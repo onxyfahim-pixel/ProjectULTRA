@@ -62,6 +62,7 @@ import {
   addProductionDefect,
 } from '@/lib/db/production-defects-store';
 import { isSewingSectionRecord } from '@/lib/db/production-records-store';
+import { NotificationService } from '@/lib/notifications/notification-service';
 
 export interface AddProductionRecordPageProps {
   initialOrder?: ProductionOrder | null;
@@ -77,19 +78,49 @@ const MANUFACTURING_UNITS = [
   'Unit 04 (Gazipur Export Zone)',
 ];
 
-const SECTIONS_AND_LINES = [
-  { id: 'Line 01', label: 'Sewing Line 01 (Knit Tops)' },
-  { id: 'Line 02', label: 'Sewing Line 02 (Knit Polo & Fleece)' },
-  { id: 'Line 03', label: 'Sewing Line 03 (Woven Bottoms)' },
-  { id: 'Line 04', label: 'Sewing Line 04 (Heavy Denim)' },
-  { id: 'Line 05', label: 'Sewing Line 05 (Precision Knit)' },
-  { id: 'Line 06', label: 'Sewing Line 06 (Fleece Assembly)' },
-  { id: 'Line 07', label: 'Sewing Line 07 (Cargo & Utility)' },
-  { id: 'Line 08', label: 'Sewing Line 08 (Intimates & Activewear)' },
-  { id: 'Cutting', label: 'Cutting Floor Section 01' },
-  { id: 'Finishing', label: 'Finishing & Packing Section 01' },
-  { id: 'Washing', label: 'Industrial Washing Floor' },
+const STANDARD_SECTIONS = [
+  'Sewing Floor',
+  'Cutting Floor',
+  'Finishing & Packing',
+  'Industrial Washing',
+  'Packing & Warehouse',
+  'Quality Assurance (QA)',
 ];
+
+const SECTION_LINE_PRESETS: Record<string, Array<{ id: string; name: string; chief: string; qc: string }>> = {
+  'Sewing Floor': [
+    { id: 'Line 01', name: 'Sewing Line 01 (Knit Tops)', chief: 'Kabir Hossain', qc: 'Md. Rafiqul Islam' },
+    { id: 'Line 02', name: 'Sewing Line 02 (Knit Polo & Fleece)', chief: 'Jahangir Alam', qc: 'Mizanur Rahman' },
+    { id: 'Line 03', name: 'Sewing Line 03 (Woven Bottoms)', chief: 'Abul Kashem', qc: 'Nasir Uddin' },
+    { id: 'Line 04', name: 'Sewing Line 04 (Heavy Denim)', chief: 'Mahbubur Rahman', qc: 'Al-Amin Hossain' },
+    { id: 'Line 05', name: 'Sewing Line 05 (Precision Knit)', chief: 'Shahinur Islam', qc: 'Suman Roy' },
+    { id: 'Line 06', name: 'Sewing Line 06 (Fleece Assembly)', chief: 'Delowar Hossain', qc: 'Rokonuzzaman' },
+    { id: 'Line 07', name: 'Sewing Line 07 (Cargo & Utility)', chief: 'Kamrul Hasan', qc: 'Mehedi Hasan' },
+    { id: 'Line 08', name: 'Sewing Line 08 (Intimates & Activewear)', chief: 'Shahadat Hossain', qc: 'Anisur Rahman' },
+  ],
+  'Cutting Floor': [
+    { id: 'CUT-01', name: 'Cutting Table 01 (Gerber CNC Auto-Cutter)', chief: 'Monir Hossain', qc: 'Harunur Rashid' },
+    { id: 'CUT-02', name: 'Cutting Table 02 (Manual Spreader & Band Knife)', chief: 'Selim Reza', qc: 'Biplob Hossain' },
+    { id: 'CUT-03', name: 'Cutting Table 03 (Precision Laser Cutter)', chief: 'Tanvir Ahmed', qc: 'Faruk Hossain' },
+  ],
+  'Finishing & Packing': [
+    { id: 'FIN-01', name: 'Finishing Line 01 (Steam Tunnel Pressing)', chief: 'Golam Rabbani', qc: 'Zahirul Islam' },
+    { id: 'FIN-02', name: 'Finishing Line 02 (Thread Trimming & Ironing)', chief: 'Moklesur Rahman', qc: 'Shakil Khan' },
+    { id: 'FIN-03', name: 'Needle & Metal Detection Station 01', chief: 'Anwar Parvez', qc: 'Nazrul Islam' },
+  ],
+  'Industrial Washing': [
+    { id: 'WASH-01', name: 'Industrial Washing Bay 01 (Enzyme & Stone)', chief: 'Shah Alam', qc: 'Habibur Rahman' },
+    { id: 'WASH-02', name: 'Industrial Washing Bay 02 (Ozone & Laser)', chief: 'Nurul Islam', qc: 'Mamunur Rashid' },
+  ],
+  'Packing & Warehouse': [
+    { id: 'PACK-01', name: 'Carton Boxing & Barcode Packing Line 01', chief: 'Saiful Islam', qc: 'Ashikur Rahman' },
+    { id: 'PACK-02', name: 'Polybag & Retail Hanger Line 02', chief: 'Belal Hossain', qc: 'Sohel Rana' },
+  ],
+  'Quality Assurance (QA)': [
+    { id: 'QA-01', name: 'AQL Pre-Final & Final Audit Chamber 01', chief: 'Md. Rafiqul Islam', qc: 'Senior QA Manager' },
+    { id: 'QA-02', name: 'End-Line 100% Quality Inspection Post', chief: 'Tareq Mahmud', qc: 'QC Lead Auditor' },
+  ],
+};
 
 const SHIFT_OPTIONS = [
   'Shift A (Morning 08:00 - 16:30)',
@@ -259,23 +290,66 @@ export function AddProductionRecordPage({
     return () => window.removeEventListener('erp_production_management_updated', loadManagedData);
   }, [initialOrder]);
 
-  const handleSelectManagedLine = (lineIdOrName: string) => {
-    const found = managedLines.find(
-      (l) => l.id === lineIdOrName || l.name === lineIdOrName || l.lineCode === lineIdOrName
+  const handleSelectSection = (newSection: string) => {
+    setSection(newSection);
+    const presets = SECTION_LINE_PRESETS[newSection] || [];
+    const matchingManaged = managedLines.filter(
+      (l) => l.sectionName === newSection || l.name.toLowerCase().includes(newSection.toLowerCase().slice(0, 3))
     );
-    if (found) {
-      setSelectedManagedLine(found);
-      setSection(found.name);
-      setLineId(found.lineCode || found.id);
-      if (found.unitName) setUnit(found.unitName);
-      if (found.lineChief) setSupervisorName(found.lineChief);
-      if (found.qualityController) setQualityInspector(found.qualityController);
-      if (found.operatorCount) setOperatorCount(found.operatorCount);
-      showToast(`Linked ${found.name} — Chief: ${found.lineChief}, QC: ${found.qualityController}`);
+    if (matchingManaged.length > 0) {
+      handleSelectLine(matchingManaged[0].id);
+    } else if (presets.length > 0) {
+      handleSelectLine(presets[0].id);
     } else {
-      setSection(lineIdOrName);
+      setLineId('Line 01');
     }
   };
+
+  const handleSelectLine = (selectedIdOrName: string) => {
+    const foundManaged = managedLines.find(
+      (l) => l.id === selectedIdOrName || l.name === selectedIdOrName || l.lineCode === selectedIdOrName
+    );
+    if (foundManaged) {
+      setSelectedManagedLine(foundManaged);
+      setLineId(foundManaged.lineCode || foundManaged.id);
+      if (foundManaged.unitName) setUnit(foundManaged.unitName);
+      if (foundManaged.lineChief) setSupervisorName(foundManaged.lineChief);
+      if (foundManaged.qualityController) setQualityInspector(foundManaged.qualityController);
+      if (foundManaged.operatorCount) setOperatorCount(foundManaged.operatorCount);
+      showToast(`Linked ${foundManaged.name} — Chief: ${foundManaged.lineChief}, QC: ${foundManaged.qualityController}`);
+      return;
+    }
+
+    const allPresets = Object.values(SECTION_LINE_PRESETS).flat();
+    const foundPreset = allPresets.find((p) => p.id === selectedIdOrName || p.name === selectedIdOrName);
+    if (foundPreset) {
+      setLineId(foundPreset.id);
+      if (foundPreset.chief) setSupervisorName(foundPreset.chief);
+      if (foundPreset.qc) setQualityInspector(foundPreset.qc);
+      showToast(`Linked ${foundPreset.name} — Chief: ${foundPreset.chief}, QC: ${foundPreset.qc}`);
+    } else {
+      setLineId(selectedIdOrName);
+    }
+  };
+
+  const availableLinesForSection = useMemo(() => {
+    const matchingManaged = managedLines.filter((l) => {
+      const matchSec =
+        !section ||
+        l.sectionName === section ||
+        l.name.toLowerCase().includes(section.toLowerCase().slice(0, 3));
+      return matchSec;
+    });
+    if (matchingManaged.length > 0) {
+      return matchingManaged.map((l) => ({
+        id: l.id,
+        name: `${l.name} (${l.lineCode || l.id})`,
+        chief: l.lineChief,
+        qc: l.qualityController,
+      }));
+    }
+    return SECTION_LINE_PRESETS[section] || SECTION_LINE_PRESETS['Sewing Floor'] || [];
+  }, [managedLines, section]);
 
   // PO Auto-Suggest State
   const [poSearchFocus, setPoSearchFocus] = useState<boolean>(false);
@@ -765,6 +839,51 @@ export function AddProductionRecordPage({
     };
 
     onSave(orderToSave);
+
+    // Dispatch real-time role-based notifications
+    try {
+      const cfg = NotificationService.getConfig();
+      const currentDhu = orderToSave.dhuRate || 0;
+      if (currentDhu >= (cfg.dhuThresholdPercent ?? 3.0)) {
+        NotificationService.triggerAlert({
+          alertTypeId: 'dhu_alert',
+          title: `DHU Quality Alert: ${orderToSave.lineId || orderToSave.section} (${currentDhu.toFixed(1)}% DHU)`,
+          message: `Quality DHU spiked to ${currentDhu.toFixed(1)}% on ${orderToSave.lineId || orderToSave.section} for style "${orderToSave.styleName}" (PO ${orderToSave.orderNumber}). Immediate line inspection required.`,
+          severity: 'urgent',
+          module: 'quality',
+          linkId: orderToSave.orderNumber,
+        });
+      }
+
+      const targetQty = orderToSave.targetQuantity || 0;
+      const completedQty = orderToSave.completedQuantity || 0;
+      if (targetQty > 0) {
+        const deficitPct = ((targetQty - completedQty) / targetQty) * 100;
+        if (deficitPct >= (cfg.targetDeficitPercent ?? 15.0) && completedQty < targetQty) {
+          NotificationService.triggerAlert({
+            alertTypeId: 'target_alert',
+            title: `Target Deficit Alert: ${orderToSave.lineId || orderToSave.section} (-${deficitPct.toFixed(0)}%)`,
+            message: `Line output deficit of ${deficitPct.toFixed(0)}% detected (${completedQty.toLocaleString()} / ${targetQty.toLocaleString()} pcs) on ${orderToSave.lineId || orderToSave.section} for order ${orderToSave.orderNumber}.`,
+            severity: 'warning',
+            module: 'production',
+            linkId: orderToSave.orderNumber,
+          });
+        }
+      }
+
+      if (!orderToSave.hourlyReports || orderToSave.hourlyReports.length === 0) {
+        NotificationService.triggerAlert({
+          alertTypeId: 'line_report_missing',
+          title: `Line Report Not Submitted: ${orderToSave.lineId || orderToSave.section}`,
+          message: `Mandatory hourly QC/production report is missing for ${orderToSave.lineId || orderToSave.section}. Line supervisor report pending.`,
+          severity: 'urgent',
+          module: 'production',
+          linkId: orderToSave.orderNumber,
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to dispatch notification alert:', err);
+    }
   };
 
   return (
@@ -1171,36 +1290,58 @@ export function AddProductionRecordPage({
             </select>
           </div>
 
-          {/* Section / Production Line with Auto-Link from Management */}
+          {/* Manufacturing Floor Section */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                Manufacturing Section <span className="text-rose-500">*</span>
+              </label>
+              <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                Floor Dept
+              </span>
+            </div>
+            <select
+              value={section}
+              onChange={(e) => handleSelectSection(e.target.value)}
+              className="w-full px-3 py-2 text-xs font-semibold bg-white border border-indigo-200 rounded-lg text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-xs cursor-pointer"
+              required
+            >
+              {(managedSections.length > 0 ? managedSections.map((s) => s.name) : STANDARD_SECTIONS).map(
+                (secItem) => (
+                  <option key={secItem} value={secItem}>
+                    {secItem}
+                  </option>
+                )
+              )}
+            </select>
+            <p className="text-[10px] text-slate-500">Department / phase of garment manufacturing.</p>
+          </div>
+
+          {/* Distinct Production Line / Workstation */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <Factory className="w-3.5 h-3.5 text-blue-600" />
-                Floor Section & Line <span className="text-rose-500">*</span>
+                Line / Workstation <span className="text-rose-500">*</span>
               </label>
               <span className="text-[10px] font-mono text-blue-600 font-semibold">
-                From Management
+                {availableLinesForSection.length} Lines Available
               </span>
             </div>
             <select
-              value={selectedManagedLine?.id || section}
-              onChange={(e) => handleSelectManagedLine(e.target.value)}
+              value={selectedManagedLine?.id || lineId}
+              onChange={(e) => handleSelectLine(e.target.value)}
               className="w-full px-3 py-2 text-xs font-semibold bg-white border border-blue-300 rounded-lg text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 shadow-xs cursor-pointer"
+              required
             >
-              {managedLines.length > 0 ? (
-                managedLines.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name} ({l.lineCode}) • Chief: {l.lineChief} • QC: {l.qualityController}
-                  </option>
-                ))
-              ) : (
-                SECTIONS_AND_LINES.map((s) => (
-                  <option key={s.id} value={s.label}>
-                    {s.label}
-                  </option>
-                ))
-              )}
+              {availableLinesForSection.map((lineItem) => (
+                <option key={lineItem.id} value={lineItem.id}>
+                  {lineItem.name} • Chief: {lineItem.chief || 'Lead'} • QC: {lineItem.qc || 'Inspector'}
+                </option>
+              ))}
             </select>
+            <p className="text-[10px] text-slate-500">Specific line/table inside the selected section.</p>
           </div>
 
           {/* Supervisor / Line Chief Name */}

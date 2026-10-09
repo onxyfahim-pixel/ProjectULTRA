@@ -25,6 +25,7 @@ import {
   User,
   MapPin,
   HelpCircle,
+  FileDown,
 } from 'lucide-react';
 import { DataTable, ColumnDef } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -51,6 +52,8 @@ import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { AnnualMasterCalendarView } from '../modules/training/AnnualMasterCalendarView';
 import { DeleteTrainingModal } from '../modules/training/DeleteTrainingModal';
+import { TrainingExportModal } from '../modules/training/TrainingExportModal';
+import { TrainingSingleExportModal } from '../modules/training/TrainingSingleExportModal';
 
 type TrainingSubView =
   | { type: 'none' }
@@ -106,6 +109,12 @@ export function TrainingView() {
     itemType: 'COURSE' | 'EXAM' | 'EVALUATION';
     items: any[];
   } | null>(null);
+
+  // Export Modal States
+  const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [selectedCoursesForExport, setSelectedCoursesForExport] = useState<TrainingMatrixItem[]>([]);
+  const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
+  const [courseForSingleExport, setCourseForSingleExport] = useState<TrainingMatrixItem | null>(null);
 
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -413,6 +422,21 @@ export function TrainingView() {
             </button>
           )}
 
+          {/* Export Course Dossier */}
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setCourseForSingleExport(item);
+                setIsSingleExportModalOpen(true);
+              }}
+              className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors cursor-pointer"
+              title="Export Course Dossier (PDF / Excel / CSV)"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Delete */}
           {canDelete && (
             <button
@@ -652,6 +676,22 @@ export function TrainingView() {
             { id: 'exam_papers', label: 'Exam Papers', count: examPapers.length },
             { id: 'evaluations', label: 'Evaluations', count: evaluations.length },
           ]}
+          actions={
+            canExport ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCoursesForExport(courses);
+                  setIsGlobalExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                title="Export Training Matrix (PDF / Excel / CSV)"
+              >
+                <FileDown className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Export Matrix</span>
+              </button>
+            ) : undefined
+          }
         />
       )}
 
@@ -958,9 +998,10 @@ export function TrainingView() {
                   }] : []),
                   ...(canExport ? [{
                     label: 'Export Matrix',
-                    icon: <Download className="w-3.5 h-3.5" />,
+                    icon: <FileDown className="w-3.5 h-3.5" />,
                     onClick: (selected: TrainingMatrixItem[]) => {
-                      showToast(`Exported ${selected.length} training records`);
+                      setSelectedCoursesForExport(selected);
+                      setIsGlobalExportModalOpen(true);
                     },
                   }] : []),
                 ]}
@@ -1063,6 +1104,24 @@ export function TrainingView() {
           onCancel={() => setDeleteModal(null)}
         />
       )}
+
+      {/* Global & Batch Training Matrix Export Modal */}
+      <TrainingExportModal
+        isOpen={isGlobalExportModalOpen}
+        onClose={() => setIsGlobalExportModalOpen(false)}
+        allCourses={courses}
+        selectedCourses={selectedCoursesForExport}
+      />
+
+      {/* Individual Training Program Export Modal */}
+      <TrainingSingleExportModal
+        isOpen={isSingleExportModalOpen}
+        onClose={() => {
+          setIsSingleExportModalOpen(false);
+          setCourseForSingleExport(null);
+        }}
+        course={courseForSingleExport}
+      />
     </div>
   );
 }

@@ -158,31 +158,32 @@ const SETTINGS_TABS: SettingsTabDef[] = [
 ];
 
 export function SettingsView() {
-  const { user } = useErpAuth();
+  const { user, can } = useErpAuth();
   const isSuperAdmin = Boolean(user?.isSuperAdmin || user?.role === 'Super Admin' || user?.role === 'ADMIN');
+  const canManageSettings = isSuperAdmin || can('settings', 'view');
 
-  // Non-Super Admin users can ONLY access User Profile and Appearance Setting
+  // Full settings access for Super Admin and roles with settings permission; profile, appearance, notification for others
   const visibleTabs = React.useMemo(() => {
-    if (isSuperAdmin) {
+    if (canManageSettings) {
       return SETTINGS_TABS;
     }
-    return SETTINGS_TABS.filter((t) => t.id === 'user_profile' || t.id === 'appearance');
-  }, [isSuperAdmin]);
+    return SETTINGS_TABS.filter((t) => t.id === 'user_profile' || t.id === 'appearance' || t.id === 'notification');
+  }, [canManageSettings]);
 
   const [activeTab, setActiveTab] = useState<SettingsTabId>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('settings_active_tab') as SettingsTabId;
-      if (saved && (isSuperAdmin ? SETTINGS_TABS : visibleTabs).some((t) => t.id === saved)) return saved;
+      if (saved && (canManageSettings ? SETTINGS_TABS : visibleTabs).some((t) => t.id === saved)) return saved;
     }
-    return isSuperAdmin ? 'overview' : 'user_profile';
+    return canManageSettings ? 'overview' : 'user_profile';
   });
 
-  // Ensure non-super admin cannot remain on a restricted tab
+  // Ensure user cannot remain on an unauthorized tab
   React.useEffect(() => {
-    if (!isSuperAdmin && activeTab !== 'user_profile' && activeTab !== 'appearance') {
+    if (!visibleTabs.some((t) => t.id === activeTab)) {
       setActiveTab('user_profile');
     }
-  }, [isSuperAdmin, activeTab]);
+  }, [visibleTabs, activeTab]);
 
   React.useEffect(() => {
     const handleSubtabNav = (e: any) => {

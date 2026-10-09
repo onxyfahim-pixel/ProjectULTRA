@@ -115,9 +115,19 @@ export function InspectionsView({
   orders = [],
 }: InspectionsViewProps) {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
-  const [records, setRecords] = useState<InspectionRecord[]>(
-    propRecords && propRecords.length > 0 ? propRecords : INITIAL_INSPECTIONS
-  );
+  const [records, setRecords] = useState<InspectionRecord[]>(() => {
+    if (propRecords && propRecords.length > 0) return propRecords;
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('erp_inspections_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return INITIAL_INSPECTIONS;
+  });
   const { user, permissions } = useErpAuth();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('inspections');
 
@@ -196,6 +206,28 @@ export function InspectionsView({
     };
     window.addEventListener('erp_buyer_orders_updated', syncFromStorage);
     return () => window.removeEventListener('erp_buyer_orders_updated', syncFromStorage);
+  }, []);
+
+  useEffect(() => {
+    const syncInspectionsFromStorage = () => {
+      try {
+        const stored = localStorage.getItem('erp_inspections_v1');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRecords(parsed);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync inspections from localStorage', err);
+      }
+    };
+    window.addEventListener('erp_inspection_records_updated', syncInspectionsFromStorage);
+    window.addEventListener('erp_inspections_updated', syncInspectionsFromStorage);
+    return () => {
+      window.removeEventListener('erp_inspection_records_updated', syncInspectionsFromStorage);
+      window.removeEventListener('erp_inspections_updated', syncInspectionsFromStorage);
+    };
   }, []);
 
   // Delivery table search & filter states
@@ -551,6 +583,14 @@ export function InspectionsView({
       onUpdateRecords(updatedList);
     }
 
+    // Persist locally and trigger reactive cross-module sync
+    try {
+      localStorage.setItem('erp_inspections_v1', JSON.stringify(updatedList));
+      window.dispatchEvent(new CustomEvent('erp_inspection_records_updated'));
+      window.dispatchEvent(new CustomEvent('erp_inspections_updated'));
+      window.dispatchEvent(new CustomEvent('erp_wip_records_updated'));
+    } catch {}
+
     // Attempt backend persistence
     try {
       if (existingIndex >= 0) {
@@ -581,6 +621,12 @@ export function InspectionsView({
     const updated = [duplicated, ...records];
     setRecords(updated);
     if (onUpdateRecords) onUpdateRecords(updated);
+    try {
+      localStorage.setItem('erp_inspections_v1', JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('erp_inspection_records_updated'));
+      window.dispatchEvent(new CustomEvent('erp_inspections_updated'));
+      window.dispatchEvent(new CustomEvent('erp_wip_records_updated'));
+    } catch {}
     showToast(`Duplicated audit as ${duplicated.inspectionCode}`);
   };
 
@@ -590,6 +636,12 @@ export function InspectionsView({
     const updated = records.filter((r) => !deleteIds.includes(r.id));
     setRecords(updated);
     if (onUpdateRecords) onUpdateRecords(updated);
+    try {
+      localStorage.setItem('erp_inspections_v1', JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('erp_inspection_records_updated'));
+      window.dispatchEvent(new CustomEvent('erp_inspections_updated'));
+      window.dispatchEvent(new CustomEvent('erp_wip_records_updated'));
+    } catch {}
 
     const count = deleteModal.records.length;
     showToast(count === 1 ? `Deleted audit ${deleteModal.records[0].inspectionCode}` : `Deleted ${count} inspection audits`);
