@@ -63,6 +63,13 @@ import {
 } from '@/lib/db/production-defects-store';
 import { isSewingSectionRecord } from '@/lib/db/production-records-store';
 import { NotificationService } from '@/lib/notifications/notification-service';
+import {
+  getSectionTargetForOrder,
+  normalizeSectionKey,
+  getDefaultSectionTargets,
+  calculateHourlyTarget,
+  SECTION_METADATA,
+} from '@/lib/utils/section-target-utils';
 
 export interface AddProductionRecordPageProps {
   initialOrder?: ProductionOrder | null;
@@ -216,6 +223,18 @@ export function AddProductionRecordPage({
   const [targetQuantity, setTargetQuantity] = useState<number>(
     initialOrder?.targetQuantity || 15000
   );
+  const [hourlyTarget, setHourlyTarget] = useState<number>(() => {
+    if (initialOrder?.hourlyTarget && initialOrder.hourlyTarget > 0) return initialOrder.hourlyTarget;
+    if (initialOrder?.targetQuantity && initialOrder.targetQuantity > 0 && initialOrder.targetQuantity <= 2500) {
+      return Math.round(initialOrder.targetQuantity / 8);
+    }
+    return 150;
+  });
+  const [shiftTarget, setShiftTarget] = useState<number>(() => {
+    if (initialOrder?.shiftTarget && initialOrder.shiftTarget > 0) return initialOrder.shiftTarget;
+    if (initialOrder?.hourlyTarget && initialOrder.hourlyTarget > 0) return initialOrder.hourlyTarget * 8;
+    return 1200;
+  });
   const [completedQuantity, setCompletedQuantity] = useState<number>(
     initialOrder?.completedQuantity || 0
   );
@@ -292,6 +311,26 @@ export function AddProductionRecordPage({
 
   const handleSelectSection = (newSection: string) => {
     setSection(newSection);
+
+    // Section-Wise Target resolution from active Buyer Order WIP & IE Planning
+    const activePO =
+      selectedBuyerOrder ||
+      availableBuyerOrders.find((bo) => bo.orderNumber === orderNumber);
+    const secTarget = getSectionTargetForOrder(activePO, newSection);
+    setSmvTarget(secTarget.smv);
+    setHourlyTarget(secTarget.hourlyTarget);
+    setShiftTarget(secTarget.dailyTarget || secTarget.hourlyTarget * 8);
+    if (secTarget.manpower) setOperatorCount(secTarget.manpower);
+    if (secTarget.targetEfficiency) setEfficiencyPercent(secTarget.targetEfficiency);
+
+    // Sync all hourly inspection slots to this section's hourly target
+    setHourlyReports((prev) =>
+      prev.map((h) => ({
+        ...h,
+        targetQty: secTarget.hourlyTarget,
+      }))
+    );
+
     const presets = SECTION_LINE_PRESETS[newSection] || [];
     const matchingManaged = managedLines.filter(
       (l) => l.sectionName === newSection || l.name.toLowerCase().includes(newSection.toLowerCase().slice(0, 3))
@@ -303,6 +342,8 @@ export function AddProductionRecordPage({
     } else {
       setLineId('Line 01');
     }
+
+    showToast(`✓ Switched to ${secTarget.sectionName}: Hourly Target ${secTarget.hourlyTarget} pcs/hr (SMV ${secTarget.smv}m) linked from WIP/IE`);
   };
 
   const handleSelectLine = (selectedIdOrName: string) => {
@@ -417,49 +458,65 @@ export function AddProductionRecordPage({
     const desc = fabricBOM ? fabricBOM.description : bo.styleDescription;
     setItemInfo(desc);
 
-    // Check if SMV is specified in Buyer Order; fallback to garment type heuristic
-    let calculatedSmv = 18.5;
-    if (bo.smv && bo.smv > 0) {
-      calculatedSmv = bo.smv;
-    } else {
-      const lowerStyle = (bo.styleDescription || '').toLowerCase();
-      if (lowerStyle.includes('tee') || lowerStyle.includes('t-shirt')) {
-        calculatedSmv = 11.2;
-      } else if (lowerStyle.includes('polo')) {
-        calculatedSmv = 15.0;
-      } else if (lowerStyle.includes('jeans') || lowerStyle.includes('denim')) {
-        calculatedSmv = 22.4;
-      } else if (lowerStyle.includes('jacket') || lowerStyle.includes('outerwear')) {
-        calculatedSmv = 28.0;
-      } else if (lowerStyle.includes('hoodie') || lowerStyle.includes('fleece')) {
-        calculatedSmv = 19.5;
-      }
-    }
-    setSmvTarget(calculatedSmv);
+    // Section-Wise Target & SMV resolution linked from Order WIP & IE Planning
+    const secTarget = getSectionTargetForOrder(bo, section);
+    setSmvTarget(secTarget.smv);
+    setHourlyTarget(secTarget.hourlyTarget);
+    setShiftTarget(secTarget.dailyTarget || secTarget.hourlyTarget * 8);
+    if (secTarget.manpower) setOperatorCount(secTarget.manpower);
+    if (secTarget.targetEfficiency) setEfficiencyPercent(secTarget.targetEfficiency);
 
-    // Check if Planned Daily Target is entered in Buyer Order; otherwise calculate from SMV
-    const plannedTarget = bo.productionTarget || bo.dailyTarget;
-    let hourlyLinePace = 0;
-    if (plannedTarget && plannedTarget > 0) {
-      hourlyLinePace = Math.round(plannedTarget / 8);
-    } else {
-      // Calculate hourly line target: (operators * 60 / SMV) * efficiency
-      hourlyLinePace = Math.round(((operatorCount || 48) * 60 / calculatedSmv) * ((efficiencyPercent || 84.5) / 100));
-    }
-
-    // Update hourly slots target to match SMV pacing
+    // Update hourly inspection slots target to match Section Hourly Target
     setHourlyReports((prev) =>
       prev.map((h) => ({
         ...h,
-        targetQty: hourlyLinePace,
+        targetQty: secTarget.hourlyTarget,
       }))
     );
 
     setPoSearchFocus(false);
-    const targetInfo = plannedTarget
-      ? ` | Target: ${plannedTarget} pcs/day (${hourlyLinePace}/hr)`
-      : ` | Hourly Pace: ${hourlyLinePace}/hr`;
-    showToast(`✓ Linked SMV (${calculatedSmv} min)${targetInfo} from Buyer Order PO: ${bo.orderNumber}`);
+    showToast(
+      `✓ Linked ${secTarget.sectionName} WIP: Hourly Target ${secTarget.hourlyTarget} pcs/hr (SMV ${secTarget.smv}m, ${secTarget.manpower} Ops) from PO: ${bo.orderNumber}`
+    );
+  };
+
+  // Direct manual adjustments for Section Hourly Target and SMV
+  const handleHourlyTargetChange = (val: number) => {
+    const clamped = Math.max(0, val);
+    setHourlyTarget(clamped);
+    setShiftTarget(clamped * 8);
+    setHourlyReports((prev) => prev.map((h) => ({ ...h, targetQty: clamped })));
+  };
+
+  const handleSmvChange = (val: number) => {
+    const clamped = Math.max(0.1, val);
+    setSmvTarget(clamped);
+    const recalculated = calculateHourlyTarget(clamped, operatorCount || 48, efficiencyPercent || 84.5);
+    setHourlyTarget(recalculated);
+    setShiftTarget(recalculated * 8);
+    setHourlyReports((prev) => prev.map((h) => ({ ...h, targetQty: recalculated })));
+  };
+
+  const handleOperatorCountChange = (val: number) => {
+    const ops = Math.max(1, val);
+    setOperatorCount(ops);
+    if (smvTarget > 0) {
+      const recalculated = calculateHourlyTarget(smvTarget, ops, efficiencyPercent || 84.5);
+      setHourlyTarget(recalculated);
+      setShiftTarget(recalculated * 8);
+      setHourlyReports((prev) => prev.map((h) => ({ ...h, targetQty: recalculated })));
+    }
+  };
+
+  const handleEfficiencyChange = (val: number) => {
+    const eff = Math.max(1, val);
+    setEfficiencyPercent(eff);
+    if (smvTarget > 0) {
+      const recalculated = calculateHourlyTarget(smvTarget, operatorCount || 48, eff);
+      setHourlyTarget(recalculated);
+      setShiftTarget(recalculated * 8);
+      setHourlyReports((prev) => prev.map((h) => ({ ...h, targetQty: recalculated })));
+    }
   };
 
   // Hourly Reports State with Granular Defect Breakdowns
@@ -815,9 +872,11 @@ export function AddProductionRecordPage({
       styleNumber: styleNumber.trim(),
       itemInfo: itemInfo.trim(),
       smvTarget: Number(smvTarget) || 18.5,
+      hourlyTarget: Number(hourlyTarget) || 0,
+      shiftTarget: Number(shiftTarget) || (Number(hourlyTarget) * 8) || 0,
       unit: unit,
       section: section,
-      targetQuantity: Number(targetQuantity) || 0,
+      targetQuantity: Number(targetQuantity) || (Number(shiftTarget) || 0),
       completedQuantity: Number(completedQuantity) || hourlySummary.totalPassed || 0,
       totalDefects: Number(totalDefects) || hourlySummary.totalDefects || 0,
       defectRate: Number(dhuRate) || hourlySummary.avgDhu || 0,
@@ -1207,12 +1266,84 @@ export function AddProductionRecordPage({
             />
           </div>
 
-          {/* Order Quantity (Batch Target) */}
+          {/* Section Hourly Target (Primary Operational Target) */}
+          <div className="space-y-1.5 p-3 rounded-xl bg-blue-50/50 border border-blue-200">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-blue-600" />
+                Section Hourly Target (pcs/hr) <span className="text-rose-500">*</span>
+              </label>
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md border border-blue-200">
+                WIP &amp; IE Linked
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                value={hourlyTarget}
+                onChange={(e) => handleHourlyTargetChange(parseInt(e.target.value, 10) || 0)}
+                className="w-full px-3 py-2 text-sm font-mono font-bold bg-white border border-blue-300 rounded-lg text-blue-950 focus:outline-hidden focus:ring-2 focus:ring-blue-500 shadow-xs"
+                required
+              />
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleHourlyTargetChange(hourlyTarget + 10)}
+                  className="px-2 py-0.5 text-[10px] font-bold bg-white hover:bg-blue-100 text-blue-700 rounded border border-blue-200 cursor-pointer"
+                  title="Increase hourly target by 10"
+                >
+                  +10
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleHourlyTargetChange(Math.max(10, hourlyTarget - 10))}
+                  className="px-2 py-0.5 text-[10px] font-bold bg-white hover:bg-blue-100 text-blue-700 rounded border border-blue-200 cursor-pointer"
+                  title="Decrease hourly target by 10"
+                >
+                  -10
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-blue-800 font-medium">
+              <span>Shift Target (8h): <strong className="font-mono font-bold">{shiftTarget.toLocaleString()} pcs</strong></span>
+              <span className="text-slate-500">Auto-syncs all 8 hour slots</span>
+            </div>
+          </div>
+
+          {/* Section SMV Target & IE Pacing Formula */}
+          <div className="space-y-1.5 p-3 rounded-xl bg-indigo-50/50 border border-indigo-200">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                <Gauge className="w-3.5 h-3.5 text-indigo-600" />
+                Section SMV (Minutes)
+              </label>
+              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-md border border-indigo-200">
+                IE Standard
+              </span>
+            </div>
+            <input
+              type="number"
+              step="0.1"
+              min="0.1"
+              value={smvTarget}
+              onChange={(e) => handleSmvChange(parseFloat(e.target.value) || 18.5)}
+              className="w-full px-3 py-2 text-xs font-mono font-bold bg-white border border-indigo-300 rounded-lg text-indigo-950 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-xs"
+            />
+            <p className="text-[10px] text-indigo-800 leading-tight">
+              Formula: ({operatorCount || 48} Ops × 60 / {smvTarget || 18.5}m) × {efficiencyPercent || 84.5}% = <strong className="font-mono">{calculateHourlyTarget(smvTarget || 18.5, operatorCount || 48, efficiencyPercent || 84.5)} pcs/hr</strong>
+            </p>
+          </div>
+
+          {/* Total Buyer Order Quantity (PO Lifecycle Target) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5 text-blue-600" />
-              Order Quantity (Total Pcs)
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-slate-500" />
+                Order Batch Total (PO Pcs)
+              </label>
+              <span className="text-[10px] text-slate-400 font-mono">PO Life</span>
+            </div>
             <input
               type="number"
               min="1"
@@ -1220,42 +1351,7 @@ export function AddProductionRecordPage({
               onChange={(e) => setTargetQuantity(parseInt(e.target.value, 10) || 0)}
               className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
-          </div>
-
-          {/* SMV Target */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <Gauge className="w-3.5 h-3.5 text-indigo-600" />
-                SMV Target (Minutes)
-              </label>
-              {selectedBuyerOrder?.smv ? (
-                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-semibold">
-                  Linked from PO: {selectedBuyerOrder.smv}m
-                </span>
-              ) : (
-                <span className="text-[10px] text-slate-400">Pacing benchmark</span>
-              )}
-            </div>
-            <input
-              type="number"
-              step="0.1"
-              min="1"
-              value={smvTarget}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value) || 18.5;
-                setSmvTarget(val);
-                // recalculate hourly target
-                const pace = Math.round(((operatorCount || 48) * 60 / val) * ((efficiencyPercent || 84.5) / 100));
-                setHourlyReports((prev) => prev.map((h) => ({ ...h, targetQty: pace })));
-              }}
-              className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-            />
-            {selectedBuyerOrder && (selectedBuyerOrder.productionTarget || selectedBuyerOrder.dailyTarget) ? (
-              <p className="text-[10px] text-emerald-700 font-medium">
-                ✓ PO Target: {(selectedBuyerOrder.productionTarget || selectedBuyerOrder.dailyTarget)?.toLocaleString()} pcs/day (~{Math.round(((selectedBuyerOrder.productionTarget || selectedBuyerOrder.dailyTarget) || 0) / 8)} pcs/hr)
-              </p>
-            ) : null}
+            <p className="text-[10px] text-slate-400">Total garments in buyer purchase order.</p>
           </div>
 
           {/* Shipment Date (Due Date) */}
@@ -1391,6 +1487,89 @@ export function AddProductionRecordPage({
               <option value="PAUSED">PAUSED (On Hold / Changeover)</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* SECTION-WISE WIP TARGET & SMV STRIP (ORDER WIP & IE PLANNING LINKAGE) */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                Section-Wise WIP Target &amp; SMV Master (Order &amp; IE Planning Linked)
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Hourly and daily production targets vary section-wise based on SMV &amp; manpower configured on the Order WIP. Tap any section to switch.
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full self-start sm:self-auto">
+            Order: {orderNumber || 'Active Order'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          {(
+            [
+              { key: 'cutting', label: 'Cutting Floor', name: 'Cutting Floor' },
+              { key: 'sewing', label: 'Sewing Floor', name: 'Sewing Floor' },
+              { key: 'washing', label: 'Industrial Washing', name: 'Industrial Washing' },
+              { key: 'finishing', label: 'Finishing & Packing', name: 'Finishing & Packing' },
+              { key: 'packing', label: 'Packing & Warehouse', name: 'Packing & Warehouse' },
+              { key: 'qa', label: 'Quality Assurance', name: 'Quality Assurance (QA)' },
+            ] as const
+          ).map((s) => {
+            const activeOrder =
+              selectedBuyerOrder ||
+              availableBuyerOrders.find((bo) => bo.orderNumber === orderNumber);
+            const cfg = getSectionTargetForOrder(activeOrder, s.key);
+            const isCurrentSection = normalizeSectionKey(section) === s.key;
+
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => handleSelectSection(s.name)}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                  isCurrentSection
+                    ? 'bg-blue-50/90 border-blue-400 shadow-xs ring-2 ring-blue-500/20'
+                    : 'bg-slate-50/80 hover:bg-slate-100/80 border-slate-200'
+                }`}
+              >
+                {isCurrentSection && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                )}
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">
+                  {s.label}
+                </div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="text-base font-black font-mono text-slate-900">
+                    {cfg.hourlyTarget}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-500">pcs/hr</span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+                  <span className="text-indigo-700 bg-indigo-50/80 px-1 py-0.2 rounded border border-indigo-100 font-bold">
+                    SMV: {cfg.smv}m
+                  </span>
+                  <span className="text-slate-600">
+                    {cfg.dailyTarget || cfg.hourlyTarget * 8} pcs/d
+                  </span>
+                </div>
+                <div className="mt-1 text-[9px] text-slate-400 font-mono">
+                  {cfg.manpower} Ops • {cfg.targetEfficiency}% Eff
+                </div>
+                {isCurrentSection && (
+                  <div className="mt-1.5 text-[9px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1">
+                    <CheckCircle2 className="w-2.5 h-2.5" /> Active Section
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -1661,7 +1840,9 @@ export function AddProductionRecordPage({
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                 <th className="py-2.5 px-3 w-12 text-center">#</th>
                 <th className="py-2.5 px-3 w-32">Hour Slot</th>
-                <th className="py-2.5 px-3 w-20 text-right">Target</th>
+                <th className="py-2.5 px-3 w-28 text-right font-bold text-blue-900" title="Section Hourly Target from Order WIP & IE Planning">
+                  Hourly Target
+                </th>
                 <th className="py-2.5 px-3 w-24 text-right bg-blue-50/50">Checked</th>
                 <th className="py-2.5 px-3 w-24 text-right bg-amber-50/50" title="Repairable alterations reworked on the line">
                   Defects (Rework)
@@ -1669,7 +1850,7 @@ export function AddProductionRecordPage({
                 <th className="py-2.5 px-3 w-24 text-right bg-rose-50/50" title="Unrecoverable scrap pieces (deducted from production)">
                   Rejects (Scrap)
                 </th>
-                <th className="py-2.5 px-3 w-24 text-right bg-emerald-50/50" title="Good output delivered (Checked - Scrap Rejects). Repaired defects are counted.">
+                <th className="py-2.5 px-3 w-28 text-right bg-emerald-50/50" title="Good output delivered (Checked - Scrap Rejects). Repaired defects are counted.">
                   Passed (Output)
                 </th>
                 <th className="py-2.5 px-3 w-20 text-right">DHU %</th>
@@ -1781,12 +1962,25 @@ export function AddProductionRecordPage({
 
                     {/* Passed Pcs (Auto-calculated: Checked - Rejects. Repaired defects included.) */}
                     <td className="py-2.5 px-3 text-right bg-emerald-50/20">
-                      <span
-                        className="font-mono font-bold text-xs text-emerald-700 bg-emerald-100/60 px-2 py-1 rounded-md border border-emerald-200"
-                        title="Good production pieces passed (Checked - Scrap Rejects). Repaired defects are included."
-                      >
-                        {row.passedQty}
-                      </span>
+                      <div className="flex flex-col items-end">
+                        <span
+                          className="font-mono font-bold text-xs text-emerald-700 bg-emerald-100/60 px-2 py-1 rounded-md border border-emerald-200"
+                          title="Good production pieces passed (Checked - Scrap Rejects). Repaired defects are included."
+                        >
+                          {row.passedQty}
+                        </span>
+                        {row.checkedQty > 0 && (
+                          <span
+                            className={`text-[10px] font-mono font-bold mt-0.5 ${
+                              row.passedQty >= row.targetQty ? 'text-emerald-700' : 'text-amber-700'
+                            }`}
+                          >
+                            {row.passedQty >= row.targetQty
+                              ? `+${row.passedQty - row.targetQty} vs tgt`
+                              : `${row.passedQty - row.targetQty} vs tgt`}
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Auto-generated DHU % */}
@@ -1875,11 +2069,14 @@ export function AddProductionRecordPage({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
           <div>
             <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-              Total Target
+              Shift Target ({hourlyTarget}/hr)
             </div>
             <div className="text-base font-black font-mono text-slate-900 mt-0.5">
               {hourlySummary.totalTarget.toLocaleString()}{' '}
               <span className="text-[10px] font-normal text-slate-400">pcs</span>
+            </div>
+            <div className="text-[10px] text-blue-700 font-semibold font-mono">
+              Sched: {shiftTarget.toLocaleString()} pcs
             </div>
           </div>
 

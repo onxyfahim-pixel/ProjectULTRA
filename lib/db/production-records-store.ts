@@ -116,6 +116,7 @@ export function saveProductionRecords(orders: ProductionOrder[]): void {
     localStorage.setItem(STORAGE_KEYS.PRODUCTION_ORDERS, JSON.stringify(orders));
     window.dispatchEvent(new CustomEvent('erp_production_records_updated'));
     window.dispatchEvent(new CustomEvent('erp_production_orders_updated'));
+    window.dispatchEvent(new CustomEvent('erp_sewing_track_updated'));
     window.dispatchEvent(new CustomEvent('erp_wip_records_updated'));
 
     // Cross-tab live broadcast

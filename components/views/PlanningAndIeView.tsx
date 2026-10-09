@@ -120,6 +120,23 @@ import {
 } from '@/lib/db/planning-ie-store';
 
 import {
+  getStoredTargetSettings,
+  saveStoredTargetSettings,
+  getStoredProductionExecutions,
+  saveStoredProductionExecutions,
+} from '@/lib/db/planning-ie-extended-store';
+
+import {
+  getLiveBuyerOrders,
+  getLiveProductionRecords,
+  buildSyncedProductionOrderPlans,
+  buildLiveTargetSettings,
+  buildLiveProductionExecutions,
+  buildLiveHourlyRecords,
+  buildLiveWipRecords,
+} from '@/lib/utils/planning-ie-live-data';
+
+import {
   ProductionUnit,
   ProductionSection,
   ProductionLine,
@@ -177,6 +194,24 @@ export function PlanningAndIeView({
   const [activeTab, setActiveTab] = useState<PlanningTabId>('dashboard');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Live Production Management States (Synchronized with Production & Quality Modules)
+  const [managedUnits, setManagedUnits] = useState<ProductionUnit[]>(getProductionUnits);
+  const [managedSections, setManagedSections] = useState<ProductionSection[]>(getProductionSections);
+  const [managedLines, setManagedLines] = useState<ProductionLine[]>(getProductionLines);
+  const [liveProdRecords, setLiveProdRecords] = useState<ProductionOrder[]>(() => {
+    return propProdOrders.length > 0 ? propProdOrders : getProductionRecords();
+  });
+
+  // Effective live buyer orders
+  const effectiveBuyerOrders = useMemo(() => {
+    return propBuyerOrders.length > 0 ? propBuyerOrders : getLiveBuyerOrders();
+  }, [propBuyerOrders]);
+
+  // Effective live production records
+  const effectiveProdRecords = useMemo(() => {
+    return propProdOrders.length > 0 ? propProdOrders : liveProdRecords;
+  }, [propProdOrders, liveProdRecords]);
+
   // Core Data States
   const [bulletins, setBulletins] = useState<StyleOperationBulletin[]>(getStoredBulletins);
   const [schedules, setSchedules] = useState<ProductionPlanSchedule[]>(getStoredSchedules);
@@ -190,15 +225,38 @@ export function PlanningAndIeView({
   const [skillMatrix, setSkillMatrix] = useState<SkillMatrixItem[]>(getStoredSkillMatrix);
   const [operations, setOperations] = useState<OperationMasterItem[]>(getStoredOperations);
 
-  // Production Orders & Planning States
-  const [productionOrders, setProductionOrders] = useState<ProductionOrderPlan[]>(getStoredProductionOrders);
+  // Production Orders & Planning States (Synchronized directly with Buyer Orders & Factory Floor)
+  const [productionOrders, setProductionOrders] = useState<ProductionOrderPlan[]>(() => {
+    const buyer = propBuyerOrders.length > 0 ? propBuyerOrders : getLiveBuyerOrders();
+    return buildSyncedProductionOrderPlans(buyer, getStoredProductionOrders());
+  });
   const [capacityPlans, setCapacityPlans] = useState<CapacityPlanningRecord[]>(getStoredCapacityPlans);
   const [linePlans, setLinePlans] = useState<LinePlanningRecord[]>(getStoredLinePlans);
   const [manpowerPlans, setManpowerPlans] = useState<ManpowerPlanningRecord[]>(getStoredManpowerPlans);
   const [methodStudies, setMethodStudies] = useState<MethodStudyRecord[]>(getStoredMethodStudies);
   const [motionStudies, setMotionStudies] = useState<MotionStudyRecord[]>(getStoredMotionStudies);
-  const [hourlyRecords, setHourlyRecords] = useState<HourlyMonitoringRecord[]>(getStoredHourlyMonitoring);
-  const [wipRecords, setWipRecords] = useState<WipManagementRecord[]>(getStoredWipTracking);
+
+  // Live Section Targets, Executions, Hourly Logs, and 6-Stage WIP
+  const [targets, setTargets] = useState<TargetSettingRecord[]>(() => {
+    const buyer = propBuyerOrders.length > 0 ? propBuyerOrders : getLiveBuyerOrders();
+    const prod = propProdOrders.length > 0 ? propProdOrders : getProductionRecords();
+    return buildLiveTargetSettings(buyer, prod, getProductionLines());
+  });
+  const [executions, setExecutions] = useState<ProductionExecutionRecord[]>(() => {
+    const buyer = propBuyerOrders.length > 0 ? propBuyerOrders : getLiveBuyerOrders();
+    const prod = propProdOrders.length > 0 ? propProdOrders : getProductionRecords();
+    return buildLiveProductionExecutions(prod, buyer);
+  });
+  const [hourlyRecords, setHourlyRecords] = useState<HourlyMonitoringRecord[]>(() => {
+    const prod = propProdOrders.length > 0 ? propProdOrders : getProductionRecords();
+    return buildLiveHourlyRecords(prod, getStoredHourlyMonitoring());
+  });
+  const [wipRecords, setWipRecords] = useState<WipManagementRecord[]>(() => {
+    const buyer = propBuyerOrders.length > 0 ? propBuyerOrders : getLiveBuyerOrders();
+    const prod = propProdOrders.length > 0 ? propProdOrders : getProductionRecords();
+    return buildLiveWipRecords(buyer, prod);
+  });
+
   const [losses, setLosses] = useState<ProductionLossRecord[]>(getStoredProductionLosses);
   const [downtimes, setDowntimes] = useState<DowntimeManagementRecord[]>(getStoredDowntimeRecords);
   const [qualityLinks, setQualityLinks] = useState<ProductionQualityLink[]>(getStoredQualityLinks);
@@ -208,12 +266,6 @@ export function PlanningAndIeView({
   const [kaizens, setKaizens] = useState<KaizenImprovementRecord[]>(getStoredKaizenRecords);
   const [alerts, setAlerts] = useState<ProductionAlertItem[]>(getStoredProductionAlerts);
   const [auditLogs, setAuditLogs] = useState<UniversalAuditRecord[]>(getStoredAuditLogs);
-
-  // Live Production Management States (Synchronized with Production & Quality Modules)
-  const [managedUnits, setManagedUnits] = useState<ProductionUnit[]>(getProductionUnits);
-  const [managedSections, setManagedSections] = useState<ProductionSection[]>(getProductionSections);
-  const [managedLines, setManagedLines] = useState<ProductionLine[]>(getProductionLines);
-  const [liveProdRecords, setLiveProdRecords] = useState<ProductionOrder[]>(getProductionRecords);
 
   // Global & Individual Export States (Synchronized with Production & Quality Modules)
   const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
@@ -256,6 +308,10 @@ export function PlanningAndIeView({
   // Sync state with storage updates
   useEffect(() => {
     const handleUpdate = () => {
+      const buyer = effectiveBuyerOrders;
+      const prod = getProductionRecords();
+      const l = getProductionLines();
+
       setBulletins(getStoredBulletins());
       setSchedules(getStoredSchedules());
       setTimeStudies(getStoredTimeStudies());
@@ -264,14 +320,16 @@ export function PlanningAndIeView({
       setOperators(getStoredOperators());
       setSkillMatrix(getStoredSkillMatrix());
       setOperations(getStoredOperations());
-      setProductionOrders(getStoredProductionOrders());
+      setProductionOrders(buildSyncedProductionOrderPlans(buyer, getStoredProductionOrders()));
       setCapacityPlans(getStoredCapacityPlans());
       setLinePlans(getStoredLinePlans());
       setManpowerPlans(getStoredManpowerPlans());
       setMethodStudies(getStoredMethodStudies());
       setMotionStudies(getStoredMotionStudies());
-      setHourlyRecords(getStoredHourlyMonitoring());
-      setWipRecords(getStoredWipTracking());
+      setTargets(buildLiveTargetSettings(buyer, prod, l));
+      setExecutions(buildLiveProductionExecutions(prod, buyer));
+      setHourlyRecords(buildLiveHourlyRecords(prod, getStoredHourlyMonitoring()));
+      setWipRecords(buildLiveWipRecords(buyer, prod));
       setLosses(getStoredProductionLosses());
       setDowntimes(getStoredDowntimeRecords());
       setQualityLinks(getStoredQualityLinks());
@@ -290,7 +348,14 @@ export function PlanningAndIeView({
     };
 
     const handleProdRecordsUpdate = () => {
-      setLiveProdRecords(getProductionRecords());
+      const pr = getProductionRecords();
+      setLiveProdRecords(pr);
+      const buyer = effectiveBuyerOrders;
+      const l = getProductionLines();
+      setTargets(buildLiveTargetSettings(buyer, pr, l));
+      setExecutions(buildLiveProductionExecutions(pr, buyer));
+      setHourlyRecords(buildLiveHourlyRecords(pr, getStoredHourlyMonitoring()));
+      setWipRecords(buildLiveWipRecords(buyer, pr));
     };
 
     window.addEventListener('erp_bulletins_updated', handleUpdate);
@@ -322,7 +387,20 @@ export function PlanningAndIeView({
       window.removeEventListener('erp_production_records_updated', handleProdRecordsUpdate);
       window.removeEventListener('erp_sewing_track_updated', handleProdRecordsUpdate);
     };
-  }, []);
+  }, [effectiveBuyerOrders]);
+
+  // Synchronize live derived data whenever effectiveBuyerOrders, effectiveProdRecords, or managedLines change
+  useEffect(() => {
+    const buyer = effectiveBuyerOrders;
+    const prod = effectiveProdRecords;
+    const l = managedLines;
+
+    setProductionOrders((prev) => buildSyncedProductionOrderPlans(buyer, prev));
+    setTargets(buildLiveTargetSettings(buyer, prod, l));
+    setExecutions(buildLiveProductionExecutions(prod, buyer));
+    setHourlyRecords(buildLiveHourlyRecords(prod, getStoredHourlyMonitoring()));
+    setWipRecords(buildLiveWipRecords(buyer, prod));
+  }, [effectiveBuyerOrders, effectiveProdRecords, managedLines]);
 
   // Universal CSV Export Utility
   const handleExportCsv = (filename: string, rows: any[]) => {
@@ -365,99 +443,31 @@ export function PlanningAndIeView({
 
   // Comprehensive Cross-Module Synchronizer
   const handleSyncAllModules = () => {
-    let syncedCount = 0;
-    let nextProductionOrders = [...productionOrders];
-
-    propBuyerOrders.forEach((bo) => {
-      const existingIdx = nextProductionOrders.findIndex(
-        (o) => o.po === bo.orderNumber || o.buyerOrderId === bo.id
-      );
-
-      const fabricBom = bo.bomItems?.find((b) => b.itemType === 'FABRIC');
-      const fabricStatus =
-        fabricBom?.status === 'RECEIVED'
-          ? '100% In-House - Passed 4-Point Inspection'
-          : fabricBom?.status === 'PARTIALLY_RECEIVED'
-          ? 'Partial Inward - Ready for Relaxation'
-          : 'Fabric Sourced - Pending Mill Delivery';
-
-      const desc = bo.styleDescription.toLowerCase();
-      const isDenim = desc.includes('jeans') || desc.includes('denim');
-      const isPolo = desc.includes('polo');
-      const isHoodie = desc.includes('hoodie') || desc.includes('fleece');
-      const isShirt = desc.includes('shirt') && !isPolo;
-
-      let assignedLine = 'Sewing Line 01';
-      let productCategory = 'Knit Tops';
-      if (isDenim) {
-        assignedLine = 'Sewing Line 04';
-        productCategory = 'Denim Bottoms';
-      } else if (isPolo) {
-        assignedLine = 'Sewing Line 02';
-        productCategory = 'Knit Tops';
-      } else if (isHoodie) {
-        assignedLine = 'Sewing Line 03';
-        productCategory = 'Fleece Outerwear';
-      } else if (isShirt) {
-        assignedLine = 'Sewing Line 05';
-        productCategory = 'Woven Tops';
-      }
-
-      const plannedQty = Math.round(bo.orderQuantity * 1.03); // +3% cutting & rework buffer
-
-      const planRecord: ProductionOrderPlan = {
-        id: `po-plan-${bo.orderNumber.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-        orderNumber: `PRD-ORD-${bo.orderNumber.replace(/[^a-zA-Z0-9]/g, '')}`,
-        buyer: bo.buyerName,
-        style: bo.styleNumber,
-        po: bo.orderNumber,
-        article: `ART-${bo.styleNumber}`,
-        product: bo.styleDescription,
-        productCategory,
-        color: 'Standard Tech Pack Colorways',
-        size: 'S - XXL',
-        sizeRange: 'S, M, L, XL, XXL',
-        orderQuantity: bo.orderQuantity,
-        plannedQuantity: plannedQty,
-        productionStartDate: bo.cuttingStartDate || new Date().toISOString().split('T')[0],
-        productionEndDate: new Date(Date.now() + 25 * 86400000).toISOString().split('T')[0],
-        deliveryDate: bo.shipDate,
-        priority: 'HIGH',
-        assignedLine,
-        assignedDepartment: 'SEWING',
-        status: bo.status === 'SEWING' ? 'IN_PRODUCTION' : bo.status === 'CUTTING' ? 'RELEASED' : 'PLANNED',
-        remarks: `Synchronized with Buyer Order ${bo.orderNumber}. 3.0% overcut allowance applied.`,
-        createdAt: new Date().toISOString(),
-        buyerOrderId: bo.id,
-        fabricStatus,
-        cuttingStatus: bo.status === 'SEWING' ? '100% Cut & Numbered' : bo.status === 'CUTTING' ? '50% Cut - Spreading Active' : 'Scheduled',
-        smv: bo.smv || 14.5,
-        fobPrice: bo.fobPrice,
-        isSyncedWithBuyerOrder: true,
-        syncSource: 'Buyer Order Module',
-        fabricReadinessPercent: fabricBom?.status === 'RECEIVED' ? 100 : 70,
-      };
-
-      if (existingIdx >= 0) {
-        nextProductionOrders[existingIdx] = {
-          ...nextProductionOrders[existingIdx],
-          ...planRecord,
-          id: nextProductionOrders[existingIdx].id,
-          orderNumber: nextProductionOrders[existingIdx].orderNumber,
-        };
-      } else {
-        nextProductionOrders = [planRecord, ...nextProductionOrders];
-      }
-      syncedCount++;
-    });
-
-    setProductionOrders(nextProductionOrders);
-    saveStoredProductionOrders(nextProductionOrders);
-
+    const buyer = effectiveBuyerOrders;
+    const pr = getProductionRecords();
     const u = getProductionUnits();
     const s = getProductionSections();
     const l = getProductionLines();
-    const pr = getProductionRecords();
+
+    const nextOrders = buildSyncedProductionOrderPlans(buyer, productionOrders);
+    setProductionOrders(nextOrders);
+    saveStoredProductionOrders(nextOrders);
+
+    const nextTargets = buildLiveTargetSettings(buyer, pr, l);
+    setTargets(nextTargets);
+    saveStoredTargetSettings(nextTargets);
+
+    const nextExec = buildLiveProductionExecutions(pr, buyer);
+    setExecutions(nextExec);
+    saveStoredProductionExecutions(nextExec);
+
+    const nextHourly = buildLiveHourlyRecords(pr, getStoredHourlyMonitoring());
+    setHourlyRecords(nextHourly);
+
+    const nextWip = buildLiveWipRecords(buyer, pr);
+    setWipRecords(nextWip);
+    saveStoredWipTracking(nextWip);
+
     setManagedUnits(u);
     setManagedSections(s);
     setManagedLines(l);
@@ -467,9 +477,9 @@ export function PlanningAndIeView({
       'UPDATE',
       'ModuleSync',
       'BuyerOrder-PPC',
-      `Synchronized ${syncedCount} Buyer Orders, ${u.length} Units, ${s.length} Sections, ${l.length} Lines into Planning & IE`
+      `Synchronized ${buyer.length} Buyer Orders, ${pr.length} Floor Records, ${u.length} Units, ${s.length} Sections, ${l.length} Lines into Planning & IE`
     );
-    showToast(`Full Plant Sync: ${syncedCount} Buyer Orders, ${u.length} Units, ${s.length} Sections, ${l.length} Lines Live-Synced!`);
+    showToast(`Full Plant Sync: ${buyer.length} Buyer Orders, ${pr.length} Floor Records, ${l.length} Lines Live-Synced!`);
   };
 
   // Operation Bulletin Handlers
@@ -1051,8 +1061,8 @@ export function PlanningAndIeView({
       {/* TAB 8: TARGET SETTING, EXECUTION & HOURLY MONITORING */}
       {activeTab === 'execution_hourly' && (
         <ExecutionHourlyTab
-          targets={INITIAL_TARGET_SETTINGS}
-          executions={INITIAL_PRODUCTION_EXECUTIONS}
+          targets={targets}
+          executions={executions}
           hourlyRecords={hourlyRecords}
           onAddHourlyRecord={handleAddHourlyRecord}
           onExportCsv={handleExportCsv}
@@ -1093,6 +1103,22 @@ export function PlanningAndIeView({
       {/* TAB 12: REPORTS & UNIVERSAL AUDIT CENTER */}
       {activeTab === 'reports_audit' && (
         <ReportsAuditTab
+          productionOrders={productionOrders}
+          buyerOrders={effectiveBuyerOrders}
+          liveProdRecords={effectiveProdRecords}
+          wipRecords={wipRecords}
+          hourlyRecords={hourlyRecords}
+          targets={targets}
+          executions={executions}
+          bulletins={bulletins}
+          schedules={schedules}
+          timeStudies={timeStudies}
+          methodStudies={methodStudies}
+          motionStudies={motionStudies}
+          lines={managedLines}
+          losses={losses}
+          downtimes={downtimes}
+          kaizens={kaizens}
           auditLogs={auditLogs}
           onExportCsv={handleExportCsv}
           onPrintReport={(reportName) => handlePrint(reportName)}

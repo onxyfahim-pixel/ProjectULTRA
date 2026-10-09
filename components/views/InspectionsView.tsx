@@ -39,6 +39,7 @@ import {
   ExternalLink,
   CalendarClock,
   FileDown,
+  Smartphone,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -52,6 +53,7 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { calculateQuantityVariance } from '@/lib/aql';
 import { InspectionDetailsPage } from '../modules/inspection/InspectionDetailsPage';
 import { InspectionEntryPage } from '../modules/inspection/InspectionEntryPage';
+import { MobileInspectionEntryPage } from '../modules/inspection/MobileInspectionEntryPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
 import { InspectionExportModal } from '../modules/inspection/InspectionExportModal';
 import { InspectionSingleExportModal } from '../modules/inspection/InspectionSingleExportModal';
@@ -69,7 +71,8 @@ type InspectionSubView =
   | { type: 'none' }
   | { type: 'details'; record: InspectionRecord }
   | { type: 'add'; initialRecord?: Partial<InspectionRecord> }
-  | { type: 'edit'; record: InspectionRecord };
+  | { type: 'edit'; record: InspectionRecord }
+  | { type: 'mobile'; initialRecord?: Partial<InspectionRecord> };
 
 const STAGE_LABELS: Record<InspectionStage, string> = {
   FABRIC_INWARD: 'Fabric Inward (4-Point)',
@@ -1009,7 +1012,7 @@ export function InspectionsView({
       )}
 
       {/* TOP MODULE HEADER */}
-      {subView.type !== 'details' && (
+      {subView.type !== 'details' && subView.type !== 'mobile' && (
         <ModuleHeader
           title="Inspections"
           activeView={subView.type !== 'none' ? 'list' : viewMode}
@@ -1023,20 +1026,47 @@ export function InspectionsView({
             { id: 'stages', label: '3-Stage Pipeline' },
           ]}
           actions={
-            canExport ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRecordsForExport([]);
-                  setIsGlobalExportModalOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
-                title="Global Export: Inspection Register (PDF or Excel)"
-              >
-                <FileDown className="w-3.5 h-3.5 text-blue-600" />
-                <span>Export Audits</span>
-              </button>
-            ) : null
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRecordsForExport([]);
+                    setIsGlobalExportModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors shadow-2xs hover:shadow-xs cursor-pointer shrink-0"
+                  title="Global Export: Inspection Register (PDF or Excel)"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="hidden sm:inline">Export Audits</span>
+                  <span className="sm:hidden">Export</span>
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'mobile' })}
+                  className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer shrink-0"
+                  title="Mobile Inspection Entry: Touch-optimized 10-Step Handheld Walkthrough"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Mobile Entry</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                </button>
+              )}
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => setSubView({ type: 'add' })}
+                  className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer shrink-0"
+                  title="Log new quality inspection audit"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">New Inspection</span>
+                  <span className="sm:hidden">Add</span>
+                </button>
+              )}
+            </div>
           }
         />
       )}
@@ -1055,6 +1085,14 @@ export function InspectionsView({
             setIsSingleExportModalOpen(true);
           }}
           onSelectRecord={(rec) => setSubView({ type: 'details', record: rec })}
+          showToast={showToast}
+        />
+      ) : subView.type === 'mobile' ? (
+        <MobileInspectionEntryPage
+          orders={syncedOrders}
+          onSave={handleSaveInspection}
+          onBack={() => setSubView({ type: 'none' })}
+          onCancel={() => setSubView({ type: 'none' })}
           showToast={showToast}
         />
       ) : subView.type === 'add' ? (
@@ -1976,14 +2014,23 @@ export function InspectionsView({
 
               {/* Bottom Action */}
               {canCreate && (
-                <div className="flex justify-center">
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setSubView({ type: 'mobile' })}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer"
+                  >
+                    <Smartphone className="w-4 h-4 text-emerald-600" />
+                    <span>Mobile Inspection Entry</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setSubView({ type: 'add' })}
                     className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-sm cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
-                    Log New Quality Inspection
+                    <span>Log New Quality Inspection</span>
                   </button>
                 </div>
               )}
@@ -2050,14 +2097,26 @@ export function InspectionsView({
                 }
                 primaryAction={
                   canCreate ? (
-                    <button
-                      type="button"
-                      onClick={() => setSubView({ type: 'add' })}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Inspection</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSubView({ type: 'mobile' })}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors shadow-2xs active:scale-95 cursor-pointer shrink-0"
+                        title="Mobile Inspection Entry (Touch-optimized)"
+                      >
+                        <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="hidden sm:inline">Mobile Entry</span>
+                        <span className="sm:hidden">Mobile</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSubView({ type: 'add' })}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Inspection</span>
+                      </button>
+                    </div>
                   ) : null
                 }
                 moduleKey="inspections"

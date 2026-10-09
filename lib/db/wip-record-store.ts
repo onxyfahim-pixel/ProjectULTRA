@@ -531,6 +531,7 @@ export function computeWIPRecordForPO(
       inspection: inspectionSource,
     },
     stageNotes: existingWIP?.stageNotes || {},
+    sectionTargets: existingWIP?.sectionTargets,
     lastSyncedAt: new Date().toISOString(),
   };
 }

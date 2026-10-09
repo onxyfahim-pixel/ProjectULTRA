@@ -255,11 +255,13 @@ export function ProductionRecordDetailsPage({
         {/* 6-METRIC KPI STRIP (CLARIFIED DEFECTS VS SCRAP REJECTS) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 bg-slate-50/60 p-4 gap-y-3">
           <div className="px-3 py-1">
-            <div className="text-[11px] font-semibold text-slate-500">Target</div>
+            <div className="text-[11px] font-semibold text-slate-500">Hourly &amp; Shift Target</div>
             <div className="text-lg font-bold font-mono text-slate-900 mt-0.5">
-              {target.toLocaleString()}
+              {order.hourlyTarget ? `${order.hourlyTarget} pcs/hr` : `${Math.round(target / 8)} pcs/hr`}
             </div>
-            <div className="text-[10px] text-slate-400">Pcs scheduled</div>
+            <div className="text-[10px] text-blue-700 font-semibold font-mono">
+              Shift: {order.shiftTarget ? `${order.shiftTarget.toLocaleString()} pcs` : `${target.toLocaleString()} pcs`}
+            </div>
           </div>
 
           <div className="px-3 py-1">
@@ -352,7 +354,7 @@ export function ProductionRecordDetailsPage({
             </div>
 
             {/* Section & Line Info */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 pt-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 pt-2">
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div className="text-[10px] text-slate-400 font-medium">Manufacturing Unit</div>
                 <div className="text-xs font-bold text-slate-800 mt-0.5">{order.unit || 'Unit 01'}</div>
@@ -361,13 +363,19 @@ export function ProductionRecordDetailsPage({
                 <div className="text-[10px] text-slate-400 font-medium">Floor Section</div>
                 <div className="text-xs font-bold text-slate-800 mt-0.5">{order.section || order.sewingLine}</div>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="text-[10px] text-slate-400 font-medium">Active Operators</div>
-                <div className="text-xs font-bold text-slate-800 mt-0.5 font-mono">{order.operatorCount || 48} Operators</div>
+              <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200">
+                <div className="text-[10px] text-blue-800 font-medium">Hourly Target</div>
+                <div className="text-xs font-bold text-blue-950 mt-0.5 font-mono">
+                  {order.hourlyTarget ? `${order.hourlyTarget} pcs/hr` : `${Math.round(target / 8)} pcs/hr`}
+                </div>
               </div>
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div className="text-[10px] text-slate-400 font-medium">SMV Target</div>
                 <div className="text-xs font-bold text-indigo-700 mt-0.5 font-mono">{order.smvTarget || 18.5} min</div>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="text-[10px] text-slate-400 font-medium">Active Operators</div>
+                <div className="text-xs font-bold text-slate-800 mt-0.5 font-mono">{order.operatorCount || 48} Operators</div>
               </div>
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div className="text-[10px] text-slate-400 font-medium">Supervisor</div>
@@ -616,7 +624,9 @@ export function ProductionRecordDetailsPage({
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                     <th className="py-2.5 px-3 w-12 text-center">#</th>
                     <th className="py-2.5 px-3 w-32">Hour Slot</th>
-                    <th className="py-2.5 px-3 w-20 text-right">Target</th>
+                    <th className="py-2.5 px-3 w-28 text-right font-bold text-blue-900" title="Section Hourly Target from Order WIP & IE Planning">
+                      Hourly Target
+                    </th>
                     <th className="py-2.5 px-3 w-24 text-right bg-blue-50/50">Checked</th>
                     <th className="py-2.5 px-3 w-24 text-right bg-amber-50/50" title="Repairable alterations reworked on the line">
                       Defects (Rework)
@@ -697,12 +707,25 @@ export function ProductionRecordDetailsPage({
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 bg-emerald-50/20">
-                          <span
-                            className="bg-emerald-100/60 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-200"
-                            title="Good production pieces (Checked - Scrap Rejects). Repaired defects are included."
-                          >
-                            {hr.passedQty}
-                          </span>
+                          <div className="flex flex-col items-end">
+                            <span
+                              className="bg-emerald-100/60 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-200"
+                              title="Good production pieces (Checked - Scrap Rejects). Repaired defects are included."
+                            >
+                              {hr.passedQty}
+                            </span>
+                            {hr.checkedQty > 0 && (
+                              <span
+                                className={`text-[10px] font-mono font-bold mt-0.5 ${
+                                  hr.passedQty >= hr.targetQty ? 'text-emerald-700' : 'text-amber-700'
+                                }`}
+                              >
+                                {hr.passedQty >= hr.targetQty
+                                  ? `+${hr.passedQty - hr.targetQty} vs tgt`
+                                  : `${hr.passedQty - hr.targetQty} vs tgt`}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2.5 px-3 text-right">
                           <span

@@ -1243,7 +1243,10 @@ export function AuditDetailsPage({
       <AuditSingleExportModal
         isOpen={isSingleExportModalOpen}
         onClose={() => setIsSingleExportModalOpen(false)}
-        audit={currentAudit}
+        audit={{
+          ...currentAudit,
+          checklist,
+        }}
       />
       </div>
     </div>

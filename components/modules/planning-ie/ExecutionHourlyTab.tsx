@@ -21,6 +21,10 @@ import {
   ProductionExecutionRecord,
   HourlyMonitoringRecord,
 } from '@/lib/types/planning-ie';
+import {
+  getDefaultSectionTargets,
+  normalizeSectionKey,
+} from '@/lib/utils/section-target-utils';
 
 interface ExecutionHourlyTabProps {
   targets: TargetSettingRecord[];
@@ -44,6 +48,7 @@ export function ExecutionHourlyTab({
   // Modal for new hourly log entry
   const [isHourlyModalOpen, setIsHourlyModalOpen] = useState(false);
   const [newSlot, setNewSlot] = useState('11:00 - 12:00');
+  const [newSection, setNewSection] = useState('Sewing Floor');
   const [newLine, setNewLine] = useState('Sewing Line 01');
   const [newStyle, setNewStyle] = useState('STY-TS-2026');
   const [newPo, setNewPo] = useState('PO-HM-99201');
@@ -52,6 +57,15 @@ export function ExecutionHourlyTab({
   const [newDowntime, setNewDowntime] = useState(0);
   const [newDowntimeReason, setNewDowntimeReason] = useState('');
   const [newRemarks, setNewRemarks] = useState('');
+
+  const handleSectionChangeInModal = (sec: string) => {
+    setNewSection(sec);
+    const defaults = getDefaultSectionTargets();
+    const key = normalizeSectionKey(sec);
+    if (defaults[key]) {
+      setNewTarget(defaults[key].hourlyTarget);
+    }
+  };
 
   const handleAddHourlySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +83,7 @@ export function ExecutionHourlyTab({
       id: `hr-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
       hourSlot: newSlot,
+      section: newSection,
       lineName: newLine,
       style: newStyle,
       po: newPo,
@@ -94,6 +109,10 @@ export function ExecutionHourlyTab({
 
   const totalHourlyTarget = useMemo(() => {
     return hourlyRecords.reduce((acc, h) => acc + (h.hourlyTarget || 0), 0);
+  }, [hourlyRecords]);
+
+  const totalFloorDowntime = useMemo(() => {
+    return hourlyRecords.reduce((acc, h) => acc + (h.downtimeMinutes || 0), 0);
   }, [hourlyRecords]);
 
   return (
@@ -186,8 +205,8 @@ export function ExecutionHourlyTab({
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
               <div className="text-[11px] font-semibold text-slate-500 uppercase">Floor Downtime Logged</div>
-              <div className="text-xl font-bold text-slate-900 mt-1">17 min</div>
-              <div className="text-[11px] text-amber-600 font-medium mt-0.5">Needle change &amp; spool refit</div>
+              <div className="text-xl font-bold text-slate-900 mt-1">{totalFloorDowntime} min</div>
+              <div className="text-[11px] text-amber-600 font-medium mt-0.5">Floor stoppage minutes</div>
             </div>
           </div>
 
@@ -233,7 +252,14 @@ export function ExecutionHourlyTab({
                       }`}
                     >
                       <td className="p-3 font-mono font-bold text-slate-900">{hr.hourSlot}</td>
-                      <td className="p-3 font-semibold text-slate-800">{hr.lineName}</td>
+                      <td className="p-3">
+                        <div className="font-semibold text-slate-800">{hr.lineName}</div>
+                        {hr.section && (
+                          <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.2 rounded">
+                            {hr.section}
+                          </span>
+                        )}
+                      </td>
                       <td className="p-3">
                         <div className="font-mono font-bold text-blue-700">{hr.style}</div>
                         <div className="text-[10px] text-slate-500 font-mono">{hr.po}</div>
@@ -373,6 +399,7 @@ export function ExecutionHourlyTab({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
                   <tr>
+                    <th className="p-3">Section</th>
                     <th className="p-3">Line Name</th>
                     <th className="p-3">Style &amp; PO</th>
                     <th className="p-3 text-right">SMV</th>
@@ -387,6 +414,11 @@ export function ExecutionHourlyTab({
                 <tbody className="divide-y divide-slate-100">
                   {targets.map((tgt) => (
                     <tr key={tgt.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">
+                          {tgt.section || 'Sewing Floor'}
+                        </span>
+                      </td>
                       <td className="p-3 font-bold text-slate-900">{tgt.lineName}</td>
                       <td className="p-3">
                         <div className="font-mono font-bold text-blue-700">{tgt.style}</div>
@@ -429,6 +461,23 @@ export function ExecutionHourlyTab({
             </div>
 
             <form onSubmit={handleAddHourlySubmit} className="space-y-4 mt-4 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700">Production Section (WIP Link)</label>
+                <select
+                  value={newSection}
+                  onChange={(e) => handleSectionChangeInModal(e.target.value)}
+                  className="w-full mt-1 p-2 rounded-xl border border-indigo-200 bg-white font-semibold text-slate-900"
+                >
+                  <option value="Cutting Floor">Cutting Floor (Gerber Auto-Cutter)</option>
+                  <option value="Sewing Floor">Sewing Floor (Assembly Lines)</option>
+                  <option value="Industrial Washing">Industrial Washing (Bays &amp; Ozone)</option>
+                  <option value="Finishing &amp; Packing">Finishing &amp; Packing (Tunnel Press)</option>
+                  <option value="Packing &amp; Warehouse">Packing &amp; Warehouse (Barcoding)</option>
+                  <option value="Quality Assurance (QA)">Quality Assurance (QA Audit)</option>
+                </select>
+                <p className="text-[10px] text-slate-500 mt-0.5">Section WIP automatically updates default hourly target.</p>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="font-semibold text-slate-700">Hour Slot</label>

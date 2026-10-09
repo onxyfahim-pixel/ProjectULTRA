@@ -1,3 +1,5 @@
+import { ProductionSectionKey } from './modules';
+
 export type GarmentType = 'T-Shirt' | 'Polo Shirt' | 'Denim Jeans' | 'Jacket' | 'Hoodie' | 'Woven Shirt' | 'Activewear';
 
 export type PriorityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -405,6 +407,8 @@ export interface MotionStudyRecord {
 export interface TargetSettingRecord {
   id: string;
   lineName: string;
+  section?: string; // e.g. 'Cutting Floor', 'Sewing Floor', 'Finishing Floor', etc.
+  sectionKey?: ProductionSectionKey;
   style: string;
   po: string;
   smv: number;
@@ -421,6 +425,7 @@ export interface ProductionExecutionRecord {
   date: string;
   shift: string;
   lineName: string;
+  section?: string;
   style: string;
   po: string;
   color: string;
@@ -440,6 +445,8 @@ export interface HourlyMonitoringRecord {
   date: string;
   hourSlot: string; // e.g. "08:00 - 09:00"
   lineName: string;
+  section?: string;
+  sectionKey?: ProductionSectionKey;
   style: string;
   po: string;
   hourlyTarget: number;

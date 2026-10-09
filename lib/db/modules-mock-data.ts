@@ -29,6 +29,7 @@ import {
   CommunicationNotice,
   SystemConfigSetting,
 } from '@/lib/types/modules';
+import { getDefaultSectionTargets } from '@/lib/utils/section-target-utils';
 
 // 1. Buyer and Order Data
 export const MOCK_BUYER_ORDERS: BuyerOrder[] = [
@@ -49,6 +50,7 @@ export const MOCK_BUYER_ORDERS: BuyerOrder[] = [
     smv: 11.2,
     productionTarget: 1800,
     dailyTarget: 1800,
+    sectionTargets: getDefaultSectionTargets(11.2, 1800, false),
     qualityStandard: 'AQL 1.5 Major / 4.0 Minor',
     productImage: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=60',
     merchandiserName: 'Farhan Rahman (Senior Garments Merchandiser)',
@@ -137,6 +139,7 @@ export const MOCK_BUYER_ORDERS: BuyerOrder[] = [
         cutting: 'Fabric relaxed 24h, 1% cutting buffer added.',
         sewing: '3 sewing lines loaded; daily output 1,800 pcs.',
       },
+      sectionTargets: getDefaultSectionTargets(11.2, 1800, false),
       lastSyncedAt: new Date().toISOString(),
     },
     bomItems: [
@@ -221,6 +224,7 @@ export const MOCK_BUYER_ORDERS: BuyerOrder[] = [
     smv: 22.4,
     productionTarget: 950,
     dailyTarget: 950,
+    sectionTargets: getDefaultSectionTargets(22.4, 950, true),
     qualityStandard: 'Inditex The List AQL 1.5',
     productImage: 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=500&auto=format&fit=crop&q=60',
     merchandiserName: 'Tanvir Hossain (Denim Division Lead)',
@@ -293,6 +297,7 @@ export const MOCK_BUYER_ORDERS: BuyerOrder[] = [
       stageNotes: {
         cutting: 'Spreading on Table 02; 14,000 pcs cut to date.',
       },
+      sectionTargets: getDefaultSectionTargets(22.4, 950, true),
       lastSyncedAt: new Date().toISOString(),
     },
     bomItems: [
@@ -366,6 +371,7 @@ export const MOCK_BUYER_ORDERS: BuyerOrder[] = [
     smv: 15.0,
     productionTarget: 1400,
     dailyTarget: 1400,
+    sectionTargets: getDefaultSectionTargets(15.0, 1400, false),
     qualityStandard: 'PVH Gold AQL 1.0/2.5',
     productImage: 'https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=500&auto=format&fit=crop&q=60',
     merchandiserName: 'Nusrat Jahan (Knitwear Merchandiser)',
@@ -448,6 +454,7 @@ export const MOCK_BUYER_ORDERS: BuyerOrder[] = [
         inspection: 'Scheduled Nov 2026',
       },
       stageNotes: {},
+      sectionTargets: getDefaultSectionTargets(15.0, 1400, false),
       lastSyncedAt: new Date().toISOString(),
     },
   },

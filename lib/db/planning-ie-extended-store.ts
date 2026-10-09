@@ -1245,11 +1245,28 @@ export const INITIAL_MOTION_STUDIES: MotionStudyRecord[] = [
   },
 ];
 
-// 13. Target Setting Master Data
+// 13. Target Setting Master Data (Section-Wise & Line-Wise)
 export const INITIAL_TARGET_SETTINGS: TargetSettingRecord[] = [
   {
-    id: 'tgt-1',
+    id: 'tgt-1-cut',
+    lineName: 'Cutting Table 01 (Gerber CNC)',
+    section: 'Cutting Floor',
+    sectionKey: 'cutting',
+    style: 'STY-TS-2026',
+    po: 'PO-HM-99201',
+    smv: 1.5,
+    workingMinutes: 480,
+    manpower: 16,
+    efficiencyPercent: 88,
+    targetPerHour: 450,
+    targetPerDay: 3600,
+    targetPerShift: 3600,
+  },
+  {
+    id: 'tgt-1-sew',
     lineName: 'Sewing Line 01',
+    section: 'Sewing Floor',
+    sectionKey: 'sewing',
     style: 'STY-TS-2026',
     po: 'PO-HM-99201',
     smv: 11.2,
@@ -1261,8 +1278,70 @@ export const INITIAL_TARGET_SETTINGS: TargetSettingRecord[] = [
     targetPerShift: 1800,
   },
   {
-    id: 'tgt-2',
+    id: 'tgt-1-fin',
+    lineName: 'Finishing Line 01 (Steam Tunnel)',
+    section: 'Finishing Floor',
+    sectionKey: 'finishing',
+    style: 'STY-TS-2026',
+    po: 'PO-HM-99201',
+    smv: 3.0,
+    workingMinutes: 480,
+    manpower: 20,
+    efficiencyPercent: 86,
+    targetPerHour: 350,
+    targetPerDay: 2800,
+    targetPerShift: 2800,
+  },
+  {
+    id: 'tgt-1-pack',
+    lineName: 'Carton Boxing & Barcode Packing 01',
+    section: 'Packing & Warehouse',
+    sectionKey: 'packing',
+    style: 'STY-TS-2026',
+    po: 'PO-HM-99201',
+    smv: 2.0,
+    workingMinutes: 480,
+    manpower: 18,
+    efficiencyPercent: 88,
+    targetPerHour: 400,
+    targetPerDay: 3200,
+    targetPerShift: 3200,
+  },
+  {
+    id: 'tgt-1-qa',
+    lineName: 'End-Line 100% Quality Inspection Post 01',
+    section: 'Quality Assurance (QA)',
+    sectionKey: 'qa',
+    style: 'STY-TS-2026',
+    po: 'PO-HM-99201',
+    smv: 1.2,
+    workingMinutes: 480,
+    manpower: 10,
+    efficiencyPercent: 90,
+    targetPerHour: 380,
+    targetPerDay: 3040,
+    targetPerShift: 3040,
+  },
+  {
+    id: 'tgt-2-cut',
+    lineName: 'Cutting Table 02 (Band Knife)',
+    section: 'Cutting Floor',
+    sectionKey: 'cutting',
+    style: 'STY-DN-502',
+    po: 'PO-ZARA-4482',
+    smv: 2.8,
+    workingMinutes: 480,
+    manpower: 18,
+    efficiencyPercent: 84,
+    targetPerHour: 300,
+    targetPerDay: 2400,
+    targetPerShift: 2400,
+  },
+  {
+    id: 'tgt-2-sew',
     lineName: 'Sewing Line 04',
+    section: 'Sewing Floor',
+    sectionKey: 'sewing',
     style: 'STY-DN-502',
     po: 'PO-ZARA-4482',
     smv: 22.4,
@@ -1274,8 +1353,40 @@ export const INITIAL_TARGET_SETTINGS: TargetSettingRecord[] = [
     targetPerShift: 950,
   },
   {
-    id: 'tgt-3',
+    id: 'tgt-2-wash',
+    lineName: 'Industrial Washing Bay 01',
+    section: 'Industrial Washing',
+    sectionKey: 'washing',
+    style: 'STY-DN-502',
+    po: 'PO-ZARA-4482',
+    smv: 5.0,
+    workingMinutes: 480,
+    manpower: 16,
+    efficiencyPercent: 80,
+    targetPerHour: 220,
+    targetPerDay: 1760,
+    targetPerShift: 1760,
+  },
+  {
+    id: 'tgt-2-fin',
+    lineName: 'Finishing Line 02 (Heavy Denim Press)',
+    section: 'Finishing Floor',
+    sectionKey: 'finishing',
+    style: 'STY-DN-502',
+    po: 'PO-ZARA-4482',
+    smv: 6.5,
+    workingMinutes: 480,
+    manpower: 24,
+    efficiencyPercent: 82,
+    targetPerHour: 180,
+    targetPerDay: 1440,
+    targetPerShift: 1440,
+  },
+  {
+    id: 'tgt-3-sew',
     lineName: 'Sewing Line 02',
+    section: 'Sewing Floor',
+    sectionKey: 'sewing',
     style: 'STY-PL-889',
     po: 'PO-PVH-7729',
     smv: 15.0,
@@ -1981,6 +2092,20 @@ export function getStoredMotionStudies(): MotionStudyRecord[] {
 }
 export function saveStoredMotionStudies(studies: MotionStudyRecord[]): void {
   saveOrDispatch(MOTION_STORAGE_KEY, studies, 'erp_motion_updated');
+}
+
+export function getStoredTargetSettings(): TargetSettingRecord[] {
+  return getOrInit(TARGETS_STORAGE_KEY, INITIAL_TARGET_SETTINGS);
+}
+export function saveStoredTargetSettings(records: TargetSettingRecord[]): void {
+  saveOrDispatch(TARGETS_STORAGE_KEY, records, 'erp_targets_updated');
+}
+
+export function getStoredProductionExecutions(): ProductionExecutionRecord[] {
+  return getOrInit(EXECUTIONS_STORAGE_KEY, INITIAL_PRODUCTION_EXECUTIONS);
+}
+export function saveStoredProductionExecutions(records: ProductionExecutionRecord[]): void {
+  saveOrDispatch(EXECUTIONS_STORAGE_KEY, records, 'erp_executions_updated');
 }
 
 export function getStoredHourlyMonitoring(): HourlyMonitoringRecord[] {

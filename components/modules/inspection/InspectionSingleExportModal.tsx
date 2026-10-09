@@ -149,6 +149,37 @@ export function InspectionSingleExportModal({
                 </span>
               </div>
             </div>
+
+            {/* Extended Mobile Inspection Details */}
+            <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between flex-wrap gap-2 text-[10px]">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {record.hasZeroToleranceFail ? (
+                  <span className="px-2 py-0.5 rounded font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                    ⚠️ 0-Tolerance Failed
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    ✓ 0-Tol Cleared
+                  </span>
+                )}
+
+                <span className="px-2 py-0.5 rounded font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                  📷 {(record.poSheetPhotos?.length || 0) + (record.sampleCartonPhotos?.length || 0) + (record.compliancePhotos?.length || 0) + (record.measurementSheetPhotos?.length || 0)} Photos
+                </span>
+
+                <span className="px-2 py-0.5 rounded font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                  🧪 {record.testRecords?.length || 0} Tests
+                </span>
+              </div>
+
+              <span className={`px-2 py-0.5 rounded font-bold ${
+                record.inspectorSignature && record.representativeSignature
+                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+              }`}>
+                {record.inspectorSignature && record.representativeSignature ? '✓ Dual Signed' : 'Sign-Off Ready'}
+              </span>
+            </div>
           </div>
 
           {/* Export Format Cards */}
@@ -176,7 +207,7 @@ export function InspectionSingleExportModal({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Official inspection certificate with Size breakdown, AQL verdict &amp; defect analysis.
+                    Official inspection certificate with photos, test records, 0-tolerance status, size breakdown &amp; dual signatures.
                   </p>
                 </div>
               </div>
@@ -207,7 +238,7 @@ export function InspectionSingleExportModal({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Full QC workbook with Size breakdown, sample pickups, defects &amp; checkpoints.
+                    Full QC workbook with size breakdown, defects, test records, photo log &amp; dual sign-off metadata.
                   </p>
                 </div>
               </div>

@@ -21,8 +21,14 @@ import {
   Truck,
   ArrowRight,
   AlertTriangle,
+  Target,
 } from 'lucide-react';
 import { ProductionStageDetail, BuyerOrderWIPRecord } from '@/lib/types/modules';
+import {
+  SECTION_KEYS,
+  SECTION_METADATA,
+  getDefaultSectionTargets,
+} from '@/lib/utils/section-target-utils';
 import {
   getCuttingProductionTrackForPO,
   getFinishingProductionTrackForPO,
@@ -386,6 +392,28 @@ export function OrderProductionTracking({
           <div className="p-1.5 rounded-lg bg-white/5 border border-white/10">
             <span className="text-slate-400 block truncate">9. Shipped</span>
             <span className="font-mono font-bold text-emerald-400 block mt-0.5">{currentWip.shippedQuantity.toLocaleString()}</span>
+          </div>
+        </div>
+
+        {/* Section-Wise Hourly Target & SMV Strip */}
+        <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[10px]">
+          <div className="flex items-center gap-1.5 text-slate-300">
+            <Target className="w-3 h-3 text-indigo-400 shrink-0" />
+            <span className="font-semibold text-slate-400 uppercase tracking-wider text-[9px]">Section Hourly Targets &amp; SMVs:</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 font-mono">
+            {SECTION_KEYS.map((k) => {
+              const cfg = currentWip.sectionTargets?.[k] || getDefaultSectionTargets()[k];
+              const meta = SECTION_METADATA[k];
+              if (k === 'washing' && !currentWip.washApplicable) return null;
+              return (
+                <span key={k} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-white text-[10px]">
+                  <span className="text-slate-400 font-sans font-medium">{meta.shortLabel}:</span>
+                  <strong className="text-indigo-300">{cfg.hourlyTarget}/hr</strong>
+                  <span className="text-slate-400">({cfg.smv}m)</span>
+                </span>
+              );
+            })}
           </div>
         </div>
       </div>

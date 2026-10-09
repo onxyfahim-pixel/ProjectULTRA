@@ -51,6 +51,29 @@ export interface LogisticsDetail {
   shippingTerms: 'FOB' | 'CIF' | 'DDP' | 'CFR' | 'EXW';
 }
 
+export type ProductionSectionKey =
+  | 'cutting'
+  | 'sewing'
+  | 'washing'
+  | 'finishing'
+  | 'packing'
+  | 'qa';
+
+export interface SectionTargetConfig {
+  sectionKey: ProductionSectionKey;
+  sectionName: string; // e.g. 'Cutting Floor', 'Sewing Floor', 'Industrial Washing', etc.
+  smv: number; // Section SMV in minutes (e.g. 2.5 min for Cutting, 18.5 min for Sewing)
+  hourlyTarget: number; // Section Hourly Target pcs/hour (e.g. 350 pcs/hr for Cutting, 140 pcs/hr for Sewing)
+  dailyTarget?: number; // Section Daily Target pcs/day (e.g. hourlyTarget * 8)
+  manpower?: number; // Allocated operators/manpower
+  efficiency?: number; // Target efficiency % (e.g. 85%)
+  targetEfficiency?: number; // Target efficiency % alias
+  workingHours?: number; // Standard working hours (e.g. 8)
+  notes?: string;
+}
+
+export type SectionWiseTargets = Record<ProductionSectionKey, SectionTargetConfig>;
+
 export interface BuyerOrderWIPRecord {
   // 1. Cutting Planned
   cuttingPlanned: number;
@@ -72,6 +95,9 @@ export interface BuyerOrderWIPRecord {
   inspectionCompletedQuantity: number;
   // 9. Shipped Quantity
   shippedQuantity: number;
+
+  // Section-Wise SMV and Hourly Targets Configuration (Linked to Production Entry & IE)
+  sectionTargets?: SectionWiseTargets;
 
   // Metadata & Auto Sync Indicators
   autoSyncFlags?: {
@@ -159,6 +185,7 @@ export interface BuyerOrder {
   smv?: number; // Standard Minute Value (SMV / SAM in minutes, e.g. 18.5)
   productionTarget?: number; // Planned Daily or Hourly Production Target (linked to IE & Production)
   dailyTarget?: number; // Planned Daily Output Target (pcs/day)
+  sectionTargets?: SectionWiseTargets; // Section-wise SMVs and Hourly Targets (Cutting, Sewing, Wash, Finishing, Packing, QA)
   colorSizeBreakdown?: OrderColorSizeBreakdown[]; // Size-wise and color-wise order breakdown matrix
   productionTracking?: {
     currentStage: 'PLANNED' | 'CUTTING' | 'SEWING' | 'PACKING' | 'READY_AUDIT' | 'SHIPPED';

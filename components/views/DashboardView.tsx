@@ -32,7 +32,9 @@ import { useLiveSync } from '@/hooks/use-live-sync';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import {
   isSewingSectionRecord,
+  isFinishingSectionRecord,
   calculateRecordCheckedQty,
+  getProductionRecords,
 } from '@/lib/db/production-records-store';
 
 export type TimeRangeOption =
@@ -148,7 +150,10 @@ export function DashboardView({
 
   // Real-time local state synchronized from props AND storage / events
   const [liveOrders, setLiveOrders] = useState<BuyerOrder[]>(orders);
-  const [liveProductionOrders, setLiveProductionOrders] = useState<ProductionOrder[]>(productionOrders);
+  const [liveProductionOrders, setLiveProductionOrders] = useState<ProductionOrder[]>(() => {
+    if (productionOrders && productionOrders.length > 0) return productionOrders;
+    return getProductionRecords();
+  });
   const [liveInspections, setLiveInspections] = useState<InspectionRecord[]>(inspections);
 
   useEffect(() => {
@@ -156,7 +161,9 @@ export function DashboardView({
   }, [orders]);
 
   useEffect(() => {
-    if (productionOrders) setLiveProductionOrders(productionOrders);
+    if (productionOrders && productionOrders.length > 0) {
+      setLiveProductionOrders(productionOrders);
+    }
   }, [productionOrders]);
 
   useEffect(() => {
@@ -179,12 +186,9 @@ export function DashboardView({
 
     const syncProduction = () => {
       try {
-        const raw = localStorage.getItem('erp_production_orders_v1');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setLiveProductionOrders(parsed);
-          }
+        const live = getProductionRecords();
+        if (live && live.length > 0) {
+          setLiveProductionOrders(live);
         }
       } catch {}
     };
@@ -204,6 +208,7 @@ export function DashboardView({
     window.addEventListener('erp_buyer_orders_updated', syncOrders);
     window.addEventListener('erp_production_records_updated', syncProduction);
     window.addEventListener('erp_production_orders_updated', syncProduction);
+    window.addEventListener('erp_sewing_track_updated', syncProduction);
     window.addEventListener('erp_production_defects_updated', syncProduction);
     window.addEventListener('erp_inspection_records_updated', syncInspections);
     window.addEventListener('erp_inspections_updated', syncInspections);
@@ -218,6 +223,7 @@ export function DashboardView({
       window.removeEventListener('erp_buyer_orders_updated', syncOrders);
       window.removeEventListener('erp_production_records_updated', syncProduction);
       window.removeEventListener('erp_production_orders_updated', syncProduction);
+      window.removeEventListener('erp_sewing_track_updated', syncProduction);
       window.removeEventListener('erp_production_defects_updated', syncProduction);
       window.removeEventListener('erp_inspection_records_updated', syncInspections);
       window.removeEventListener('erp_inspections_updated', syncInspections);
@@ -295,16 +301,8 @@ export function DashboardView({
   // METRIC 3: Total Finishing Quantity with DHU & Reject (Sync from Finishing & WIP)
   // ==========================================
   const finishingMetrics = useMemo(() => {
-    // 1. Gather finishing records from liveProductionOrders
-    const finishingLines = liveProductionOrders.filter(
-      (po) =>
-        (po.section &&
-          (po.section.toLowerCase().includes('finish') ||
-            po.section.toLowerCase().includes('pack') ||
-            po.section.toLowerCase().includes('iron'))) ||
-        (po.sewingLine &&
-          (po.sewingLine.toLowerCase().includes('finish') || po.sewingLine.toLowerCase().includes('pack')))
-    );
+    // 1. Gather finishing records from liveProductionOrders using standard store detector
+    const finishingLines = liveProductionOrders.filter((po) => isFinishingSectionRecord(po));
 
     const prodFinishingPcs = finishingLines.reduce((sum, po) => sum + calculateRecordCheckedQty(po), 0);
     const prodFinishingTarget = finishingLines.reduce((sum, po) => sum + (Number(po.targetQuantity) || 0), 0);

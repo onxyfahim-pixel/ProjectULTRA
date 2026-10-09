@@ -6,7 +6,10 @@ export type FooterSignatureMode = 'dual' | 'triple' | 'none';
 export interface ExportPdfOptions {
   signatureMode?: FooterSignatureMode;
   includeChecklist?: boolean;
+  includePhotos?: boolean;
+  includeRemarks?: boolean;
 }
+
 
 // -------------------------------------------------------------
 // KPI COMPUTATIONS FOR AUDIT MODULE
@@ -543,9 +546,68 @@ export function exportSingleAuditPdf(
 
     const checklist = audit.checklist || [];
 
+    // Collect all evidence photos across all questions
+    const allEvidencePhotos: {
+      url: string;
+      caption?: string;
+      timestamp?: string;
+      clauseNumber: string;
+      subClauseTitle: string;
+      status: string;
+    }[] = [];
+
+    checklist.forEach((q) => {
+      const pList =
+        q.evidencePhotos && q.evidencePhotos.length > 0
+          ? q.evidencePhotos
+          : q.evidencePhoto
+          ? [{ id: `p-${q.id}`, url: q.evidencePhoto, caption: q.remark || '', timestamp: q.photoTimestamp }]
+          : [];
+
+      pList.forEach((p) => {
+        allEvidencePhotos.push({
+          url: p.url,
+          caption: p.caption,
+          timestamp: p.timestamp,
+          clauseNumber: q.clauseNumber,
+          subClauseTitle: q.subClauseTitle || q.clause,
+          status: q.status,
+        });
+      });
+    });
+
     const checklistRowsHtml = checklist
-      .map(
-        (q, idx) => `
+      .map((q, idx) => {
+        const qPhotos =
+          q.evidencePhotos && q.evidencePhotos.length > 0
+            ? q.evidencePhotos
+            : q.evidencePhoto
+            ? [{ id: `p-${q.id}`, url: q.evidencePhoto, caption: q.remark || '', timestamp: q.photoTimestamp }]
+            : [];
+
+        const qPhotosHtml =
+          options?.includePhotos !== false && qPhotos.length > 0
+            ? `
+            <div style="display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap;">
+              ${qPhotos
+                .map(
+                  (p, pIdx) => `
+                <div style="border: 1px solid #cbd5e1; border-radius: 3px; overflow: hidden; background: #ffffff; width: 60px; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">
+                  <img src="${p.url}" alt="Evidence ${pIdx + 1}" style="width: 60px; height: 42px; object-fit: cover; display: block;" onerror="this.style.display='none'" />
+                  ${
+                    p.caption
+                      ? `<div style="font-size: 6px; line-height: 1.1; color: #475569; padding: 1.5px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60px;" title="${p.caption}">${p.caption}</div>`
+                      : ''
+                  }
+                </div>
+              `
+                )
+                .join('')}
+            </div>
+          `
+            : '';
+
+        return `
         <tr style="border-bottom: 1px solid #f1f5f9; ${
           q.status === 'CRITICAL_NC'
             ? 'background-color: #fff1f2;'
@@ -580,10 +642,13 @@ export function exportSingleAuditPdf(
               ${q.status.replace('_', ' ')}
             </span>
           </td>
-          <td style="font-size: 7.5px; color: #334155;">${q.remark || '-'}</td>
+          <td style="font-size: 7.5px; color: #334155;">
+            <div>${q.remark || '-'}</div>
+            ${qPhotosHtml}
+          </td>
         </tr>
-      `
-      )
+      `;
+      })
       .join('');
 
     const html = `
@@ -595,7 +660,7 @@ export function exportSingleAuditPdf(
           <style>
             @page {
               size: A4 portrait;
-              margin: 12mm 15mm 12mm 15mm;
+              margin: 10mm 12mm 10mm 12mm;
             }
             body {
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -616,6 +681,8 @@ export function exportSingleAuditPdf(
               border-radius: 8px;
               padding: 9px 11px;
               background: #f8fafc;
+              break-inside: avoid;
+              page-break-inside: avoid;
             }
             .card-title {
               font-size: 9.5px;
@@ -657,6 +724,20 @@ export function exportSingleAuditPdf(
             td {
               padding: 4px;
               border-bottom: 1px solid #e2e8f0;
+              vertical-align: top;
+            }
+            @media print {
+              img {
+                max-width: 100% !important;
+                page-break-inside: avoid;
+              }
+              .photo-grid {
+                page-break-inside: auto;
+              }
+              .photo-card {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
             }
           </style>
         </head>
@@ -684,7 +765,7 @@ export function exportSingleAuditPdf(
               }; color: #ffffff;">
                 ${hasCritical ? 'FAILED (CRITICAL NC)' : isPassed ? 'PASSED (≥80 MARKS)' : 'FAILED / ACTION REQ.'}
               </span>
-              <div style="font-size: 11px; font-mono; font-weight: 800; color: ${
+              <div style="font-size: 11px; font-family: monospace; font-weight: 800; color: ${
                 hasCritical ? '#b91c1c' : isPassed ? '#047857' : '#b45309'
               }; margin-top: 2px;">
                 Score: ${scoreVal}% (${scoreVal} / 100 Marks)
@@ -747,7 +828,7 @@ export function exportSingleAuditPdf(
           ${
             audit.executiveSummary
               ? `
-            <div style="padding: 7px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px;">
+            <div style="padding: 7px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 10px; break-inside: avoid;">
               <strong style="color: #1e3a8a; font-size: 8.5px; text-transform: uppercase;">Executive Summary &amp; Findings:</strong>
               <div style="color: #334155; font-size: 8.5px; margin-top: 3px; line-height: 1.4;">${audit.executiveSummary}</div>
             </div>
@@ -756,9 +837,9 @@ export function exportSingleAuditPdf(
           }
 
           ${
-            checklist.length > 0
+            checklist.length > 0 && options?.includeChecklist !== false
               ? `
-            <div style="margin-top: 8px; margin-bottom: 4px; font-size: 9px; font-weight: 800; color: #0f172a; text-transform: uppercase; border-bottom: 1.5px solid #0f172a; padding-bottom: 2px; display: flex; justify-content: space-between;">
+            <div style="margin-top: 10px; margin-bottom: 4px; font-size: 9px; font-weight: 800; color: #0f172a; text-transform: uppercase; border-bottom: 1.5px solid #0f172a; padding-bottom: 2px; display: flex; justify-content: space-between;">
               <span>Audit Clause Verification &amp; Checklist Assessment</span>
               <span style="font-size: 8px; color: #64748b; font-weight: 600;">${checklist.length} Checkpoints Evaluated</span>
             </div>
@@ -769,13 +850,91 @@ export function exportSingleAuditPdf(
                   <th style="width: 25px; text-align: center;">#</th>
                   <th style="width: 50px;">Clause</th>
                   <th>Clause Description &amp; Verification Criteria</th>
-                  <th style="text-align: center; width: 60px;">Marks</th>
-                  <th style="text-align: center; width: 85px;">Compliance</th>
-                  <th style="width: 140px;">Auditor Remarks / Evidence</th>
+                  <th style="text-align: center; width: 55px;">Marks</th>
+                  <th style="text-align: center; width: 80px;">Compliance</th>
+                  <th style="width: 170px;">Auditor Remarks &amp; Evidence</th>
                 </tr>
               </thead>
               <tbody>
                 ${checklistRowsHtml}
+              </tbody>
+            </table>
+          `
+              : ''
+          }
+
+          ${
+            options?.includePhotos !== false && allEvidencePhotos.length > 0
+              ? `
+            <div style="page-break-before: auto; margin-top: 16px; margin-bottom: 6px; font-size: 9.5px; font-weight: 800; color: #0f172a; text-transform: uppercase; border-bottom: 1.5px solid #0f172a; padding-bottom: 3px; display: flex; justify-content: space-between; align-items: center;">
+              <span>Audit Photo Evidences &amp; Visual Verification Gallery</span>
+              <span style="font-size: 8px; color: #64748b; font-weight: 600;">${allEvidencePhotos.length} Photographic Records Attached</span>
+            </div>
+
+            <div class="photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px;">
+              ${allEvidencePhotos
+                .map(
+                  (p, pIdx) => `
+                <div class="photo-card" style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #ffffff; break-inside: avoid; page-break-inside: avoid; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                  <div style="height: 105px; background: #f8fafc; overflow: hidden; position: relative;">
+                    <img src="${p.url}" alt="Audit Evidence ${pIdx + 1}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;font-size:8px;color:#94a3b8;\\'>Photo Preview Unavailable</div>'" />
+                  </div>
+                  <div style="padding: 6px 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                      <span style="font-family: monospace; font-size: 7.5px; font-weight: 800; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 1px 4px; border-radius: 3px;">
+                        ${p.clauseNumber}
+                      </span>
+                      <span style="font-size: 7px; color: #64748b; font-family: monospace;">${p.timestamp || 'Recorded'}</span>
+                    </div>
+                    <div style="font-size: 8px; font-weight: 700; color: #0f172a; line-height: 1.25; margin-bottom: 2px;">
+                      ${p.caption || p.subClauseTitle || 'Visual Verification Record'}
+                    </div>
+                    <div style="font-size: 7px; color: #64748b; line-height: 1.2;">
+                      ${p.subClauseTitle}
+                    </div>
+                  </div>
+                </div>
+              `
+                )
+                .join('')}
+            </div>
+          `
+              : ''
+          }
+
+          ${
+            audit.uploadedFiles && audit.uploadedFiles.length > 0
+              ? `
+            <div style="margin-top: 14px; margin-bottom: 6px; font-size: 9px; font-weight: 800; color: #0f172a; text-transform: uppercase; border-bottom: 1.5px solid #0f172a; padding-bottom: 2px; display: flex; justify-content: space-between;">
+              <span>Attached Documents &amp; Certificates</span>
+              <span style="font-size: 8px; color: #64748b; font-weight: 600;">${audit.uploadedFiles.length} File(s)</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 30px; text-align: center;">#</th>
+                  <th>File Name</th>
+                  <th style="width: 80px;">Type</th>
+                  <th style="width: 80px;">Size</th>
+                  <th style="width: 90px;">Upload Date</th>
+                  <th style="width: 90px;">Uploaded By</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${audit.uploadedFiles
+                  .map(
+                    (f, fIdx) => `
+                  <tr style="border-bottom: 1px solid #f1f5f9; ${fIdx % 2 === 1 ? 'background: #f8fafc;' : ''}">
+                    <td style="text-align: center; font-family: monospace; font-size: 8px; color: #64748b;">${fIdx + 1}</td>
+                    <td style="font-weight: 700; color: #1e3a8a; font-size: 8px;">${f.fileName}</td>
+                    <td style="font-size: 7.5px; color: #475569;">${f.fileType}</td>
+                    <td style="font-size: 7.5px; font-family: monospace; color: #475569;">${f.fileSize}</td>
+                    <td style="font-size: 7.5px; font-family: monospace; color: #475569;">${f.uploadDate}</td>
+                    <td style="font-size: 7.5px; color: #475569;">${f.uploadedBy || 'Lead Auditor'}</td>
+                  </tr>
+                `
+                  )
+                  .join('')}
               </tbody>
             </table>
           `
@@ -817,23 +976,65 @@ export function exportSingleAuditExcel(audit: QualityAudit): void {
       !hasCritical &&
       (audit.isPassed !== undefined ? audit.isPassed : scoreVal >= (audit.passMarks ?? 80));
 
+    // Checklist rows with photo count & photo references
     const checklistRows = (audit.checklist || [])
-      .map(
-        (q, idx) => `
+      .map((q, idx) => {
+        const photos =
+          q.evidencePhotos && q.evidencePhotos.length > 0
+            ? q.evidencePhotos
+            : q.evidencePhoto
+            ? [{ id: `p-${q.id}`, url: q.evidencePhoto, caption: q.remark || '', timestamp: q.photoTimestamp }]
+            : [];
+
+        const photoRef = photos
+          .map((p, pIdx) => `[Photo ${pIdx + 1}: ${p.caption || 'Evidence'} (${p.url})]`)
+          .join(' | ');
+
+        return `
         <tr>
           <td>${idx + 1}</td>
           <td>${q.clauseNumber}</td>
           <td>${q.clause}</td>
           <td>${q.subClauseTitle || ''}</td>
           <td>${q.question}</td>
+          <td>${q.guidance || ''}</td>
           <td>${q.score}</td>
           <td>${q.maxScore}</td>
           <td>${q.status}</td>
           <td>${q.remark || ''}</td>
+          <td>${photos.length}</td>
+          <td>${photoRef}</td>
         </tr>
-      `
-      )
+      `;
+      })
       .join('');
+
+    // Evidence photo log table
+    const allEvidenceRows: string[] = [];
+    let photoCounter = 1;
+    (audit.checklist || []).forEach((q) => {
+      const photos =
+        q.evidencePhotos && q.evidencePhotos.length > 0
+          ? q.evidencePhotos
+          : q.evidencePhoto
+          ? [{ id: `p-${q.id}`, url: q.evidencePhoto, caption: q.remark || '', timestamp: q.photoTimestamp }]
+          : [];
+
+      photos.forEach((p) => {
+        allEvidenceRows.push(`
+          <tr>
+            <td>${photoCounter++}</td>
+            <td>${q.clauseNumber}</td>
+            <td>${q.clause}</td>
+            <td>${q.subClauseTitle || ''}</td>
+            <td>${q.question}</td>
+            <td>${p.caption || q.remark || 'Audit photographic evidence'}</td>
+            <td>${p.timestamp || 'Recorded'}</td>
+            <td>${p.url}</td>
+          </tr>
+        `);
+      });
+    });
 
     const template = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -842,7 +1043,7 @@ export function exportSingleAuditExcel(audit: QualityAudit): void {
           <style>
             table { border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 11pt; }
             th { background-color: #1e3a8a; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 6px; text-align: left; }
-            td { border: 1px solid #e2e8f0; padding: 5px; }
+            td { border: 1px solid #e2e8f0; padding: 5px; vertical-align: top; }
           </style>
         </head>
         <body>
@@ -886,12 +1087,37 @@ export function exportSingleAuditExcel(audit: QualityAudit): void {
                 <th>Clause Section</th>
                 <th>Sub-Clause Title</th>
                 <th>Auditing Requirement</th>
+                <th>Verification Guidance</th>
                 <th>Score</th>
                 <th>Max Score</th>
                 <th>Status</th>
                 <th>Auditor Remarks</th>
+                <th>Photo Count</th>
+                <th>Photo Evidences &amp; URLs</th>
               </tr>
               ${checklistRows}
+            </table>
+          `
+              : ''
+          }
+
+          ${
+            allEvidenceRows.length > 0
+              ? `
+            <br/>
+            <h3>Audit Photo Evidences &amp; Visual Verification Log</h3>
+            <table border="1">
+              <tr style="background-color: #0f172a; color: #ffffff;">
+                <th>#</th>
+                <th>Clause #</th>
+                <th>Clause Section</th>
+                <th>Sub-Clause Title</th>
+                <th>Auditing Question</th>
+                <th>Photo Caption / Observation</th>
+                <th>Timestamp</th>
+                <th>Image URL</th>
+              </tr>
+              ${allEvidenceRows.join('')}
             </table>
           `
               : ''
@@ -913,3 +1139,4 @@ export function exportSingleAuditExcel(audit: QualityAudit): void {
     console.error('Failed to export single audit Excel:', err);
   }
 }
+

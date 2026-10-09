@@ -49,7 +49,7 @@ import { ProductionManagementView } from '@/components/modules/production/Produc
 import { ProductionExportModal } from '@/components/modules/production/ProductionExportModal';
 import { ProductionSingleExportModal } from '@/components/modules/production/ProductionSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
-import { getProductionLines } from '@/lib/db/production-management-store';
+import { getProductionLines, INITIAL_PRODUCTION_UNITS } from '@/lib/db/production-management-store';
 import {
   getProductionRecords,
   saveProductionRecords,
@@ -243,20 +243,41 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
     });
   }, [orders, startDateFilter, endDateFilter]);
 
+  // Smart section and line matchers for Unit, Floor Section, and Line filters
+  const matchesSectionFilter = (o: ProductionOrder, filter: string): boolean => {
+    if (filter === 'ALL') return true;
+    const f = filter.toLowerCase().trim();
+    const sec = (o.section || o.sewingLine || '').toLowerCase().trim();
+    if (f.includes('cut')) return isCuttingSectionRecord(o) || sec.includes('cut');
+    if (f.includes('sew')) return isSewingSectionRecord(o) || sec.includes('sew');
+    if (f.includes('finish')) return isFinishingSectionRecord(o) || sec.includes('finish');
+    if (f.includes('pack')) return isPackingSectionRecord(o) || sec.includes('pack');
+    if (f.includes('wash')) return isWashingSectionRecord(o) || sec.includes('wash');
+    if (f.includes('qa') || f.includes('qual')) return isQualitySectionRecord(o) || sec.includes('qa') || sec.includes('qual');
+    return sec === f || sec.includes(f) || f.includes(sec);
+  };
+
+  const matchesLineFilter = (o: ProductionOrder, filter: string): boolean => {
+    if (filter === 'ALL') return true;
+    const f = filter.toLowerCase().trim();
+    const lineId = (o.lineId || '').toLowerCase().trim();
+    const lineName = (o.sewingLine || '').toLowerCase().trim();
+    return lineId === f || lineName === f || lineName.includes(f) || f.includes(lineId) || lineId.includes(f);
+  };
+
+  const matchesUnitFilter = (o: ProductionOrder, filter: string): boolean => {
+    if (filter === 'ALL') return true;
+    const f = filter.toLowerCase().trim();
+    const u = (o.unit || 'Unit 01').toLowerCase().trim();
+    return u === f || u.includes(f) || f.includes(u);
+  };
+
   // Real dynamic KPIs linked directly from matching production records in date + unit + section + line filters
   const summaryOrders = useMemo(() => {
     return dateFilteredOrders.filter((o) => {
-      const matchesUnit = unitFilter === 'ALL' || (o.unit || 'Unit 01') === unitFilter;
-      const secText = (o.section || o.sewingLine || '').toLowerCase();
-      const matchesSection =
-        sectionFilter === 'ALL' ||
-        secText.includes(sectionFilter.toLowerCase()) ||
-        sectionFilter.toLowerCase().includes(secText);
-      const lineText = `${o.lineId || ''} ${o.sewingLine || ''}`.toLowerCase();
-      const matchesLine =
-        lineFilter === 'ALL' ||
-        lineText.includes(lineFilter.toLowerCase()) ||
-        lineFilter.toLowerCase().includes((o.lineId || '').toLowerCase());
+      const matchesUnit = matchesUnitFilter(o, unitFilter);
+      const matchesSection = matchesSectionFilter(o, sectionFilter);
+      const matchesLine = matchesLineFilter(o, lineFilter);
       return matchesUnit && matchesSection && matchesLine;
     });
   }, [dateFilteredOrders, unitFilter, sectionFilter, lineFilter]);
@@ -442,26 +463,56 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
     return sorted.slice(0, 5);
   }, [summaryOrders]);
 
-  // Unique lists for filters
-  const uniqueUnits = Array.from(new Set(orders.map((o) => o.unit || 'Unit 01'))).filter(Boolean);
-  const uniqueSections = Array.from(
-    new Set(orders.map((o) => o.section || o.sewingLine || 'Sewing Floor'))
-  ).filter(Boolean);
-  const uniqueLines = Array.from(
-    new Set(orders.map((o) => o.lineId || o.sewingLine || 'Line 01'))
-  ).filter(Boolean);
-  const uniqueBuyers = Array.from(new Set(orders.map((o) => o.buyer))).filter(Boolean);
+  // Unique lists for Unit, Floor Section, Line, Buyer, Status filters
+  const uniqueUnits = useMemo(() => {
+    const set = new Set<string>();
+    INITIAL_PRODUCTION_UNITS.forEach((u) => {
+      if (u.name) set.add(u.name.split('(')[0].trim());
+      if (u.unitCode) set.add(u.unitCode);
+    });
+    orders.forEach((o) => {
+      if (o.unit) set.add(o.unit);
+    });
+    return Array.from(set).filter(Boolean);
+  }, [orders]);
+
+  const uniqueSections = useMemo(() => {
+    const set = new Set<string>();
+    set.add('Cutting Floor');
+    set.add('Sewing Floor');
+    set.add('Finishing Floor');
+    set.add('Packing Floor');
+    set.add('Washing');
+    set.add('QA / Quality');
+    orders.forEach((o) => {
+      if (o.section) set.add(o.section);
+    });
+    return Array.from(set).filter(Boolean);
+  }, [orders]);
+
+  const uniqueLines = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((o) => {
+      if (o.lineId) set.add(o.lineId);
+      if (o.sewingLine) set.add(o.sewingLine);
+    });
+    getProductionLines().forEach((l) => {
+      if (l.name) set.add(l.name.split('(')[0].trim());
+      if (l.lineCode) set.add(l.lineCode);
+    });
+    return Array.from(set).filter(Boolean);
+  }, [orders]);
+
+  const uniqueBuyers = useMemo(() => {
+    return Array.from(new Set(orders.map((o) => o.buyer))).filter(Boolean);
+  }, [orders]);
 
   // Filtered Orders for the DataTable (combines date filter + unit/section/line/buyer/status)
   const filteredOrders = useMemo(() => {
     return dateFilteredOrders.filter((o) => {
-      const matchesUnit = unitFilter === 'ALL' || (o.unit || 'Unit 01') === unitFilter;
-      const matchesSection =
-        sectionFilter === 'ALL' || (o.section || o.sewingLine) === sectionFilter;
-      const matchesLine =
-        lineFilter === 'ALL' ||
-        o.lineId === lineFilter ||
-        (o.sewingLine || '').toLowerCase().includes(lineFilter.toLowerCase());
+      const matchesUnit = matchesUnitFilter(o, unitFilter);
+      const matchesSection = matchesSectionFilter(o, sectionFilter);
+      const matchesLine = matchesLineFilter(o, lineFilter);
       const matchesBuyer = buyerFilter === 'ALL' || o.buyer === buyerFilter;
       const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
       return matchesUnit && matchesSection && matchesLine && matchesBuyer && matchesStatus;
@@ -1254,25 +1305,25 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                 />
               </div>
 
-              {/* Section Quantities Floor Breakdown Cards */}
-              <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-5 rounded-2xl text-white shadow-md border border-slate-700/60 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-700/60">
+              {/* Section-Wise Production Summary Cards (LIGHT EXECUTIVE THEME) */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/30">
+                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-200/60">
                       <Layers className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold tracking-wide text-white uppercase flex items-center gap-2">
-                        Floor Section Quantities Summary
-                        <span className="text-[10px] normal-case bg-blue-500/20 text-blue-300 font-semibold px-2 py-0.5 rounded-full border border-blue-400/30">
+                      <h3 className="text-sm font-bold tracking-wide text-slate-900 uppercase flex items-center gap-2">
+                        Section-Wise Production Summary
+                        <span className="text-[10px] normal-case bg-blue-50 text-blue-700 font-bold px-2.5 py-0.5 rounded-full border border-blue-200">
                           {sectionBreakdown.totalAllSectionQty.toLocaleString()} Total Output Pcs
                         </span>
                       </h3>
-                      <p className="text-xs text-slate-400">
-                        Real-time output across Sewing, Finishing, Cutting, Packing & Other Sections
-                        {unitFilter !== 'ALL' && ` • Filtered by Unit: ${unitFilter}`}
-                        {sectionFilter !== 'ALL' && ` • Filtered by Section: ${sectionFilter}`}
-                        {lineFilter !== 'ALL' && ` • Filtered by Line: ${lineFilter}`}
+                      <p className="text-xs text-slate-500">
+                        Real-time floor summary across Cutting, Sewing, Finishing, Packing &amp; Other Sections
+                        {unitFilter !== 'ALL' && ` • Unit: ${unitFilter}`}
+                        {sectionFilter !== 'ALL' && ` • Section: ${sectionFilter}`}
+                        {lineFilter !== 'ALL' && ` • Line: ${lineFilter}`}
                       </p>
                     </div>
                   </div>
@@ -1280,7 +1331,7 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                     <button
                       type="button"
                       onClick={() => setSectionFilter('ALL')}
-                      className="text-xs text-blue-400 hover:text-blue-300 underline font-medium self-start sm:self-auto cursor-pointer"
+                      className="text-xs text-blue-600 hover:text-blue-800 underline font-semibold self-start sm:self-auto cursor-pointer"
                     >
                       Clear Section Filter ({sectionFilter})
                     </button>
@@ -1288,170 +1339,176 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-                  {/* 1. Sewing Section */}
+                  {/* 1. Cutting Section */}
                   <div
-                    onClick={() => setSectionFilter(sectionFilter === 'Sewing' ? 'ALL' : 'Sewing')}
+                    onClick={() => setSectionFilter(sectionFilter === 'Cutting' ? 'ALL' : 'Cutting')}
                     className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
-                      sectionFilter === 'Sewing'
-                        ? 'bg-blue-600/30 border-blue-400 ring-2 ring-blue-500/50 shadow-lg'
-                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-blue-500/50'
+                      sectionFilter === 'Cutting'
+                        ? 'bg-indigo-50/80 border-indigo-400 ring-2 ring-indigo-500/30 shadow-xs'
+                        : 'bg-white hover:bg-indigo-50/30 border-slate-200 hover:border-indigo-300 shadow-2xs'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        <div className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg">
+                        <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100">
+                          <Scissors className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Cutting Section</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                        {sectionBreakdown.cutting.recordsCount} runs
+                      </span>
+                    </div>
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">
+                      {sectionBreakdown.cutting.qty.toLocaleString()}{' '}
+                      <span className="text-xs font-semibold text-slate-400">pcs</span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-[11px]">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Target:</span>
+                        <span className="font-semibold text-slate-800">
+                          {sectionBreakdown.cutting.target.toLocaleString()} pcs
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Efficiency:</span>
+                        <span className="font-bold text-emerald-600">{sectionBreakdown.cutting.eff}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Scrap/Loss:</span>
+                        <span className="font-semibold text-amber-600">
+                          {sectionBreakdown.cutting.rejects.toLocaleString()} pcs
+                        </span>
+                      </div>
+                    </div>
+                    {/* Share bar */}
+                    <div className="mt-3 pt-2 border-t border-slate-100">
+                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                        <span>Floor Share</span>
+                        <span className="font-bold text-indigo-600">{sectionBreakdown.cutting.pct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-indigo-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, sectionBreakdown.cutting.pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Sewing Section */}
+                  <div
+                    onClick={() => setSectionFilter(sectionFilter === 'Sewing' ? 'ALL' : 'Sewing')}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
+                      sectionFilter === 'Sewing'
+                        ? 'bg-blue-50/80 border-blue-400 ring-2 ring-blue-500/30 shadow-xs'
+                        : 'bg-white hover:bg-blue-50/30 border-slate-200 hover:border-blue-300 shadow-2xs'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
                           <Shirt className="w-4 h-4" />
                         </div>
-                        <span className="text-xs font-bold text-blue-200 uppercase tracking-wider">Sewing</span>
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Sewing Section</span>
                       </div>
-                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
+                      <span className="text-[10px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
                         {sectionBreakdown.sewing.recordsCount} runs
                       </span>
                     </div>
-                    <div className="text-2xl font-black text-white tracking-tight">
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">
                       {sectionBreakdown.sewing.qty.toLocaleString()}{' '}
                       <span className="text-xs font-semibold text-slate-400">pcs</span>
                     </div>
-                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                    <div className="mt-2 space-y-1 text-[11px]">
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Target:</span>
-                        <span className="font-semibold text-slate-200">
+                        <span className="text-slate-500">Target:</span>
+                        <span className="font-semibold text-slate-800">
                           {sectionBreakdown.sewing.target.toLocaleString()} pcs
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Efficiency:</span>
-                        <span className="font-bold text-emerald-400">{sectionBreakdown.sewing.eff}%</span>
+                        <span className="text-slate-500">Efficiency:</span>
+                        <span className="font-bold text-emerald-600">{sectionBreakdown.sewing.eff}%</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">DHU Rate:</span>
-                        <span className="font-bold text-purple-300">{sectionBreakdown.sewing.dhu}%</span>
+                        <span className="text-slate-500">DHU Rate:</span>
+                        <span className="font-bold text-purple-600">{sectionBreakdown.sewing.dhu}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Rejects:</span>
+                        <span className="font-semibold text-amber-600">
+                          {sectionBreakdown.sewing.rejects.toLocaleString()} pcs
+                        </span>
                       </div>
                     </div>
                     {/* Share bar */}
-                    <div className="mt-3 pt-2 border-t border-slate-700/60">
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                    <div className="mt-3 pt-2 border-t border-slate-100">
+                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
                         <span>Floor Share</span>
-                        <span className="font-bold text-blue-400">{sectionBreakdown.sewing.pct}%</span>
+                        <span className="font-bold text-blue-600">{sectionBreakdown.sewing.pct}%</span>
                       </div>
-                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                         <div
-                          className="bg-blue-500 h-full rounded-full transition-all duration-300"
+                          className="bg-blue-600 h-full rounded-full transition-all duration-300"
                           style={{ width: `${Math.min(100, sectionBreakdown.sewing.pct)}%` }}
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* 2. Finishing Section */}
+                  {/* 3. Finishing Section */}
                   <div
                     onClick={() => setSectionFilter(sectionFilter === 'Finishing' ? 'ALL' : 'Finishing')}
                     className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
                       sectionFilter === 'Finishing'
-                        ? 'bg-emerald-600/30 border-emerald-400 ring-2 ring-emerald-500/50 shadow-lg'
-                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-emerald-500/50'
+                        ? 'bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-500/30 shadow-xs'
+                        : 'bg-white hover:bg-emerald-50/30 border-slate-200 hover:border-emerald-300 shadow-2xs'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg">
+                        <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
                           <Sparkles className="w-4 h-4" />
                         </div>
-                        <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Finishing</span>
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Finishing Section</span>
                       </div>
-                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
+                      <span className="text-[10px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
                         {sectionBreakdown.finishing.recordsCount} runs
                       </span>
                     </div>
-                    <div className="text-2xl font-black text-white tracking-tight">
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">
                       {sectionBreakdown.finishing.qty.toLocaleString()}{' '}
                       <span className="text-xs font-semibold text-slate-400">pcs</span>
                     </div>
-                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                    <div className="mt-2 space-y-1 text-[11px]">
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Target:</span>
-                        <span className="font-semibold text-slate-200">
+                        <span className="text-slate-500">Target:</span>
+                        <span className="font-semibold text-slate-800">
                           {sectionBreakdown.finishing.target.toLocaleString()} pcs
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Efficiency:</span>
-                        <span className="font-bold text-emerald-400">{sectionBreakdown.finishing.eff}%</span>
+                        <span className="text-slate-500">Efficiency:</span>
+                        <span className="font-bold text-emerald-600">{sectionBreakdown.finishing.eff}%</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Rejects:</span>
-                        <span className="font-semibold text-amber-300">
+                        <span className="text-slate-500">Rejects:</span>
+                        <span className="font-semibold text-amber-600">
                           {sectionBreakdown.finishing.rejects.toLocaleString()} pcs
                         </span>
                       </div>
                     </div>
                     {/* Share bar */}
-                    <div className="mt-3 pt-2 border-t border-slate-700/60">
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                    <div className="mt-3 pt-2 border-t border-slate-100">
+                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
                         <span>Floor Share</span>
-                        <span className="font-bold text-emerald-400">{sectionBreakdown.finishing.pct}%</span>
+                        <span className="font-bold text-emerald-600">{sectionBreakdown.finishing.pct}%</span>
                       </div>
-                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                         <div
                           className="bg-emerald-500 h-full rounded-full transition-all duration-300"
                           style={{ width: `${Math.min(100, sectionBreakdown.finishing.pct)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3. Cutting Section */}
-                  <div
-                    onClick={() => setSectionFilter(sectionFilter === 'Cutting' ? 'ALL' : 'Cutting')}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
-                      sectionFilter === 'Cutting'
-                        ? 'bg-indigo-600/30 border-indigo-400 ring-2 ring-indigo-500/50 shadow-lg'
-                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-indigo-500/50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-1.5">
-                        <div className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg">
-                          <Scissors className="w-4 h-4" />
-                        </div>
-                        <span className="text-xs font-bold text-indigo-200 uppercase tracking-wider">Cutting</span>
-                      </div>
-                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
-                        {sectionBreakdown.cutting.recordsCount} runs
-                      </span>
-                    </div>
-                    <div className="text-2xl font-black text-white tracking-tight">
-                      {sectionBreakdown.cutting.qty.toLocaleString()}{' '}
-                      <span className="text-xs font-semibold text-slate-400">pcs</span>
-                    </div>
-                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Target:</span>
-                        <span className="font-semibold text-slate-200">
-                          {sectionBreakdown.cutting.target.toLocaleString()} pcs
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Efficiency:</span>
-                        <span className="font-bold text-emerald-400">{sectionBreakdown.cutting.eff}%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Scrap/Loss:</span>
-                        <span className="font-semibold text-amber-300">
-                          {sectionBreakdown.cutting.rejects.toLocaleString()} pcs
-                        </span>
-                      </div>
-                    </div>
-                    {/* Share bar */}
-                    <div className="mt-3 pt-2 border-t border-slate-700/60">
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                        <span>Floor Share</span>
-                        <span className="font-bold text-indigo-400">{sectionBreakdown.cutting.pct}%</span>
-                      </div>
-                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-indigo-500 h-full rounded-full transition-all duration-300"
-                          style={{ width: `${Math.min(100, sectionBreakdown.cutting.pct)}%` }}
                         />
                       </div>
                     </div>
@@ -1462,50 +1519,50 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                     onClick={() => setSectionFilter(sectionFilter === 'Packing' ? 'ALL' : 'Packing')}
                     className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
                       sectionFilter === 'Packing'
-                        ? 'bg-amber-600/30 border-amber-400 ring-2 ring-amber-500/50 shadow-lg'
-                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-amber-500/50'
+                        ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-500/30 shadow-xs'
+                        : 'bg-white hover:bg-amber-50/30 border-slate-200 hover:border-amber-300 shadow-2xs'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        <div className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg">
+                        <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
                           <PackageCheck className="w-4 h-4" />
                         </div>
-                        <span className="text-xs font-bold text-amber-200 uppercase tracking-wider">Packing</span>
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Packing Section</span>
                       </div>
-                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
+                      <span className="text-[10px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
                         {sectionBreakdown.packing.recordsCount} runs
                       </span>
                     </div>
-                    <div className="text-2xl font-black text-white tracking-tight">
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">
                       {sectionBreakdown.packing.qty.toLocaleString()}{' '}
                       <span className="text-xs font-semibold text-slate-400">pcs</span>
                     </div>
-                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                    <div className="mt-2 space-y-1 text-[11px]">
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Target:</span>
-                        <span className="font-semibold text-slate-200">
+                        <span className="text-slate-500">Target:</span>
+                        <span className="font-semibold text-slate-800">
                           {sectionBreakdown.packing.target.toLocaleString()} pcs
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Cartons:</span>
-                        <span className="font-bold text-amber-400">
+                        <span className="text-slate-500">Cartons:</span>
+                        <span className="font-bold text-amber-600">
                           {sectionBreakdown.packing.cartons.toLocaleString()} ctn
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Status:</span>
-                        <span className="font-semibold text-emerald-400">Ready to Ship</span>
+                        <span className="text-slate-500">Status:</span>
+                        <span className="font-semibold text-emerald-600">Ready to Ship</span>
                       </div>
                     </div>
                     {/* Share bar */}
-                    <div className="mt-3 pt-2 border-t border-slate-700/60">
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                    <div className="mt-3 pt-2 border-t border-slate-100">
+                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
                         <span>Floor Share</span>
-                        <span className="font-bold text-amber-400">{sectionBreakdown.packing.pct}%</span>
+                        <span className="font-bold text-amber-600">{sectionBreakdown.packing.pct}%</span>
                       </div>
-                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                         <div
                           className="bg-amber-500 h-full rounded-full transition-all duration-300"
                           style={{ width: `${Math.min(100, sectionBreakdown.packing.pct)}%` }}
@@ -1525,50 +1582,50 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                     }}
                     className={`p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
                       ['Washing', 'Quality', 'QA', 'Other'].includes(sectionFilter)
-                        ? 'bg-rose-600/30 border-rose-400 ring-2 ring-rose-500/50 shadow-lg'
-                        : 'bg-slate-800/80 hover:bg-slate-850 border-slate-700 hover:border-rose-500/50'
+                        ? 'bg-purple-50/80 border-purple-400 ring-2 ring-purple-500/30 shadow-xs'
+                        : 'bg-white hover:bg-purple-50/30 border-slate-200 hover:border-purple-300 shadow-2xs'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        <div className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg">
+                        <div className="p-1.5 bg-purple-50 text-purple-600 rounded-lg border border-purple-100">
                           <Droplets className="w-4 h-4" />
                         </div>
-                        <span className="text-xs font-bold text-rose-200 uppercase tracking-wider">Other Sections</span>
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Other Sections</span>
                       </div>
-                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700">
+                      <span className="text-[10px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
                         {sectionBreakdown.other.recordsCount} runs
                       </span>
                     </div>
-                    <div className="text-2xl font-black text-white tracking-tight">
+                    <div className="text-2xl font-black text-slate-900 tracking-tight">
                       {sectionBreakdown.other.qty.toLocaleString()}{' '}
                       <span className="text-xs font-semibold text-slate-400">pcs</span>
                     </div>
-                    <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+                    <div className="mt-2 space-y-1 text-[11px]">
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Target:</span>
-                        <span className="font-semibold text-slate-200">
+                        <span className="text-slate-500">Target:</span>
+                        <span className="font-semibold text-slate-800">
                           {sectionBreakdown.other.target.toLocaleString()} pcs
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Scope:</span>
-                        <span className="font-semibold text-slate-200">Washing & QA</span>
+                        <span className="text-slate-500">Scope:</span>
+                        <span className="font-semibold text-slate-700">Washing &amp; QA</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Efficiency:</span>
-                        <span className="font-semibold text-emerald-400">Active</span>
+                        <span className="text-slate-500">Status:</span>
+                        <span className="font-semibold text-emerald-600">Active</span>
                       </div>
                     </div>
                     {/* Share bar */}
-                    <div className="mt-3 pt-2 border-t border-slate-700/60">
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                    <div className="mt-3 pt-2 border-t border-slate-100">
+                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
                         <span>Floor Share</span>
-                        <span className="font-bold text-rose-400">{sectionBreakdown.other.pct}%</span>
+                        <span className="font-bold text-purple-600">{sectionBreakdown.other.pct}%</span>
                       </div>
-                      <div className="w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                         <div
-                          className="bg-rose-500 h-full rounded-full transition-all duration-300"
+                          className="bg-purple-500 h-full rounded-full transition-all duration-300"
                           style={{ width: `${Math.min(100, sectionBreakdown.other.pct)}%` }}
                         />
                       </div>
@@ -1954,6 +2011,115 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                 </div>
               </div>
 
+              {/* UNIT, FLOOR SECTION & LINE FILTER TOOLBAR (RECORDS LIST) */}
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white rounded-2xl border border-slate-200 shadow-xs">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 mr-1">
+                    <Filter className="w-3.5 h-3.5 text-indigo-600" />
+                    Record Filters:
+                  </span>
+
+                  {/* Unit Filter */}
+                  <div className="flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                    <select
+                      value={unitFilter}
+                      onChange={(e) => setUnitFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="ALL">All Units ({uniqueUnits.length})</option>
+                      {uniqueUnits.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Floor Section Filter */}
+                  <div className="flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                    <select
+                      value={sectionFilter}
+                      onChange={(e) => setSectionFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                    >
+                      <option value="ALL">All Floor Sections ({uniqueSections.length})</option>
+                      {uniqueSections.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Line Filter */}
+                  <div className="flex items-center gap-1.5">
+                    <Factory className="w-3.5 h-3.5 text-blue-500" />
+                    <select
+                      value={lineFilter}
+                      onChange={(e) => setLineFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="ALL">All Lines ({uniqueLines.length})</option>
+                      {uniqueLines.map((l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Buyer Filter */}
+                  <select
+                    value={buyerFilter}
+                    onChange={(e) => setBuyerFilter(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  >
+                    <option value="ALL">All Buyers ({uniqueBuyers.length})</option>
+                    {uniqueBuyers.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Status Filter */}
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="RUNNING">Running</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="PAUSED">Paused</option>
+                  </select>
+
+                  {(unitFilter !== 'ALL' || sectionFilter !== 'ALL' || lineFilter !== 'ALL' || buyerFilter !== 'ALL' || statusFilter !== 'ALL') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUnitFilter('ALL');
+                        setSectionFilter('ALL');
+                        setLineFilter('ALL');
+                        setBuyerFilter('ALL');
+                        setStatusFilter('ALL');
+                      }}
+                      className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Reset Filters
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
+                    {filteredOrders.length} matching record{filteredOrders.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+              </div>
+
               <DataTable
                 id="production-quality-records-table"
                 data={filteredOrders}
@@ -1989,7 +2155,7 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                       ))}
                     </select>
 
-                    {/* Section filter */}
+                    {/* Floor Section filter */}
                     <select
                       value={sectionFilter}
                       onChange={(e) => setSectionFilter(e.target.value)}
@@ -1999,6 +2165,20 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                       {uniqueSections.map((s) => (
                         <option key={s} value={s}>
                           {s}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Line filter */}
+                    <select
+                      value={lineFilter}
+                      onChange={(e) => setLineFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors max-w-[150px]"
+                    >
+                      <option value="ALL">All Lines</option>
+                      {uniqueLines.map((l) => (
+                        <option key={l} value={l}>
+                          {l}
                         </option>
                       ))}
                     </select>

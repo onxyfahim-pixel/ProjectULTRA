@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
   Calendar,
@@ -32,8 +32,27 @@ import {
   TrendingUp,
   TrendingDown,
   FileDown,
+  Camera,
+  Smartphone,
+  Eye,
+  PenTool,
+  Award,
+  CheckSquare,
+  X,
+  ExternalLink,
+  Tag,
+  ShieldAlert,
 } from 'lucide-react';
-import { InspectionRecord, InspectionType, InspectionStatus, InspectionStage } from '@/lib/types/erp';
+import {
+  InspectionRecord,
+  InspectionType,
+  InspectionStatus,
+  InspectionStage,
+  InspectionPhotoEvidence,
+  InspectionTestRecord,
+  InspectionCompliancePhoto,
+  PackingZeroToleranceItem,
+} from '@/lib/types/erp';
 import { calculateAqlInspection, calculateQuantityVariance } from '@/lib/aql';
 import { syncRecordCheckpoints } from './inspection-checkpoints';
 import { useModulePermission } from '@/hooks/use-module-permission';
@@ -51,6 +70,17 @@ interface InspectionDetailsPageProps {
   onSelectRecord?: (record: InspectionRecord) => void;
   showToast: (msg: string) => void;
 }
+
+type DetailsTab =
+  | 'overview'
+  | 'photos'
+  | 'tests'
+  | 'packing'
+  | 'defects'
+  | 'sizes'
+  | 'measurements'
+  | 'checkpoints'
+  | 'signatures';
 
 const TYPE_CONFIG: Record<
   InspectionType,
@@ -114,6 +144,28 @@ const STATUS_MAP: Record<InspectionStatus, { label: string; cls: string; pill: s
   },
 };
 
+// Safe accessors for flexible image/evidence fields
+function getPhotoUrl(p: any): string {
+  if (!p) return '';
+  return p.photoUrl || p.url || '';
+}
+
+function getPhotoRemark(p: any): string {
+  if (!p) return '';
+  return p.remark || p.caption || '';
+}
+
+function getPhotoTime(p: any): string {
+  if (!p) return '';
+  const t = p.capturedAt || p.timestamp;
+  return t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+}
+
+function getTestPass(t: any): boolean {
+  if (!t) return false;
+  return t.result === 'PASS' || t.status === 'PASS';
+}
+
 export function InspectionDetailsPage({
   record,
   allRecords = [],
@@ -126,11 +178,14 @@ export function InspectionDetailsPage({
   showToast,
 }: InspectionDetailsPageProps) {
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('inspections');
-  const [activeTab, setActiveTab] = useState<'overview' | 'sizes' | 'defects' | 'checkpoints'>('overview');
+  const [activeTab, setActiveTab] = useState<DetailsTab>('overview');
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
+  const [complianceFilter, setComplianceFilter] = useState<string>('ALL');
+
   const syncedCheckpoints = syncRecordCheckpoints(record.checkpoints);
   const checkpointsPassedCount = syncedCheckpoints.filter((c) => c.status === 'PASS').length;
 
-  const sizeBreakdown = React.useMemo(() => {
+  const sizeBreakdown = useMemo(() => {
     if (record.sizeBreakdown && record.sizeBreakdown.length > 0) {
       return record.sizeBreakdown;
     }
@@ -168,6 +223,31 @@ export function InspectionDetailsPage({
   const reMinor = record.minorRejectionPoint !== undefined ? record.minorRejectionPoint : aqlDetails.minorRe;
   const codeLetter = record.aqlCodeLetter || aqlDetails.codeLetter;
 
+  // Evidence collections with safe defaults
+  const poSheetPhotos: InspectionPhotoEvidence[] = record.poSheetPhotos || [];
+  const sampleCartonPhotos: InspectionPhotoEvidence[] = record.sampleCartonPhotos || [];
+  const testRecords: InspectionTestRecord[] = record.testRecords || [];
+  const compliancePhotos: InspectionCompliancePhoto[] = record.compliancePhotos || [];
+  const zeroToleranceChecks: PackingZeroToleranceItem[] = record.packingZeroToleranceChecks || [];
+  const measurementPhotos: InspectionPhotoEvidence[] = record.measurementSheetPhotos || [];
+
+  const totalPhotosCount =
+    poSheetPhotos.length +
+    sampleCartonPhotos.length +
+    compliancePhotos.length +
+    measurementPhotos.length;
+
+  const zeroToleranceFailedItem = zeroToleranceChecks.find(
+    (z) => z.hasDefect || z.isPass === false || (z.defectCount !== undefined && z.defectCount > 0)
+  );
+  const hasZeroToleranceFail = record.hasZeroToleranceFail || Boolean(zeroToleranceFailedItem);
+
+  // Filter compliance gallery
+  const filteredCompliancePhotos = useMemo(() => {
+    if (complianceFilter === 'ALL') return compliancePhotos;
+    return compliancePhotos.filter((p) => p.category === complianceFilter);
+  }, [compliancePhotos, complianceFilter]);
+
   // Find other inspection records for the same style/order to demonstrate the 3-Stage Lifecycle
   const relatedStyleRecords = allRecords.filter(
     (r) =>
@@ -200,884 +280,1489 @@ export function InspectionDetailsPage({
     },
   ];
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onBack();
+      if (e.key === 'Escape') {
+        if (lightboxImage) {
+          setLightboxImage(null);
+        } else {
+          onBack();
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onBack]);
+  }, [onBack, lightboxImage]);
 
   return (
     <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
       <div className="w-full max-w-[1920px] mx-auto space-y-3.5 pb-20">
-        {/* Top Navigation Bar - Identical styling to Buyer & Order module */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-            title="Back to Inspection List"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <div className="flex items-center flex-wrap gap-2">
-              <h2 className="text-base font-bold text-slate-900 font-mono tracking-tight">
-                {record.inspectionCode}
-              </h2>
-              {/* Inspection Type Pill */}
-              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${typeConfig.badgeCls}`}>
-                <span>{typeConfig.icon}</span>
-                <span>{typeConfig.label}</span>
-              </span>
-              {/* Verdict Pill */}
-              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${statusConfig.cls}`}>
-                <StatusIcon className="w-3 h-3" />
-                <span>{statusConfig.label}</span>
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {record.buyer} • Style: <span className="font-semibold text-slate-700">{record.styleNumber}</span>
-              {record.orderNumber && (
-                <>
-                  {' '}• PO: <span className="font-mono text-blue-600 font-semibold">{record.orderNumber}</span>
-                </>
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Action Buttons - Styled identically to Buyer & Order module */}
-        <div className="flex items-center flex-wrap gap-2">
-          {canExport && onExport && (
+        {/* Top Navigation Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-xs">
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => onExport(record)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors shadow-2xs cursor-pointer"
-              title="Export AQL Inspection Report (PDF or Excel)"
+              onClick={onBack}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+              title="Back to Inspection List"
             >
-              <FileDown className="w-3.5 h-3.5" />
-              <span>Export Certificate</span>
+              <ArrowLeft className="w-4 h-4" />
             </button>
-          )}
-
-          {canCreate && (
-            <button
-              type="button"
-              onClick={() => onDuplicate(record)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
-              title="Duplicate as new audit template"
-            >
-              <Copy className="w-3.5 h-3.5 text-slate-500" />
-              <span>Duplicate Audit</span>
-            </button>
-          )}
-
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => onEdit(record)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
-              title="Edit this inspection record"
-            >
-              <Edit className="w-3.5 h-3.5" />
-              <span>Edit Inspection</span>
-            </button>
-          )}
-
-          {canDelete && (
-            <button
-              type="button"
-              onClick={() => onDelete(record)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
-              title="Delete this audit record"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Delete</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* THREE-STAGE APPAREL QC PIPELINE TRACKER */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-blue-600" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-              3-Stage Apparel Inspection Pipeline (Inline ➔ Pre-Final ➔ Final)
-            </h3>
-          </div>
-          <span className="text-[11px] text-slate-500 font-medium">
-            Style: <span className="font-mono font-semibold text-slate-800">{record.styleNumber}</span>
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {stagesLifecycle.map((st) => {
-            const isCurrent = st.type === inspectionType;
-            const hasRec = Boolean(st.rec);
-            const statusLabel = hasRec
-              ? st.rec?.status === 'PASSED'
-                ? 'Passed'
-                : st.rec?.status === 'CONDITIONAL_PASS'
-                ? 'Conditional'
-                : 'Rejected'
-              : 'Not Logged';
-
-            return (
-              <div
-                key={st.type}
-                onClick={() => {
-                  if (st.rec && st.rec.id !== record.id && onSelectRecord) {
-                    onSelectRecord(st.rec);
-                  }
-                }}
-                className={`p-3.5 rounded-xl border transition-all ${
-                  isCurrent
-                    ? 'bg-blue-50/50 border-blue-400 ring-2 ring-blue-500/20 shadow-xs'
-                    : hasRec
-                    ? 'bg-slate-50 border-slate-200 hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer'
-                    : 'bg-slate-50/50 border-slate-200/60 opacity-70'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className={`text-xs font-bold ${isCurrent ? 'text-blue-900' : 'text-slate-800'}`}>
-                    {st.label}
-                  </span>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      hasRec && st.rec?.status === 'PASSED'
-                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                        : hasRec && st.rec?.status === 'CONDITIONAL_PASS'
-                        ? 'bg-amber-100 text-amber-800 border-amber-200'
-                        : hasRec && st.rec?.status === 'REJECTED'
-                        ? 'bg-rose-100 text-rose-800 border-rose-200'
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
-                    }`}
-                  >
-                    {statusLabel}
-                  </span>
-                </div>
-
-                <div className="text-[11px] text-slate-500">
-                  {hasRec && st.rec ? (
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-slate-600 font-medium">{st.rec.inspectionCode}</span>
-                      <span className="font-mono text-slate-700 font-semibold">
-                        {st.rec.passCount}/{st.rec.sampleSize} pass
-                      </span>
-                    </div>
-                  ) : (
-                    <span>Audit checkpoint pending for this order</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* HERO CARD - Rich Modern Aesthetic Matching Buyer Order Module */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className={`bg-gradient-to-r ${typeConfig.heroGradient} px-6 py-6 text-white`}>
-          <div className="flex items-start justify-between flex-wrap gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-bold bg-white/15 backdrop-blur-md px-2.5 py-1 rounded-lg text-white border border-white/20">
+            <div>
+              <div className="flex items-center flex-wrap gap-2">
+                <h2 className="text-base font-bold text-slate-900 font-mono tracking-tight">
                   {record.inspectionCode}
+                </h2>
+                {/* Mobile Entry Badge */}
+                {record.isMobileEntry && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                    <Smartphone className="w-3 h-3" />
+                    <span>Mobile Entry</span>
+                  </span>
+                )}
+                {/* Inspection Type Pill */}
+                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${typeConfig.badgeCls}`}>
+                  <span>{typeConfig.icon}</span>
+                  <span>{typeConfig.label}</span>
                 </span>
-                <span className="text-xs font-bold bg-white/20 px-2.5 py-1 rounded-full text-white backdrop-blur-md">
-                  {typeConfig.icon} {typeConfig.label}
-                </span>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                  record.status === 'PASSED'
-                    ? 'bg-emerald-500/90 text-white'
-                    : record.status === 'CONDITIONAL_PASS'
-                    ? 'bg-amber-500/90 text-white'
-                    : 'bg-rose-500/90 text-white'
-                }`}>
-                  {record.status.replace('_', ' ')}
+                {/* Verdict Pill */}
+                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${statusConfig.cls}`}>
+                  <StatusIcon className="w-3 h-3" />
+                  <span>{statusConfig.label}</span>
                 </span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                {record.styleDescription || typeConfig.stageName}
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-200 font-medium">
-                Buyer: <span className="font-bold text-white">{record.buyer}</span> • Style: <span className="font-mono font-bold text-white">{record.styleNumber}</span>
-                {record.isCombinedInspection || (record.poNumbers && record.poNumbers.length > 1) ? (
+              <p className="text-xs text-slate-500 mt-0.5">
+                {record.buyer} • Style: <span className="font-semibold text-slate-700">{record.styleNumber}</span>
+                {record.orderNumber && (
                   <>
-                    {' '}•{' '}
-                    <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full text-white font-bold backdrop-blur-md">
-                      ⚡ Combined Inspection ({record.poNumbers?.length || record.combinedOrders?.length || record.orderNumber?.split(',').length} POs)
-                    </span>
+                    {' '}• PO: <span className="font-mono text-blue-600 font-semibold">{record.orderNumber}</span>
                   </>
-                ) : record.orderNumber ? (
-                  <> • PO: <span className="font-mono text-white font-bold">{record.orderNumber}</span></>
-                ) : null}
+                )}
               </p>
             </div>
+          </div>
 
-            <div className="text-right sm:self-center bg-white/10 backdrop-blur-md p-3.5 rounded-xl border border-white/15">
-              <div className="text-[11px] text-white/80 font-medium">QC Pass Ratio</div>
-              <div className="text-2xl sm:text-3xl font-black font-mono text-white">
-                {passRate}%
-              </div>
-              <div className="text-[10px] text-white/70">
-                {record.passCount} of {record.sampleSize} sampled units
-              </div>
-            </div>
+          {/* Action Buttons */}
+          <div className="flex items-center flex-wrap gap-2">
+            {canExport && onExport && (
+              <button
+                type="button"
+                onClick={() => onExport(record)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors shadow-2xs cursor-pointer"
+                title="Export AQL Inspection Report (PDF or Excel)"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>Export Certificate</span>
+              </button>
+            )}
+
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => onDuplicate(record)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200 cursor-pointer"
+                title="Duplicate as new audit template"
+              >
+                <Copy className="w-3.5 h-3.5 text-slate-500" />
+                <span>Duplicate Audit</span>
+              </button>
+            )}
+
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(record)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-xs cursor-pointer"
+                title="Edit this inspection record"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Edit Inspection</span>
+              </button>
+            )}
+
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(record)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
+                title="Delete this audit record"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* METRICS KPI STRIP - 5 ENHANCED METRICS INCLUDING ORDER VS INSPECTED VARIANCE */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 bg-slate-50/50">
-          <div className="p-4">
-            <div className="text-[11px] font-semibold text-slate-500">Sampled Pieces</div>
-            <div className="text-xl font-black font-mono text-slate-900 mt-0.5">
-              {record.sampleSize.toLocaleString()} pcs
+        {/* 0-TOLERANCE CRITICAL DEFECT WARNING BANNER */}
+        {hasZeroToleranceFail && (
+          <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 shadow-sm flex items-start gap-3.5 animate-pulse">
+            <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md">
+              <ShieldAlert className="w-6 h-6" />
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">ISO 2859-1 • Code {codeLetter}</div>
-          </div>
-
-          <div className="p-4">
-            <div className="text-[11px] font-semibold text-slate-500">Total Defect Count</div>
-            <div className={`text-xl font-black font-mono mt-0.5 ${record.defectCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-              {record.defectCount} pcs
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">{defectRate}% defect rate</div>
-          </div>
-
-          <div className="p-4">
-            <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
-              <span>Order Quantity</span>
-              <span className="text-[9px] font-bold font-mono px-1 rounded bg-blue-50 text-blue-700">Auto</span>
-            </div>
-            <div className="text-xl font-black font-mono text-slate-900 mt-0.5">
-              {orderQty.toLocaleString()} pcs
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              {record.isCombinedInspection ? `${record.combinedOrders?.length || record.poNumbers?.length || 1} POs combined` : `Target order size`}
-            </div>
-          </div>
-
-          <div className="p-4">
-            <div className="text-[11px] font-semibold text-blue-900 flex items-center justify-between">
-              <span>Inspected Lot</span>
-              <span className="text-[9px] font-bold font-mono px-1 rounded bg-amber-50 text-amber-700">Manual</span>
-            </div>
-            <div className="text-xl font-black font-mono text-blue-700 mt-0.5">
-              {inspQty.toLocaleString()} pcs
-            </div>
-            <div className="mt-1">
-              {variance.isExcess && (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  +{variance.excessQty.toLocaleString()} pcs (+{variance.percentage}% Excess)
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-rose-800">
+                  Critical Zero-Tolerance Breach
                 </span>
-              )}
-              {variance.isShort && (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">
-                  -{variance.shortQty.toLocaleString()} pcs ({variance.percentage}% Short)
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white font-mono">
+                  AUTO REJECTED
                 </span>
-              )}
-              {variance.isExact && (
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                  Exact Match (0 Variance)
-                </span>
-              )}
+              </div>
+              <h4 className="text-sm font-bold text-rose-950 mt-0.5">
+                {zeroToleranceFailedItem
+                  ? `Critical Non-Compliance: ${zeroToleranceFailedItem.name}${zeroToleranceFailedItem.defectCount ? ` (${zeroToleranceFailedItem.defectCount} defect(s))` : ''}`
+                  : 'Inspection lot automatically failed due to Zero-Tolerance packing defect violation.'}
+              </h4>
+              <p className="text-xs text-rose-700 mt-0.5">
+                According to international buyer standards (AQL Level II), zero-tolerance defects (mold, live insects, broken needle, wrong barcode, wet garments, or sharp hazard) cause immediate shipment block regardless of other sample scores.
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('packing')}
+              className="px-3 py-1.5 text-xs font-bold text-rose-800 bg-white border border-rose-300 rounded-lg hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
+            >
+              View 0-Tolerance Check →
+            </button>
           </div>
+        )}
 
-          <div className="p-4">
-            <div className="text-[11px] font-semibold text-slate-500">Packaging Status</div>
-            <div className="text-xl font-black font-mono text-indigo-700 mt-0.5">
-              {record.packedPercent !== undefined ? `${record.packedPercent}%` : inspectionType === 'FINAL' ? '100%' : '70%'}
+        {/* THREE-STAGE APPAREL QC PIPELINE TRACKER */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-blue-600" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                3-Stage Apparel Inspection Pipeline (Inline ➔ Pre-Final ➔ Final)
+              </h3>
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              {record.cartonCount ? `${record.cartonCount} Master Cartons` : 'Polybagged & folded'}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* NAVIGATION TABS */}
-      <div className="flex items-center gap-1 border-b border-slate-200">
-        {[
-          { id: 'overview', label: 'Audit Overview' },
-          { id: 'sizes', label: `Size Breakdown (${sizeBreakdown.length} Sizes)` },
-          { id: 'defects', label: `Defect Breakdown (${record.defects?.length || 0})` },
-          { id: 'checkpoints', label: `Inspection Checkpoints (${checkpointsPassedCount}/${syncedCheckpoints.length} ✓)` },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 cursor-pointer ${
-              activeTab === tab.id
-                ? 'border-blue-600 text-blue-700 bg-white shadow-2xs'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100/50'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* TAB CONTENT: OVERVIEW */}
-      {activeTab === 'overview' && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Left Col: Type Specific Breakdown */}
-            <div className="lg:col-span-2 space-y-5">
-              {/* Type Specific Context Banner */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{typeConfig.icon}</span>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900">{typeConfig.label} Specifications</h3>
-                      <p className="text-[11px] text-slate-500">{typeConfig.description}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">
-                    Stage: {record.stage}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Inspection Location</div>
-                    <div className="font-bold text-slate-800 mt-0.5">{record.factoryUnit || 'Unit 01 (Dhaka Complex)'}</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">{record.sewingLine || 'Main Assembly Line'}</div>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Auditor / Inspector</div>
-                    <div className="font-bold text-slate-800 mt-0.5">{record.inspectorName}</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">ID: {record.inspectorId}</div>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Audit Date & Time</div>
-                    <div className="font-bold text-slate-800 mt-0.5">{new Date(record.createdAt).toLocaleDateString()}</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">{new Date(record.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                  </div>
-
-                  {inspectionType === 'INLINE' && (
-                    <>
-                      <div className="p-3 rounded-xl bg-blue-50/50 border border-blue-100">
-                        <div className="text-[10px] text-blue-600 font-semibold uppercase">Stitches Per Inch (SPI)</div>
-                        <div className="font-bold text-blue-900 mt-0.5">11 – 12 SPI Calibrated</div>
-                        <div className="text-[10px] text-blue-700 mt-0.5">Overlock & lockstitch checked</div>
-                      </div>
-                      <div className="p-3 rounded-xl bg-blue-50/50 border border-blue-100">
-                        <div className="text-[10px] text-blue-600 font-semibold uppercase">Needle Control</div>
-                        <div className="font-bold text-blue-900 mt-0.5">9-Point Log Verified</div>
-                        <div className="text-[10px] text-blue-700 mt-0.5">Zero broken needle slips</div>
-                      </div>
-                      <div className="p-3 rounded-xl bg-blue-50/50 border border-blue-100">
-                        <div className="text-[10px] text-blue-600 font-semibold uppercase">Workmanship Verdict</div>
-                        <div className="font-bold text-blue-900 mt-0.5">Line in Regular Operation</div>
-                        <div className="text-[10px] text-blue-700 mt-0.5">Next check: Hourly DHU log</div>
-                      </div>
-                    </>
-                  )}
-
-                  {inspectionType === 'PRE_FINAL' && (
-                    <>
-                      <div className="p-3 rounded-xl bg-amber-50/50 border border-amber-100">
-                        <div className="text-[10px] text-amber-700 font-semibold uppercase">Packed Percentage</div>
-                        <div className="font-bold text-amber-900 mt-0.5">{record.packedPercent || 70}% Packed</div>
-                        <div className="text-[10px] text-amber-700 mt-0.5">Target: min 50%–80% for Pre-Final</div>
-                      </div>
-                      <div className="p-3 rounded-xl bg-amber-50/50 border border-amber-100">
-                        <div className="text-[10px] text-amber-700 font-semibold uppercase">Carton Assortment</div>
-                        <div className="font-bold text-amber-900 mt-0.5">Solid Size / Solid Color</div>
-                        <div className="text-[10px] text-amber-700 mt-0.5">Ratio verified against PO pack sheet</div>
-                      </div>
-                      <div className="p-3 rounded-xl bg-amber-50/50 border border-amber-100">
-                        <div className="text-[10px] text-amber-700 font-semibold uppercase">Polybag Warning Check</div>
-                        <div className="font-bold text-amber-900 mt-0.5">Suffocation Warning OK</div>
-                        <div className="text-[10px] text-amber-700 mt-0.5">Ventilation holes standard</div>
-                      </div>
-                    </>
-                  )}
-
-                  {inspectionType === 'FINAL' && (
-                    <>
-                      <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100">
-                        <div className="text-[10px] text-emerald-700 font-semibold uppercase">100% Metal Detection</div>
-                        <div className="font-bold text-emerald-900 mt-0.5">Passed Calibration</div>
-                        <div className="text-[10px] text-emerald-700 mt-0.5">Fe 1.0mm, Non-Fe 1.2mm, SS 1.5mm</div>
-                      </div>
-                      <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100">
-                        <div className="text-[10px] text-emerald-700 font-semibold uppercase">ISTA 1A Carton Drop Test</div>
-                        <div className="font-bold text-emerald-900 mt-0.5">10 Drops Completed</div>
-                        <div className="text-[10px] text-emerald-700 mt-0.5">1 Corner, 3 Edges, 6 Faces - No damage</div>
-                      </div>
-                      <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100">
-                        <div className="text-[10px] text-emerald-700 font-semibold uppercase">Barcode Scan Readability</div>
-                        <div className="font-bold text-emerald-900 mt-0.5">100% Scan Pass Rate</div>
-                        <div className="text-[10px] text-emerald-700 mt-0.5">EAN / UPC code clear & scannable</div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* COMBINED PURCHASE ORDERS CARD (WHEN COMBINED INSPECTION IS ACTIVE) */}
-              {(record.isCombinedInspection || (record.poNumbers && record.poNumbers.length > 1) || (record.combinedOrders && record.combinedOrders.length > 0) || (record.orderNumber && record.orderNumber.includes(','))) && (
-                <div className="bg-white p-5 rounded-2xl border border-indigo-200/90 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-indigo-600" />
-                      <div>
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                          Combined Purchase Orders Breakdown
-                        </h3>
-                        <p className="text-[11px] text-slate-500">
-                          This inspection covers multiple buyer purchase orders audited together as a single unified lot.
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">
-                      ⚡ Combined Lot ({record.combinedOrders?.length || record.poNumbers?.length || record.orderNumber?.split(',').length} POs)
-                    </span>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
-                          <th className="py-2 px-3">#</th>
-                          <th className="py-2 px-3">PO Number</th>
-                          <th className="py-2 px-3">Style Reference</th>
-                          <th className="py-2 px-3">Order Qty</th>
-                          <th className="py-2 px-3">Cartons</th>
-                          <th className="py-2 px-3">Destination / Split</th>
-                          <th className="py-2 px-3 text-right">Lot Share %</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {record.combinedOrders && record.combinedOrders.length > 0
-                          ? record.combinedOrders.map((po, idx) => {
-                              const share = record.orderQuantity
-                                ? ((po.orderQuantity / record.orderQuantity) * 100).toFixed(1)
-                                : '—';
-                              return (
-                                <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
-                                  <td className="py-2 px-3 font-bold text-slate-400">{idx + 1}</td>
-                                  <td className="py-2 px-3 font-mono font-bold text-indigo-700">
-                                    {po.poNumber}
-                                  </td>
-                                  <td className="py-2 px-3 font-mono text-slate-700">
-                                    {po.styleNumber || record.styleNumber}
-                                  </td>
-                                  <td className="py-2 px-3 font-bold text-slate-900 font-mono">
-                                    {po.orderQuantity.toLocaleString()} pcs
-                                  </td>
-                                  <td className="py-2 px-3 font-mono text-slate-700">
-                                    {po.cartonCount ? `${po.cartonCount} boxes` : '—'}
-                                  </td>
-                                  <td className="py-2 px-3 text-slate-600">
-                                    {po.colorOrDestination || 'Main Destination'}
-                                  </td>
-                                  <td className="py-2 px-3 text-right font-mono font-bold text-slate-700">
-                                    {share}%
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          : (record.poNumbers || record.orderNumber?.split(', ') || []).map((po, idx) => (
-                              <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
-                                <td className="py-2 px-3 font-bold text-slate-400">{idx + 1}</td>
-                                <td className="py-2 px-3 font-mono font-bold text-indigo-700">
-                                  {po.trim()}
-                                </td>
-                                <td className="py-2 px-3 font-mono text-slate-700">{record.styleNumber}</td>
-                                <td className="py-2 px-3 font-mono text-slate-900">
-                                  Combined in lot
-                                </td>
-                                <td className="py-2 px-3 font-mono text-slate-700">—</td>
-                                <td className="py-2 px-3 text-slate-600">Combined PO Split</td>
-                                <td className="py-2 px-3 text-right font-mono font-bold text-slate-700">—</td>
-                              </tr>
-                            ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* SIZE BREAKDOWN & SAMPLE PICKUP SPECIFICATION */}
-              <InspectionSizeBreakdownSection
-                items={sizeBreakdown}
-                totalSampleSize={record.sampleSize || 315}
-                readOnly={true}
-              />
-
-              {/* Remarks & Corrective Action (CAPA) */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                  <FileText className="w-4 h-4 text-indigo-600" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                    Inspector Verdict & Corrective Action Required (CAPA)
-                  </h3>
-                </div>
-
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <span className="font-bold text-slate-700 block mb-1">Auditor Remarks:</span>
-                    <p className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-800 leading-relaxed font-sans">
-                      {record.remarks || 'Standard inspection audit completed. Results recorded according to international garments quality requirements.'}
-                    </p>
-                  </div>
-
-                  {record.correctiveAction && (
-                    <div>
-                      <span className="font-bold text-rose-700 block mb-1">Mandatory Corrective Action:</span>
-                      <p className="p-3 rounded-xl bg-rose-50/60 border border-rose-200 text-rose-900 leading-relaxed">
-                        {record.correctiveAction}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Col: Defect Severity Distribution & Verdict Donut */}
-            <div className="space-y-5">
-              {/* QUANTITY VARIANCE SUMMARY CARD */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                    <Scale className="w-4 h-4 text-indigo-600" />
-                    <span>Order vs Inspected Variance</span>
-                  </h3>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${variance.badgeCls}`}>
-                    {variance.isExcess ? 'Excess' : variance.isShort ? 'Shortage' : 'Balanced'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                    <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Order (Auto)</div>
-                    <div className="text-base font-black font-mono text-slate-900 mt-0.5">
-                      {orderQty.toLocaleString()} pcs
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-blue-50/50 border border-blue-100">
-                    <div className="text-[10px] text-blue-700 font-bold uppercase">Inspected Lot (Manual)</div>
-                    <div className="text-base font-black font-mono text-blue-700 mt-0.5">
-                      {inspQty.toLocaleString()} pcs
-                    </div>
-                  </div>
-                </div>
-
-                <div className={`p-3 rounded-xl border text-xs ${variance.badgeCls}`}>
-                  <div className="flex items-center justify-between font-bold">
-                    <span>Net Quantity Variance:</span>
-                    <span className="font-mono text-sm">
-                      {variance.isExcess && `+${variance.excessQty.toLocaleString()} pcs`}
-                      {variance.isShort && `-${variance.shortQty.toLocaleString()} pcs`}
-                      {variance.isExact && '0 pcs'}
-                    </span>
-                  </div>
-                  <div className="text-[10px] mt-1 font-medium">
-                    {variance.isExcess && `Overproduction rate of +${variance.percentage}% presented for quality inspection.`}
-                    {variance.isShort && `Short shipment rate of ${variance.percentage}% below purchase order size.`}
-                    {variance.isExact && 'Offered inspection lot quantity exactly matches total purchase order.'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Defect Breakdown Cards with AQL Allowance */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-rose-600" />
-                    <span>AQL Defect Tolerances (Code {codeLetter})</span>
-                  </h3>
-                  <span className="text-[10px] font-mono font-bold text-slate-500">
-                    Sample: {record.sampleSize} pcs
-                  </span>
-                </div>
-
-                <div className="space-y-2.5">
-                  {/* Critical */}
-                  <div className={`p-3 rounded-xl border ${record.criticalDefects > 0 ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">🚨</span>
-                        <div>
-                          <div className="font-bold text-xs text-rose-900">Critical Defects</div>
-                          <div className="text-[10px] text-slate-500">Max Allowed: 0 (Re: 1)</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-lg font-black font-mono text-rose-700">{record.criticalDefects}</span>
-                        <span className={`block text-[9px] font-bold px-1.5 py-0.2 rounded-full mt-0.5 ${record.criticalDefects > 0 ? 'bg-rose-200 text-rose-900' : 'bg-emerald-100 text-emerald-800'}`}>
-                          {record.criticalDefects > 0 ? 'REJECT' : 'PASS'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Major */}
-                  <div className={`p-3 rounded-xl border ${record.majorDefects >= reMajor ? 'bg-rose-50 border-rose-200' : record.majorDefects === maxMajor ? 'bg-amber-50 border-amber-200' : 'bg-amber-50/40 border-amber-100'}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">⚠️</span>
-                        <div>
-                          <div className="font-bold text-xs text-amber-900">Major Defects</div>
-                          <div className="text-[10px] text-slate-600">
-                            Max Allowed (Ac): <strong className="text-emerald-700">{maxMajor}</strong> • Re: <strong className="text-rose-700">{reMajor}</strong>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-lg font-black font-mono text-amber-700">{record.majorDefects}</span>
-                        <span className={`block text-[9px] font-bold px-1.5 py-0.2 rounded-full mt-0.5 ${record.majorDefects >= reMajor ? 'bg-rose-200 text-rose-900' : record.majorDefects === maxMajor ? 'bg-amber-200 text-amber-900' : 'bg-emerald-100 text-emerald-800'}`}>
-                          {record.majorDefects >= reMajor ? 'EXCEEDED' : record.majorDefects === maxMajor ? 'AT LIMIT' : 'WITHIN TOLERANCE'}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Progress Bar */}
-                    <div className="w-full bg-slate-200 rounded-full h-1 mt-2 overflow-hidden">
-                      <div
-                        className={`h-1 rounded-full ${record.majorDefects >= reMajor ? 'bg-rose-600' : record.majorDefects >= maxMajor * 0.7 ? 'bg-amber-500' : 'bg-emerald-600'}`}
-                        style={{ width: `${Math.min(100, (record.majorDefects / Math.max(1, reMajor)) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Minor */}
-                  <div className={`p-3 rounded-xl border ${record.minorDefects >= reMinor ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">ℹ️</span>
-                        <div>
-                          <div className="font-bold text-xs text-slate-800">Minor Defects</div>
-                          <div className="text-[10px] text-slate-500">
-                            Max Allowed (Ac): <strong className="text-emerald-700">{maxMinor}</strong> • Re: <strong className="text-rose-700">{reMinor}</strong>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-lg font-black font-mono text-slate-700">{record.minorDefects}</span>
-                        <span className={`block text-[9px] font-bold px-1.5 py-0.2 rounded-full mt-0.5 ${record.minorDefects >= reMinor ? 'bg-rose-200 text-rose-900' : 'bg-emerald-100 text-emerald-800'}`}>
-                          {record.minorDefects >= reMinor ? 'EXCEEDED' : 'WITHIN TOLERANCE'}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Progress Bar */}
-                    <div className="w-full bg-slate-200 rounded-full h-1 mt-2 overflow-hidden">
-                      <div
-                        className={`h-1 rounded-full ${record.minorDefects >= reMinor ? 'bg-rose-600' : 'bg-blue-600'}`}
-                        style={{ width: `${Math.min(100, (record.minorDefects / Math.max(1, reMinor)) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                  <span>Total Defective Pcs:</span>
-                  <span className="font-bold font-mono text-slate-900">
-                    {record.defectCount} pcs ({defectRate}%)
-                  </span>
-                </div>
-              </div>
-
-              {/* Quick Summary of individual defects */}
-              {record.defects && record.defects.length > 0 && (
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">Identified Defects</h4>
-                    <button
-                      onClick={() => setActiveTab('defects')}
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
-                    >
-                      View All →
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {record.defects.slice(0, 3).map((d) => (
-                      <div key={d.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-slate-900 truncate">{d.defectType}</span>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${
-                              d.severity === 'CRITICAL'
-                                ? 'bg-rose-100 text-rose-800'
-                                : d.severity === 'MAJOR'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {d.severity}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 flex justify-between">
-                          <span>Loc: {d.location}</span>
-                          <span className="font-mono font-bold text-slate-700">{d.count} pcs</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB CONTENT: SIZES MATRIX */}
-      {activeTab === 'sizes' && (
-        <div className="space-y-4">
-          <InspectionSizeBreakdownSection
-            items={sizeBreakdown}
-            totalSampleSize={record.sampleSize || 315}
-            readOnly={true}
-          />
-        </div>
-      )}
-
-      {/* TAB CONTENT: DEFECTS MATRIX */}
-      {activeTab === 'defects' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Garment Defects Registry</h3>
-              <p className="text-xs text-slate-500">Itemized defect instances logged during sampling</p>
-            </div>
-            <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-700">
-              {record.defects?.length || 0} Defect Types Logged
+            <span className="text-[11px] text-slate-500 font-medium">
+              Style: <span className="font-mono font-semibold text-slate-800">{record.styleNumber}</span>
             </span>
           </div>
 
-          {record.defects && record.defects.length > 0 ? (
-            <div className="divide-y divide-slate-100">
-              {record.defects.map((d, index) => (
-                <div key={d.id || index} className="p-4 flex items-center justify-between hover:bg-slate-50/60 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {stagesLifecycle.map((st) => {
+              const isCurrent = st.type === inspectionType;
+              const hasRec = Boolean(st.rec);
+              const statusLabel = hasRec
+                ? st.rec?.status === 'PASSED'
+                  ? 'Passed'
+                  : st.rec?.status === 'CONDITIONAL_PASS'
+                  ? 'Conditional'
+                  : 'Rejected'
+                : 'Not Logged';
+
+              return (
+                <div
+                  key={st.type}
+                  onClick={() => {
+                    if (st.rec && st.rec.id !== record.id && onSelectRecord) {
+                      onSelectRecord(st.rec);
+                    }
+                  }}
+                  className={`p-3.5 rounded-xl border transition-all ${
+                    isCurrent
+                      ? 'bg-blue-50/50 border-blue-400 ring-2 ring-blue-500/20 shadow-xs'
+                      : hasRec
+                      ? 'bg-slate-50 border-slate-200 hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer'
+                      : 'bg-slate-50/50 border-slate-200/60 opacity-70'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-xs font-bold ${isCurrent ? 'text-blue-900' : 'text-slate-800'}`}>
+                      {st.label}
+                    </span>
                     <span
-                      className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 ${
-                        d.severity === 'CRITICAL'
-                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                          : d.severity === 'MAJOR'
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                          : 'bg-slate-100 text-slate-700 border border-slate-200'
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        hasRec && st.rec?.status === 'PASSED'
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                          : hasRec && st.rec?.status === 'CONDITIONAL_PASS'
+                          ? 'bg-amber-100 text-amber-800 border-amber-200'
+                          : hasRec && st.rec?.status === 'REJECTED'
+                          ? 'bg-rose-100 text-rose-800 border-rose-200'
+                          : 'bg-slate-100 text-slate-500 border-slate-200'
                       }`}
                     >
-                      {d.severity}
+                      {statusLabel}
                     </span>
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-slate-900 truncate">{d.defectType}</div>
-                      <div className="text-xs text-slate-500">Location on garment: <span className="font-semibold text-slate-700">{d.location}</span></div>
-                    </div>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <span className="text-base font-black font-mono text-slate-900">{d.count} pcs</span>
-                    <span className="block text-[10px] text-slate-400">
-                      {(((d.count || 1) / record.sampleSize) * 100).toFixed(1)}% of sample
-                    </span>
+                  <div className="text-[11px] text-slate-500">
+                    {hasRec && st.rec ? (
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-slate-600 font-medium">{st.rec.inspectionCode}</span>
+                        <span className="font-mono text-slate-700 font-semibold">
+                          {st.rec.passCount}/{st.rec.sampleSize} pass
+                        </span>
+                      </div>
+                    ) : (
+                      <span>Audit checkpoint pending for this order</span>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-12 text-center text-slate-400 text-xs">
-              <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-60" />
-              <span>Zero defects recorded during this quality audit.</span>
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
-      )}
 
-      {/* TAB CONTENT: CHECKPOINTS AUDIT (11 STANDARD VERIFICATION POINTS WITH TIK MARK) */}
-      {activeTab === 'checkpoints' && (
+        {/* HERO CARD */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Inspection Checkpoints Verification Checklist</span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Standard 11 Verification Points: Workmanship, Styling, Safety Check, Cross Check Carton Mark, Sticker Mark, Accessories, BOM, Measurement, Test Record, PP Sample, Working Environment
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5 stroke-[3]" />
-                {checkpointsPassedCount} of {syncedCheckpoints.length} Verified OK
-              </span>
+          <div className={`bg-gradient-to-r ${typeConfig.heroGradient} px-6 py-6 text-white`}>
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold bg-white/15 backdrop-blur-md px-2.5 py-1 rounded-lg text-white border border-white/20">
+                    {record.inspectionCode}
+                  </span>
+                  <span className="text-xs font-bold bg-white/20 px-2.5 py-1 rounded-full text-white backdrop-blur-md">
+                    {typeConfig.icon} {typeConfig.label}
+                  </span>
+                  <span
+                    className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                      record.status === 'PASSED'
+                        ? 'bg-emerald-500/90 text-white'
+                        : record.status === 'CONDITIONAL_PASS'
+                        ? 'bg-amber-500/90 text-white'
+                        : 'bg-rose-500/90 text-white'
+                    }`}
+                  >
+                    {record.status.replace('_', ' ')}
+                  </span>
+                </div>
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  {record.styleDescription || typeConfig.stageName}
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-200 font-medium">
+                  Buyer: <span className="font-bold text-white">{record.buyer}</span> • Style:{' '}
+                  <span className="font-mono font-bold text-white">{record.styleNumber}</span>
+                  {record.orderNumber && (
+                    <>
+                      {' '}• PO: <span className="font-mono text-white font-bold">{record.orderNumber}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+
+              <div className="text-right sm:self-center bg-white/10 backdrop-blur-md p-3.5 rounded-xl border border-white/15">
+                <div className="text-[11px] text-white/80 font-medium">QC Pass Ratio</div>
+                <div className="text-2xl sm:text-3xl font-black font-mono text-white">{passRate}%</div>
+                <div className="text-[10px] text-white/70">
+                  {record.passCount} of {record.sampleSize} sampled units
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="p-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {syncedCheckpoints.map((c, idx) => {
-                const isPass = c.status === 'PASS';
-                return (
-                  <div
-                    key={c.id || idx}
-                    className={`p-4 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
-                      isPass
-                        ? 'bg-emerald-50/40 border-emerald-200/90'
-                        : 'bg-rose-50/40 border-rose-200/90'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono text-xs font-black shrink-0 ${
-                          isPass ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
-                        }`}
-                      >
-                        {idx + 1}
+          {/* METRICS KPI STRIP */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 bg-slate-50/50">
+            <div className="p-4">
+              <div className="text-[11px] font-semibold text-slate-500">Sampled Pieces</div>
+              <div className="text-xl font-black font-mono text-slate-900 mt-0.5">
+                {record.sampleSize.toLocaleString()} pcs
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">ISO 2859-1 • Code {codeLetter}</div>
+            </div>
+
+            <div className="p-4">
+              <div className="text-[11px] font-semibold text-slate-500">Total Defect Count</div>
+              <div
+                className={`text-xl font-black font-mono mt-0.5 ${
+                  record.defectCount > 0 ? 'text-rose-600' : 'text-emerald-600'
+                }`}
+              >
+                {record.defectCount} pcs
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">{defectRate}% defect rate</div>
+            </div>
+
+            <div className="p-4">
+              <div className="text-[11px] font-semibold text-slate-500">Major / Critical</div>
+              <div className="text-xl font-black font-mono mt-0.5">
+                <span className={record.majorDefects > maxMajor ? 'text-rose-600' : 'text-slate-900'}>
+                  {record.majorDefects}
+                </span>
+                <span className="text-slate-400 text-xs"> / {maxMajor} Ac</span>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">Rejection: ≥{reMajor}</div>
+            </div>
+
+            <div className="p-4">
+              <div className="text-[11px] font-semibold text-slate-500">Minor Defect Allowed</div>
+              <div className="text-xl font-black font-mono mt-0.5">
+                <span className={record.minorDefects > maxMinor ? 'text-rose-600' : 'text-slate-900'}>
+                  {record.minorDefects}
+                </span>
+                <span className="text-slate-400 text-xs"> / {maxMinor} Ac</span>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">Rejection: ≥{reMinor}</div>
+            </div>
+
+            <div className="p-4">
+              <div className="text-[11px] font-semibold text-slate-500">Offered vs PO Qty</div>
+              <div className="text-xl font-black font-mono text-slate-900 mt-0.5">
+                {inspQty.toLocaleString()} pcs
+              </div>
+              <div
+                className={`text-[10px] font-bold mt-0.5 ${
+                  variance.diff > 0
+                    ? 'text-emerald-600'
+                    : variance.diff < 0
+                    ? 'text-rose-600'
+                    : 'text-slate-500'
+                }`}
+              >
+                {variance.label} ({variance.diff > 0 ? `+${variance.diff}` : variance.diff} pcs)
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* NAVIGATION TABS WITH RICH COUNTERS */}
+        <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto pb-1 scrollbar-none">
+          {[
+            { id: 'overview' as DetailsTab, label: 'Audit Overview' },
+            {
+              id: 'photos' as DetailsTab,
+              label: `Visual Evidences (${totalPhotosCount})`,
+              badge: totalPhotosCount > 0 ? 'Camera' : undefined,
+            },
+            {
+              id: 'tests' as DetailsTab,
+              label: `On-Site Tests (${testRecords.length})`,
+              alert: testRecords.some((t) => !getTestPass(t)),
+            },
+            {
+              id: 'packing' as DetailsTab,
+              label: '0-Tolerance Packing Check',
+              alert: hasZeroToleranceFail,
+            },
+            {
+              id: 'defects' as DetailsTab,
+              label: `Defects & AQL (${record.defects?.length || 0})`,
+              badge: record.defectCount > 0 ? `${record.defectCount} pcs` : undefined,
+            },
+            { id: 'sizes' as DetailsTab, label: `Size Breakdown (${sizeBreakdown.length})` },
+            {
+              id: 'measurements' as DetailsTab,
+              label: `Measurement Sheet (${measurementPhotos.length})`,
+            },
+            {
+              id: 'checkpoints' as DetailsTab,
+              label: `11 Checkpoints (${checkpointsPassedCount}/${syncedCheckpoints.length} ✓)`,
+            },
+            {
+              id: 'signatures' as DetailsTab,
+              label: 'Dual Signatures & Authorization',
+              badge: record.inspectorSignature && record.representativeSignature ? 'Signed' : undefined,
+            },
+          ].map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3.5 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  isActive
+                    ? 'border-blue-600 text-blue-700 bg-white shadow-2xs'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100/50'
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.alert && (
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                )}
+                {tab.badge && !tab.alert && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-blue-100 text-blue-700">
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === 'overview' && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* Left Col: Type Specific Breakdown */}
+              <div className="lg:col-span-2 space-y-5">
+                {/* Audit Context Details Card */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{typeConfig.icon}</span>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">{typeConfig.label} Specifications</h3>
+                        <p className="text-[11px] text-slate-500">{typeConfig.description}</p>
                       </div>
-                      <div className="min-w-0">
-                        <span className="text-xs font-bold text-slate-900 block leading-tight truncate">
-                          {c.checkpoint}
-                        </span>
-                        <span className="text-[10px] font-semibold text-slate-500 block mt-0.5">
-                          {c.category}
-                        </span>
+                    </div>
+                    <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700">
+                      Stage: {record.stage}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Inspection Location</div>
+                      <div className="font-bold text-slate-800 mt-0.5">{record.factoryUnit || 'Unit 01 (Dhaka Complex)'}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">{record.sewingLine || 'Main Assembly Line'}</div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Lead Inspector</div>
+                      <div className="font-bold text-slate-800 mt-0.5">{record.inspectorName}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">ID: {record.inspectorId}</div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Factory Representative</div>
+                      <div className="font-bold text-slate-800 mt-0.5">{record.representativeName || 'Factory QA Manager'}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Signed: {record.representativeSignature ? 'Yes' : 'Pending'}</div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Audit Date & Time</div>
+                      <div className="font-bold text-slate-800 mt-0.5">{new Date(record.createdAt).toLocaleDateString()}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {new Date(record.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
 
-                    <div className="shrink-0">
-                      <span
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black border shadow-2xs ${
-                          isPass
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                            : 'bg-rose-100 text-rose-800 border-rose-300'
-                        }`}
-                      >
-                        {isPass ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 stroke-[3]" />
-                            <span>✓ Tik OK</span>
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>✗ Issue</span>
-                          </>
-                        )}
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Packing Condition</div>
+                      <div className="font-bold text-slate-800 mt-0.5">{record.packedPercent || 100}% Packed</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">{record.cartonCount || Math.ceil(inspQty / 24)} Cartons</div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">AQL Sampling Standard</div>
+                      <div className="font-bold text-slate-800 mt-0.5">ISO 2859-1 Level II</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Normal Single Sampling</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Evidence Quick Photo Gallery Strip */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-purple-600" />
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                        Audit Photos & Evidence Snapshots ({totalPhotosCount} Files)
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('photos')}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                    >
+                      View All in Gallery →
+                    </button>
+                  </div>
+
+                  {totalPhotosCount > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                      {/* PO Sheet Preview */}
+                      {poSheetPhotos.slice(0, 2).map((p, idx) => {
+                        const url = getPhotoUrl(p);
+                        const remark = getPhotoRemark(p);
+                        return (
+                          <div
+                            key={`po-${idx}`}
+                            onClick={() => setLightboxImage({ url, title: 'PO Sheet Evidence', subtitle: remark })}
+                            className="group relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer hover:shadow-md transition-all"
+                          >
+                            <img src={url} alt="PO Sheet" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/80 to-transparent p-1.5">
+                              <span className="text-[9px] font-bold text-white block truncate">PO Sheet</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Sample Carton Preview */}
+                      {sampleCartonPhotos.slice(0, 2).map((p, idx) => {
+                        const url = getPhotoUrl(p);
+                        const remark = getPhotoRemark(p);
+                        return (
+                          <div
+                            key={`carton-${idx}`}
+                            onClick={() => setLightboxImage({ url, title: 'Sample Carton Evidence', subtitle: remark })}
+                            className="group relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer hover:shadow-md transition-all"
+                          >
+                            <img src={url} alt="Sample Carton" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/80 to-transparent p-1.5">
+                              <span className="text-[9px] font-bold text-white block truncate">Carton Pickup</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Compliance Photos Preview */}
+                      {compliancePhotos.slice(0, 4).map((p, idx) => {
+                        const url = getPhotoUrl(p);
+                        const title = p.categoryTitle || p.categoryLabel || p.category;
+                        return (
+                          <div
+                            key={`comp-${idx}`}
+                            onClick={() => setLightboxImage({ url, title, subtitle: p.remark })}
+                            className="group relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer hover:shadow-md transition-all"
+                          >
+                            <img src={url} alt={title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/80 to-transparent p-1.5">
+                              <span className="text-[9px] font-bold text-white block truncate">{title}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-slate-400 text-xs bg-slate-50 rounded-xl">
+                      <Camera className="w-6 h-6 mx-auto mb-1 text-slate-300" />
+                      <span>No photos attached to this audit report.</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Combined PO Details Card if applicable */}
+                {(record.isCombinedInspection || (record.poNumbers && record.poNumbers.length > 1)) && (
+                  <div className="bg-white p-5 rounded-2xl border border-indigo-200/90 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-indigo-600" />
+                        <div>
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                            Combined Purchase Orders Breakdown
+                          </h3>
+                          <p className="text-[11px] text-slate-500">
+                            This audit covers multiple buyer purchase orders combined into a unified sample.
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        ⚡ {record.poNumbers?.length || 1} POs Combined
                       </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {record.poNumbers?.map((po, idx) => (
+                        <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center gap-2">
+                          <Tag className="w-3.5 h-3.5 text-blue-600" />
+                          <span className="font-mono font-bold text-slate-800">{po}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Col: Summary Sidebars */}
+              <div className="space-y-5">
+                {/* Test Records Status Card */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <CheckSquare className="w-4 h-4 text-emerald-600" />
+                      <span>On-Site Test Records</span>
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('tests')}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                    >
+                      Details →
+                    </button>
+                  </div>
+
+                  {testRecords.length > 0 ? (
+                    <div className="space-y-2">
+                      {testRecords.map((t, idx) => {
+                        const isPass = getTestPass(t);
+                        return (
+                          <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+                            <div>
+                              <span className="font-bold text-slate-800 block">{t.testName}</span>
+                              <span className="text-[10px] text-slate-400">{t.value || t.remark || (isPass ? 'Meets Spec' : 'Failed')}</span>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                isPass
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : 'bg-rose-100 text-rose-800 border border-rose-200'
+                              }`}
+                            >
+                              {isPass ? 'PASS' : 'FAIL'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-400 py-3 text-center">
+                      Physical test records completed with normal standards.
+                    </div>
+                  )}
+                </div>
+
+                {/* 0-Tolerance Check Status Card */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                      <span>0-Tolerance Packing Check</span>
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('packing')}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                    >
+                      Audit View →
+                    </button>
+                  </div>
+
+                  <div className={`p-3 rounded-xl border flex items-center justify-between ${
+                    hasZeroToleranceFail ? 'bg-rose-50 border-rose-300' : 'bg-emerald-50 border-emerald-200'
+                  }`}>
+                    <div>
+                      <span className={`text-xs font-bold block ${hasZeroToleranceFail ? 'text-rose-900' : 'text-emerald-900'}`}>
+                        {hasZeroToleranceFail ? 'Critical Failure Detected' : 'All 0-Tolerance Checks Passed'}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {hasZeroToleranceFail ? 'Mold / Needle / Insect violation' : '6 Critical parameters 100% clear'}
+                      </span>
+                    </div>
+                    <span className={`text-xs font-black px-2.5 py-1 rounded-full ${
+                      hasZeroToleranceFail ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+                    }`}>
+                      {hasZeroToleranceFail ? 'FAILED' : 'CLEARED'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Dual Signatures Preview Card */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <PenTool className="w-4 h-4 text-purple-600" />
+                      <span>Signatures & Verification</span>
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('signatures')}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                    >
+                      View Pads →
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Inspector Sign</div>
+                      {record.inspectorSignature ? (
+                        <div className="h-10 my-1 flex items-center justify-center">
+                          <img src={record.inspectorSignature} alt="Inspector Signature" className="max-h-10 max-w-full object-contain" />
+                        </div>
+                      ) : (
+                        <div className="h-10 my-1 flex items-center justify-center text-[10px] text-slate-400 italic">
+                          Electronic Sign
+                        </div>
+                      )}
+                      <span className="font-bold text-slate-800 truncate block text-[11px]">{record.inspectorName}</span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Factory Rep Sign</div>
+                      {record.representativeSignature ? (
+                        <div className="h-10 my-1 flex items-center justify-center">
+                          <img src={record.representativeSignature} alt="Rep Signature" className="max-h-10 max-w-full object-contain" />
+                        </div>
+                      ) : (
+                        <div className="h-10 my-1 flex items-center justify-center text-[10px] text-slate-400 italic">
+                          Pending Pad
+                        </div>
+                      )}
+                      <span className="font-bold text-slate-800 truncate block text-[11px]">{record.representativeName || 'Factory Representative'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: VISUAL & COMPLIANCE GALLERY */}
+        {activeTab === 'photos' && (
+          <div className="space-y-4">
+            {/* Filter Chips */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              {[
+                { id: 'ALL', label: `All Photos (${totalPhotosCount})` },
+                { id: 'po_sheet', label: `PO Sheets (${poSheetPhotos.length})` },
+                { id: 'sample_carton', label: `Cartons (${sampleCartonPhotos.length})` },
+                { id: 'carton_exterior', label: 'Carton Exterior' },
+                { id: 'shipping_mark_sticker', label: 'Stickers' },
+                { id: 'trims_accessories', label: 'Accessories' },
+                { id: 'product_front_back', label: 'Front & Back View' },
+                { id: 'ratio_folding', label: 'Ratio & Folding' },
+                { id: 'care_brand_labels', label: 'Labels' },
+                { id: 'polybag_hangers', label: 'Poly & Hanger' },
+                { id: 'measurement', label: `Measurements (${measurementPhotos.length})` },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setComplianceFilter(cat.id)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all cursor-pointer ${
+                    complianceFilter === cat.id
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Photos Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+              {/* PO Sheet Photos */}
+              {(complianceFilter === 'ALL' || complianceFilter === 'po_sheet') &&
+                poSheetPhotos.map((p, idx) => {
+                  const url = getPhotoUrl(p);
+                  const remark = getPhotoRemark(p);
+                  const time = getPhotoTime(p);
+                  return (
+                    <div
+                      key={`po-card-${idx}`}
+                      onClick={() => setLightboxImage({ url, title: 'PO Sheet Attachment', subtitle: remark })}
+                      className="group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="relative aspect-4/3 bg-slate-100 overflow-hidden">
+                        <img src={url} alt="PO Sheet" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-600 text-white shadow-sm">
+                          PO Sheet
+                        </span>
+                      </div>
+                      <div className="p-3 text-xs">
+                        <p className="font-semibold text-slate-800 line-clamp-2">{remark || 'PO Master Sheet verification photo'}</p>
+                        {time && <span className="text-[10px] text-slate-400 mt-1 block">{time}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {/* Sample Carton Photos */}
+              {(complianceFilter === 'ALL' || complianceFilter === 'sample_carton') &&
+                sampleCartonPhotos.map((p, idx) => {
+                  const url = getPhotoUrl(p);
+                  const remark = getPhotoRemark(p);
+                  const time = getPhotoTime(p);
+                  return (
+                    <div
+                      key={`carton-card-${idx}`}
+                      onClick={() => setLightboxImage({ url, title: 'Sample Carton Attachment', subtitle: remark })}
+                      className="group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="relative aspect-4/3 bg-slate-100 overflow-hidden">
+                        <img src={url} alt="Sample Carton" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-600 text-white shadow-sm">
+                          Carton Pickup
+                        </span>
+                      </div>
+                      <div className="p-3 text-xs">
+                        <p className="font-semibold text-slate-800 line-clamp-2">{remark || 'Sample carton selection & seal evidence'}</p>
+                        {time && <span className="text-[10px] text-slate-400 mt-1 block">{time}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {/* Compliance Category Photos */}
+              {filteredCompliancePhotos.map((p, idx) => {
+                const url = getPhotoUrl(p);
+                const title = p.categoryTitle || p.categoryLabel || p.category;
+                const time = getPhotoTime(p);
+                return (
+                  <div
+                    key={`comp-card-${idx}`}
+                    onClick={() => setLightboxImage({ url, title, subtitle: p.remark })}
+                    className="group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all cursor-pointer"
+                  >
+                    <div className="relative aspect-4/3 bg-slate-100 overflow-hidden">
+                      <img src={url} alt={title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-600 text-white shadow-sm">
+                        {title}
+                      </span>
+                    </div>
+                    <div className="p-3 text-xs">
+                      <p className="font-semibold text-slate-800 line-clamp-2">{p.remark || 'Compliance evidence picture'}</p>
+                      {time && <span className="text-[10px] text-slate-400 mt-1 block">{time}</span>}
                     </div>
                   </div>
                 );
               })}
+
+              {/* Measurement Photos */}
+              {(complianceFilter === 'ALL' || complianceFilter === 'measurement') &&
+                measurementPhotos.map((p, idx) => {
+                  const url = getPhotoUrl(p);
+                  const remark = getPhotoRemark(p);
+                  const time = getPhotoTime(p);
+                  return (
+                    <div
+                      key={`meas-card-${idx}`}
+                      onClick={() => setLightboxImage({ url, title: 'Measurement Spec Sheet', subtitle: remark })}
+                      className="group bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="relative aspect-4/3 bg-slate-100 overflow-hidden">
+                        <img src={url} alt="Measurement Spec" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-600 text-white shadow-sm">
+                          Measurement Sheet
+                        </span>
+                      </div>
+                      <div className="p-3 text-xs">
+                        <p className="font-semibold text-slate-800 line-clamp-2">{remark || 'Garment measurement points & grading table'}</p>
+                        {time && <span className="text-[10px] text-slate-400 mt-1 block">{time}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {totalPhotosCount === 0 && (
+              <div className="p-12 text-center text-slate-400 text-xs bg-white rounded-2xl border border-slate-200">
+                <Camera className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <span>No captured photos found for this inspection audit.</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: ON-SITE TEST RECORDS */}
+        {activeTab === 'tests' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <CheckSquare className="w-4 h-4 text-emerald-600" />
+                  <span>On-Site Physical Test Records &amp; Performance Audits</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Mandatory on-site quality tests including Barcode scanner readability, ISTA 1A drop test, 100% metal detection, fabric GSM, and seam pull tests.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-700">
+                {testRecords.length} Tests Logged
+              </span>
+            </div>
+
+            {testRecords.length > 0 ? (
+              <div className="divide-y divide-slate-100">
+                {testRecords.map((t, idx) => {
+                  const isPass = getTestPass(t);
+                  const testPhotos = t.photos || (t.photoUrl ? [t.photoUrl] : []);
+                  return (
+                    <div key={idx} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                      <div className="flex items-start gap-4">
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                            isPass ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                          }`}
+                        >
+                          {isPass ? '✓' : '✗'}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-slate-900">{t.testName}</h4>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                isPass
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : 'bg-rose-100 text-rose-800 border border-rose-200'
+                              }`}
+                            >
+                              {isPass ? 'PASSED' : 'FAILED'}
+                            </span>
+                          </div>
+                          {(t.value || t.remark) && (
+                            <p className="text-xs font-semibold text-slate-700 mt-1">
+                              Specification / Measured Value: <span className="font-mono text-blue-700">{t.value || t.remark}</span>
+                            </p>
+                          )}
+                          {(t.notes || t.remark) && <p className="text-xs text-slate-500 mt-0.5">Notes: {t.notes || t.remark}</p>}
+                        </div>
+                      </div>
+
+                      {/* Attached Test Evidence Photos */}
+                      {testPhotos.length > 0 && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          {testPhotos.map((url: string, pIdx: number) => (
+                            <div
+                              key={pIdx}
+                              onClick={() => setLightboxImage({ url, title: `${t.testName} Evidence` })}
+                              className="w-14 h-14 rounded-xl border border-slate-200 overflow-hidden cursor-pointer hover:shadow-md transition-all shrink-0 bg-slate-100"
+                            >
+                              <img src={url} alt="Test evidence" className="w-full h-full object-cover" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-12 text-center text-slate-400 text-xs">
+                <CheckSquare className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-50" />
+                <span>No physical test records registered for this audit.</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: PACKING 0-TOLERANCE CHECK */}
+        {activeTab === 'packing' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                  <span>Packing Check &amp; 0-Tolerance Critical Defects Verification</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Strict zero-tolerance parameters: Mold, insect contamination, broken needle fragments, wrong barcode, wet garments, or sharp hazard triggers immediate failure.
+                </p>
+              </div>
+              <span
+                className={`text-xs font-black px-3 py-1 rounded-full uppercase ${
+                  hasZeroToleranceFail
+                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                }`}
+              >
+                {hasZeroToleranceFail ? '⚠️ 0-Tolerance Failed' : '✓ 0-Tolerance Cleared'}
+              </span>
+            </div>
+
+            <div className="p-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {[
+                  {
+                    id: 'mold_mildew',
+                    name: 'Mold / Mildew Contamination',
+                    desc: 'Any signs of fungal growth or musty moisture odor',
+                  },
+                  {
+                    id: 'live_insect',
+                    name: 'Live Insects / Biological Contamination',
+                    desc: 'Pest activity or biological hazard in goods or cartons',
+                  },
+                  {
+                    id: 'broken_needle',
+                    name: 'Broken Needle Fragment',
+                    desc: 'Missing needle tip or metal contamination in garments',
+                  },
+                  {
+                    id: 'wrong_barcode',
+                    name: 'Incorrect Barcode / Wrong SKU',
+                    desc: 'Scanned barcode mismatches buyer purchase order SKU',
+                  },
+                  {
+                    id: 'wet_garments',
+                    name: 'Damp / Wet Garments',
+                    desc: 'Moisture content exceeds maximum allowable buyer threshold',
+                  },
+                  {
+                    id: 'sharp_hazard',
+                    name: 'Sharp Hazard / Metal Burr',
+                    desc: 'Exposed staple, razor fragment, or dangerous trim element',
+                  },
+                ].map((item) => {
+                  const checkItem = zeroToleranceChecks.find((z) => z.id === item.id);
+                  const isFail = checkItem
+                    ? checkItem.hasDefect || checkItem.isPass === false || (checkItem.defectCount !== undefined && checkItem.defectCount > 0)
+                    : false;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-4 rounded-xl border transition-colors ${
+                        isFail
+                          ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-500/20'
+                          : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900 leading-tight">{item.name}</h4>
+                          <p className="text-[10px] text-slate-500 mt-0.5">{item.desc}</p>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
+                            isFail
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          }`}
+                        >
+                          {isFail ? 'FAIL (0-Tol)' : 'PASS (0-Tol)'}
+                        </span>
+                      </div>
+
+                      {checkItem && checkItem.notes && (
+                        <div className="text-[11px] text-slate-600 bg-white/70 p-2 rounded-lg border border-slate-200 mt-2">
+                          <strong>Inspector Notes:</strong> {checkItem.notes}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: DEFECTS & AQL ANALYSIS */}
+        {activeTab === 'defects' && (
+          <div className="space-y-4">
+            {/* AQL Limits Ac/Re Meter Strip */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-blue-600" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    AQL 2.5 Normal Single Sampling Plan (ISO 2859-1 Level II)
+                  </h3>
+                </div>
+                <span className="text-xs font-mono font-bold text-slate-600">
+                  Code Letter: <strong className="text-blue-700">{codeLetter}</strong> • Sample Size:{' '}
+                  <strong className="text-blue-700">{record.sampleSize}</strong>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-700">Critical Defects</span>
+                    <span className="font-mono font-bold text-rose-700">Allowed Ac: 0</span>
+                  </div>
+                  <div className="text-2xl font-black font-mono mt-1 text-slate-900">
+                    {record.criticalDefects || 0}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {record.criticalDefects === 0 ? '✓ Within 0-defect limit' : '✗ Failed: Zero tolerance breached'}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-700">Major Defects (AQL 2.5)</span>
+                    <span className="font-mono font-bold text-amber-700">
+                      Ac: {maxMajor} / Re: {reMajor}
+                    </span>
+                  </div>
+                  <div
+                    className={`text-2xl font-black font-mono mt-1 ${
+                      record.majorDefects > maxMajor ? 'text-rose-600' : 'text-slate-900'
+                    }`}
+                  >
+                    {record.majorDefects || 0}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {record.majorDefects <= maxMajor
+                      ? `✓ Within tolerance (${maxMajor - record.majorDefects} spare)`
+                      : `✗ Exceeded by ${record.majorDefects - maxMajor} defect(s)`}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-700">Minor Defects (AQL 4.0)</span>
+                    <span className="font-mono font-bold text-blue-700">
+                      Ac: {maxMinor} / Re: {reMinor}
+                    </span>
+                  </div>
+                  <div
+                    className={`text-2xl font-black font-mono mt-1 ${
+                      record.minorDefects > maxMinor ? 'text-rose-600' : 'text-slate-900'
+                    }`}
+                  >
+                    {record.minorDefects || 0}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {record.minorDefects <= maxMinor
+                      ? `✓ Within tolerance (${maxMinor - record.minorDefects} spare)`
+                      : `✗ Exceeded by ${record.minorDefects - maxMinor} defect(s)`}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Defects Registry with Photo Thumbnails */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Garment Defects Registry &amp; Photo Evidence</h3>
+                  <p className="text-xs text-slate-500">Itemized defect instances captured on the inspection line</p>
+                </div>
+                <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-700">
+                  {record.defects?.length || 0} Defect Types Logged
+                </span>
+              </div>
+
+              {record.defects && record.defects.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {record.defects.map((d, index) => (
+                    <div
+                      key={d.id || index}
+                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors"
+                    >
+                      <div className="flex items-start sm:items-center gap-3 min-w-0">
+                        {d.photoUrl ? (
+                          <div
+                            onClick={() => setLightboxImage({ url: d.photoUrl!, title: d.defectType, subtitle: d.remark || d.location })}
+                            className="w-14 h-14 rounded-xl border border-slate-200 overflow-hidden shrink-0 cursor-pointer hover:shadow-md bg-slate-100"
+                          >
+                            <img src={d.photoUrl} alt={d.defectType} className="w-full h-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0 text-slate-400 text-xs font-bold">
+                            No Pic
+                          </div>
+                        )}
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-slate-900 truncate">{d.defectType}</span>
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                                d.severity === 'CRITICAL'
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                  : d.severity === 'MAJOR'
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              }`}
+                            >
+                              {d.severity}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            Location: <span className="font-semibold text-slate-700">{d.location || 'Main body'}</span>
+                            {d.remark && (
+                              <>
+                                {' '}• Remark: <span className="italic text-slate-600">{d.remark}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-base font-black font-mono text-slate-900">{d.count} pcs</span>
+                        <span className="block text-[10px] text-slate-400">
+                          {(((d.count || 1) / record.sampleSize) * 100).toFixed(1)}% of sample
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-12 text-center text-slate-400 text-xs">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-60" />
+                  <span>Zero visual defects identified during sample inspection.</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: SIZES BREAKDOWN */}
+        {activeTab === 'sizes' && (
+          <div className="space-y-4">
+            <InspectionSizeBreakdownSection
+              items={sizeBreakdown}
+              totalSampleSize={record.sampleSize || 315}
+              readOnly={true}
+            />
+          </div>
+        )}
+
+        {/* TAB 7: MEASUREMENT SPEC SHEET */}
+        {activeTab === 'measurements' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                  <span>Garment Measurement Spec Sheets &amp; POM Charts</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Measurement spec sheet captures, points of measure tolerance checks, and sizing conformity records.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-700">
+                {measurementPhotos.length} Sheets Attached
+              </span>
+            </div>
+
+            {measurementPhotos.length > 0 ? (
+              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {measurementPhotos.map((p, idx) => {
+                  const url = getPhotoUrl(p);
+                  const remark = getPhotoRemark(p);
+                  const time = getPhotoTime(p);
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => setLightboxImage({ url, title: 'Measurement Spec Sheet', subtitle: remark })}
+                      className="group bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden cursor-pointer hover:shadow-md transition-all"
+                    >
+                      <div className="aspect-4/3 bg-slate-100 overflow-hidden relative">
+                        <img src={url} alt="Measurement Sheet" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        <div className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-900/60 text-white backdrop-blur-xs">
+                          <Maximize2 className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="p-3 text-xs">
+                        <p className="font-semibold text-slate-800">{remark || `Measurement Chart #${idx + 1}`}</p>
+                        {time && (
+                          <span className="text-[10px] text-slate-400 mt-1 block">
+                            Captured: {time}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-12 text-center text-slate-400 text-xs">
+                <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <span>No measurement spec sheet uploaded for this inspection record.</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 8: 11 STANDARD CHECKPOINTS */}
+        {activeTab === 'checkpoints' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Inspection Checkpoints Verification Checklist</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Standard 11 Verification Points: Workmanship, Styling, Safety Check, Cross Check Carton Mark, Sticker Mark, Accessories, BOM, Measurement, Test Record, PP Sample, Working Environment
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  {checkpointsPassedCount} of {syncedCheckpoints.length} Verified OK
+                </span>
+              </div>
+            </div>
+
+            <div className="p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {syncedCheckpoints.map((c, idx) => {
+                  const isPass = c.status === 'PASS';
+                  return (
+                    <div
+                      key={c.id || idx}
+                      className={`p-4 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
+                        isPass
+                          ? 'bg-emerald-50/40 border-emerald-200/90'
+                          : 'bg-rose-50/40 border-rose-200/90'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono text-xs font-black shrink-0 ${
+                            isPass ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                          }`}
+                        >
+                          {idx + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-slate-900 block leading-tight truncate">
+                            {c.checkpoint}
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-500 block mt-0.5">
+                            {c.category}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black border shadow-2xs ${
+                            isPass
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                              : 'bg-rose-100 text-rose-800 border-rose-300'
+                          }`}
+                        >
+                          {isPass ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              <span>✓ Tik OK</span>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>✗ Issue</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 9: DUAL DIGITAL SIGNATURES & QUALITY SIGN-OFF */}
+        {activeTab === 'signatures' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Award className="w-5 h-5 text-blue-600" />
+                <span>Official Quality Inspection Sign-Off &amp; Authorization</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Formal certificate endorsement signed by the certified lead QA inspector and authorized factory representative.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+              {/* Lead Inspector Card */}
+              <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Lead QA Inspector</span>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                      Certified Auditor
+                    </span>
+                  </div>
+
+                  <div className="pt-2 space-y-1">
+                    <div className="text-sm font-bold text-slate-900">{record.inspectorName || 'Lead Auditor'}</div>
+                    <div className="text-xs text-slate-500">ID: {record.inspectorId || 'QC-01'}</div>
+                    <div className="text-[11px] text-slate-400">Date: {new Date(record.createdAt).toLocaleDateString()}</div>
+                  </div>
+                </div>
+
+                {/* Signature Preview Canvas */}
+                <div className="border border-slate-200 rounded-xl bg-white p-3 h-32 flex items-center justify-center relative shadow-2xs">
+                  {record.inspectorSignature ? (
+                    <img
+                      src={record.inspectorSignature}
+                      alt="Inspector Digital Signature"
+                      className="max-h-28 max-w-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-center text-slate-400 text-xs italic">
+                      <PenTool className="w-6 h-6 mx-auto mb-1 opacity-40" />
+                      <span>Digital Signature Not On File</span>
+                    </div>
+                  )}
+                  <span className="absolute bottom-2 right-2 text-[9px] font-mono text-slate-400">Digital Seal</span>
+                </div>
+
+                <div className="text-[10px] text-slate-500 text-center">
+                  Verified according to AQL ISO 2859-1 Quality Assurance Standards.
+                </div>
+              </div>
+
+              {/* Factory Representative Card */}
+              <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Factory / Vendor Representative
+                    </span>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                      Manufacturer Rep
+                    </span>
+                  </div>
+
+                  <div className="pt-2 space-y-1">
+                    <div className="text-sm font-bold text-slate-900">
+                      {record.representativeName || 'Factory Representative'}
+                    </div>
+                    <div className="text-xs text-slate-500">Factory: {record.factoryUnit || 'Unit 01 Production Floor'}</div>
+                    <div className="text-[11px] text-slate-400">Date: {new Date(record.createdAt).toLocaleDateString()}</div>
+                  </div>
+                </div>
+
+                {/* Signature Preview Canvas */}
+                <div className="border border-slate-200 rounded-xl bg-white p-3 h-32 flex items-center justify-center relative shadow-2xs">
+                  {record.representativeSignature ? (
+                    <img
+                      src={record.representativeSignature}
+                      alt="Representative Digital Signature"
+                      className="max-h-28 max-w-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-center text-slate-400 text-xs italic">
+                      <PenTool className="w-6 h-6 mx-auto mb-1 opacity-40" />
+                      <span>Factory Representative Signature Pending</span>
+                    </div>
+                  )}
+                  <span className="absolute bottom-2 right-2 text-[9px] font-mono text-slate-400">Factory Seal</span>
+                </div>
+
+                <div className="text-[10px] text-slate-500 text-center">
+                  Acknowledgement of audit findings, sample counts, and defect classifications.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* FULL-SCREEN LIGHTBOX MODAL */}
+      {lightboxImage && (
+        <div
+          onClick={() => setLightboxImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl flex flex-col"
+          >
+            <div className="px-5 py-3.5 bg-slate-950/90 flex items-center justify-between border-b border-slate-800">
+              <div>
+                <h4 className="text-sm font-bold text-white">{lightboxImage.title}</h4>
+                {lightboxImage.subtitle && (
+                  <p className="text-xs text-slate-400 mt-0.5">{lightboxImage.subtitle}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setLightboxImage(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 overflow-auto flex items-center justify-center max-h-[75vh]">
+              <img
+                src={lightboxImage.url}
+                alt={lightboxImage.title}
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              />
             </div>
           </div>
         </div>
       )}
-      </div>
     </div>
   );
 }

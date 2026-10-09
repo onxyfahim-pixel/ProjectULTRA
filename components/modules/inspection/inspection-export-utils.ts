@@ -495,7 +495,10 @@ export function exportSingleInspectionPdf(
         (d, idx) => `
         <tr style="border-bottom: 1px solid #f1f5f9;">
           <td style="font-family: monospace; font-size: 8.5px; color: #64748b;">${idx + 1}</td>
-          <td style="font-size: 8.5px; font-weight: 700; color: #1e293b;">${d.defectType}</td>
+          <td style="font-size: 8.5px; font-weight: 700; color: #1e293b;">
+            ${d.defectType}
+            ${d.remark ? `<div style="font-size: 7.5px; color: #64748b; font-style: italic;">Remark: ${d.remark}</div>` : ''}
+          </td>
           <td style="font-size: 8.5px;">
             <span style="font-size: 7.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; background: ${
               d.severity === 'CRITICAL' ? '#fef2f2; color: #b91c1c;' : d.severity === 'MAJOR' ? '#fffbeb; color: #b45309;' : '#f1f5f9; color: #475569;'
@@ -505,6 +508,9 @@ export function exportSingleInspectionPdf(
           </td>
           <td style="text-align: right; font-family: monospace; font-size: 8.5px; font-weight: 700; color: #0f172a;">${d.count}</td>
           <td style="font-size: 8.5px; color: #64748b;">${d.location || '-'}</td>
+          <td style="text-align: center; width: 55px;">
+            ${d.photoUrl ? `<img src="${d.photoUrl}" style="width: 28px; height: 28px; object-fit: cover; border-radius: 4px; border: 1px solid #cbd5e1;" />` : '<span style="color: #cbd5e1; font-size: 7.5px;">-</span>'}
+          </td>
         </tr>
       `
       )
@@ -532,6 +538,67 @@ export function exportSingleInspectionPdf(
       `
       )
       .join('');
+
+    // Zero-Tolerance Packing Checks
+    const ztChecks = record.packingZeroToleranceChecks || [];
+    const ztFailedItem = ztChecks.find((z) => !z.isPass || (z.defectCount && z.defectCount > 0));
+    const hasZtFail = record.hasZeroToleranceFail || Boolean(ztFailedItem);
+
+    const ztRowsHtml = ztChecks
+      .map(
+        (z, idx) => `
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="font-family: monospace; font-size: 8px; color: #64748b; width: 25px;">${idx + 1}</td>
+          <td style="font-size: 8.5px; font-weight: 700; color: #1e293b;">${z.name}</td>
+          <td style="text-align: center; font-size: 8.5px; font-family: monospace; font-weight: 700; color: ${(z.defectCount ?? 0) > 0 ? '#b91c1c' : '#059669'};">
+            ${z.defectCount || 0}
+          </td>
+          <td style="text-align: center; width: 95px;">
+            <span style="display: inline-block; font-size: 7.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; ${
+              z.isPass && (z.defectCount || 0) === 0
+                ? 'background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;'
+                : 'background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;'
+            }">
+              ${z.isPass && (z.defectCount || 0) === 0 ? '✓ PASS (0-TOL)' : '✗ FAILED (0-TOL)'}
+            </span>
+          </td>
+          <td style="font-size: 8px; color: #64748b;">${z.notes || '-'}</td>
+        </tr>
+      `
+      )
+      .join('');
+
+    // On-Site Test Records
+    const testRecords = record.testRecords || [];
+    const testRowsHtml = testRecords
+      .map(
+        (t, idx) => `
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="font-family: monospace; font-size: 8px; color: #64748b; width: 25px;">${idx + 1}</td>
+          <td style="font-size: 8.5px; font-weight: 700; color: #1e293b;">${t.testName}</td>
+          <td style="font-size: 8.5px; color: #334155; font-family: monospace;">${t.value || '-'}</td>
+          <td style="text-align: center; width: 85px;">
+            <span style="display: inline-block; font-size: 7.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; ${
+              t.result === 'PASS'
+                ? 'background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;'
+                : 'background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;'
+            }">
+              ${t.result === 'PASS' ? '✓ PASS' : '✗ FAIL'}
+            </span>
+          </td>
+          <td style="font-size: 8px; color: #64748b;">${t.notes || '-'}</td>
+        </tr>
+      `
+      )
+      .join('');
+
+    // Photographic Evidence
+    const allEvidencePhotos = [
+      ...(record.poSheetPhotos || []).map((p) => ({ ...p, label: 'PO Sheet' })),
+      ...(record.sampleCartonPhotos || []).map((p) => ({ ...p, label: 'Sample Carton' })),
+      ...(record.compliancePhotos || []).map((p) => ({ ...p, label: p.categoryTitle || p.category })),
+      ...(record.measurementSheetPhotos || []).map((p) => ({ ...p, label: 'Measurement Sheet' })),
+    ];
 
     const html = `
       <!DOCTYPE html>
@@ -762,19 +829,34 @@ export function exportSingleInspectionPdf(
             </tfoot>
           </table>
 
+          ${
+            hasZtFail
+              ? `
+                <div style="background: #fef2f2; border: 1.5px solid #ef4444; border-radius: 8px; padding: 8px 12px; margin: 8px 0; color: #991b1b;">
+                  <div style="font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Critical Quality Breach Notice</div>
+                  <div style="font-size: 11px; font-weight: 900; margin-top: 1px;">CRITICAL ZERO-TOLERANCE DEFECT DETECTED — SHIPMENT BLOCKED</div>
+                  <div style="font-size: 8px; color: #b91c1c; margin-top: 2px;">
+                    Inspection lot failed zero-tolerance technical standards (mold, needle, live insects, wrong barcode, dampness, or sharp hazard). Goods quarantined for 100% sort and correction.
+                  </div>
+                </div>
+              `
+              : ''
+          }
+
           <!-- Defect Itemization Table -->
           ${
             record.defects && record.defects.length > 0
               ? `
-                <div class="section-title">Itemized Defect Breakdown</div>
+                <div class="section-title">Itemized Defect Breakdown &amp; Photographic Evidence</div>
                 <table>
                   <thead>
                     <tr>
                       <th style="width: 30px;">#</th>
                       <th>Defect Classification</th>
-                      <th style="width: 90px;">Severity</th>
-                      <th style="width: 70px; text-align: right;">Count</th>
-                      <th style="width: 140px;">Garment Location</th>
+                      <th style="width: 80px;">Severity</th>
+                      <th style="width: 60px; text-align: right;">Count</th>
+                      <th style="width: 130px;">Garment Location</th>
+                      <th style="width: 55px; text-align: center;">Photo</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -787,6 +869,52 @@ export function exportSingleInspectionPdf(
                   ✓ Zero visual defects identified during sample inspection.
                 </div>
               `
+          }
+
+          <!-- Packing Check: Zero Tolerance Parameters -->
+          ${
+            ztRowsHtml
+              ? `
+                <div class="section-title">Packing Check — Zero-Tolerance Parameters Verification</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 25px;">#</th>
+                      <th>Zero-Tolerance Checkpoint</th>
+                      <th style="width: 70px; text-align: center;">Defects</th>
+                      <th style="width: 95px; text-align: center;">Verification</th>
+                      <th>Auditor Observations</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${ztRowsHtml}
+                  </tbody>
+                </table>
+              `
+              : ''
+          }
+
+          <!-- On-Site Physical Test Records -->
+          ${
+            testRowsHtml
+              ? `
+                <div class="section-title">On-Site Physical Test Records &amp; Verification</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 25px;">#</th>
+                      <th>Quality Test Routine</th>
+                      <th style="width: 120px;">Specification / Value</th>
+                      <th style="width: 85px; text-align: center;">Test Result</th>
+                      <th>Observations &amp; Standards</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${testRowsHtml}
+                  </tbody>
+                </table>
+              `
+              : ''
           }
 
           <!-- Inspection Checkpoints Verification Checklist -->
@@ -805,6 +933,27 @@ export function exportSingleInspectionPdf(
             </tbody>
           </table>
 
+          <!-- Audit Photographic Evidences Register -->
+          ${
+            allEvidencePhotos.length > 0
+              ? `
+                <div class="section-title">Photographic Evidences &amp; Compliance Register (${allEvidencePhotos.length} Images)</div>
+                <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 6px;">
+                  ${allEvidencePhotos.slice(0, 18).map((p) => `
+                    <div style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #f8fafc; text-align: center;">
+                      <div style="height: 52px; overflow: hidden; background: #e2e8f0;">
+                        <img src="${p.photoUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
+                      </div>
+                      <div style="padding: 2px 4px; font-size: 7px; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${p.label}
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              `
+              : ''
+          }
+
           ${
             record.remarks
               ? `
@@ -815,7 +964,31 @@ export function exportSingleInspectionPdf(
               : ''
           }
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'none')}
+          <!-- Dual Authorization & Signature Endorsement -->
+          <div style="margin-top: 18px; page-break-inside: avoid;">
+            <div class="section-title" style="margin-bottom: 8px;">Official Quality Authorization &amp; Dual Sign-Off</div>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+              <!-- Lead Quality Inspector -->
+              <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; background: #f8fafc; text-align: center;">
+                <div style="font-size: 7.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.3px;">Lead Quality Assurance Auditor</div>
+                <div style="height: 52px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #cbd5e1;">
+                  ${record.inspectorSignature ? `<img src="${record.inspectorSignature}" style="max-height: 48px; max-width: 100%; object-fit: contain;" />` : `<span style="font-size: 8px; color: #94a3b8; font-style: italic;">Auditor Signature On File</span>`}
+                </div>
+                <div style="font-size: 9px; font-weight: 800; color: #0f172a;">${record.inspectorName || 'Lead Auditor'}</div>
+                <div style="font-size: 7.5px; color: #64748b;">Auditor ID: ${record.inspectorId || 'QC-01'} • Date: ${dateStr}</div>
+              </div>
+
+              <!-- Factory Representative -->
+              <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; background: #f8fafc; text-align: center;">
+                <div style="font-size: 7.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.3px;">Factory / Vendor Authorized Representative</div>
+                <div style="height: 52px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #cbd5e1;">
+                  ${record.representativeSignature ? `<img src="${record.representativeSignature}" style="max-height: 48px; max-width: 100%; object-fit: contain;" />` : `<span style="font-size: 8px; color: #94a3b8; font-style: italic;">Factory Representative Sign</span>`}
+                </div>
+                <div style="font-size: 9px; font-weight: 800; color: #0f172a;">${record.representativeName || 'Factory Representative'}</div>
+                <div style="font-size: 7.5px; color: #64748b;">Production Floor: ${record.factoryUnit || 'Unit 01'} • Date: ${dateStr}</div>
+              </div>
+            </div>
+          </div>
 
           <div class="footer-note">
             <span>Project ULTRA ERP • Quality Assurance &amp; Technical Inspection Directorate</span>
@@ -874,6 +1047,48 @@ export function exportSingleInspectionExcel(record: InspectionRecord): void {
       `
       )
       .join('');
+
+    // Zero-Tolerance Packing Checks for Excel
+    const ztChecksExcel = (record.packingZeroToleranceChecks || []).map((z, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td style="font-weight: bold;">${z.name}</td>
+        <td style="text-align: center; color: ${(z.defectCount ?? 0) > 0 ? '#b91c1c' : '#047857'}; font-weight: bold;">${z.defectCount || 0}</td>
+        <td style="font-weight: bold; color: ${z.isPass && (z.defectCount || 0) === 0 ? '#047857' : '#b91c1c'};">
+          ${z.isPass && (z.defectCount || 0) === 0 ? '✓ PASS (0-TOL)' : '✗ FAILED (0-TOL)'}
+        </td>
+        <td>${z.notes || ''}</td>
+      </tr>
+    `).join('');
+
+    // On-site Physical Test Records for Excel
+    const testRecordsExcel = (record.testRecords || []).map((t, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td style="font-weight: bold;">${t.testName}</td>
+        <td>${t.value || ''}</td>
+        <td style="font-weight: bold; color: ${t.result === 'PASS' ? '#047857' : '#b91c1c'};">
+          ${t.result === 'PASS' ? '✓ PASS' : '✗ FAIL'}
+        </td>
+        <td>${t.notes || ''}</td>
+      </tr>
+    `).join('');
+
+    // Photo Evidences Log for Excel
+    const allPhotosExcel = [
+      ...(record.poSheetPhotos || []).map((p) => ({ category: 'PO Sheet', remark: p.remark, date: p.capturedAt })),
+      ...(record.sampleCartonPhotos || []).map((p) => ({ category: 'Sample Carton', remark: p.remark, date: p.capturedAt })),
+      ...(record.compliancePhotos || []).map((p) => ({ category: p.categoryTitle || p.category, remark: p.remark, date: p.capturedAt })),
+      ...(record.measurementSheetPhotos || []).map((p) => ({ category: 'Measurement Sheet', remark: p.remark, date: p.capturedAt })),
+    ].map((p, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td style="font-weight: bold;">${p.category}</td>
+        <td>${p.remark || 'Evidence photo verified'}</td>
+        <td>${p.date ? new Date(p.date).toLocaleString() : ''}</td>
+        <td style="color: #047857; font-weight: bold;">✓ Captured &amp; Verified</td>
+      </tr>
+    `).join('');
 
     const template = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -994,6 +1209,80 @@ export function exportSingleInspectionExcel(record: InspectionRecord): void {
               <th>Tik Verification Status</th>
             </tr>
             ${checkpointRows}
+          </table>
+
+          ${
+            ztChecksExcel
+              ? `
+                <h3>Packing Check: Zero-Tolerance Critical Parameters</h3>
+                <table>
+                  <tr>
+                    <th style="width: 30px;">#</th>
+                    <th>Zero-Tolerance Parameter</th>
+                    <th>Defects Count</th>
+                    <th>Verification Status</th>
+                    <th>Inspector Observations</th>
+                  </tr>
+                  ${ztChecksExcel}
+                </table>
+              `
+              : ''
+          }
+
+          ${
+            testRecordsExcel
+              ? `
+                <h3>On-Site Physical Test Records &amp; Verification</h3>
+                <table>
+                  <tr>
+                    <th style="width: 30px;">#</th>
+                    <th>Quality Test Routine</th>
+                    <th>Measured Value / Specification</th>
+                    <th>Result</th>
+                    <th>Standards &amp; Notes</th>
+                  </tr>
+                  ${testRecordsExcel}
+                </table>
+              `
+              : ''
+          }
+
+          ${
+            allPhotosExcel
+              ? `
+                <h3>Audit Photographic Evidences &amp; Verification Register</h3>
+                <table>
+                  <tr>
+                    <th style="width: 30px;">#</th>
+                    <th>Evidence Category</th>
+                    <th>Caption &amp; Remarks</th>
+                    <th>Captured Timestamp</th>
+                    <th>Verification Status</th>
+                  </tr>
+                  ${allPhotosExcel}
+                </table>
+              `
+              : ''
+          }
+
+          <h3>Official Quality Authorization &amp; Endorsement Sign-Off</h3>
+          <table>
+            <tr>
+              <th colspan="2">Lead Quality Assurance Auditor</th>
+              <th colspan="2">Factory / Vendor Authorized Representative</th>
+            </tr>
+            <tr>
+              <td style="font-weight: bold;">Inspector Name:</td><td>${record.inspectorName || 'Lead Auditor'} (${record.inspectorId || 'QC-01'})</td>
+              <td style="font-weight: bold;">Representative Name:</td><td>${record.representativeName || 'Factory Representative'}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: bold;">Digital Sign Status:</td><td>${record.inspectorSignature ? '✓ Electronically Signed' : 'Signed On Physical Paper'}</td>
+              <td style="font-weight: bold;">Factory Rep Sign:</td><td>${record.representativeSignature ? '✓ Electronically Signed' : 'Signed On Physical Paper'}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: bold;">Audit Date:</td><td>${dateStr}</td>
+              <td style="font-weight: bold;">Production Unit:</td><td>${record.factoryUnit || 'Unit 01'}</td>
+            </tr>
           </table>
         </body>
       </html>

@@ -61,6 +61,11 @@ import {
 } from '@/lib/db/production-defects-store';
 import { MOCK_BUYER_ORDERS } from '@/lib/db/modules-mock-data';
 import { BuyerOrder } from '@/lib/types/modules';
+import {
+  getSectionTargetForOrder,
+  normalizeSectionKey,
+  getDefaultSectionTargets,
+} from '@/lib/utils/section-target-utils';
 
 export interface MobileProductionEntryPageProps {
   orders: ProductionOrder[];
@@ -273,6 +278,15 @@ export function MobileProductionEntryPage({
   const [targetQuantity, setTargetQuantity] = useState<number>(
     initialOrder?.targetQuantity || 1200
   );
+  const [hourlyTarget, setHourlyTarget] = useState<number>(() => {
+    if (initialOrder?.hourlyTarget && initialOrder.hourlyTarget > 0) return initialOrder.hourlyTarget;
+    return Math.round((initialOrder?.targetQuantity || 1200) / 8);
+  });
+  const [shiftTarget, setShiftTarget] = useState<number>(() => {
+    if (initialOrder?.shiftTarget && initialOrder.shiftTarget > 0) return initialOrder.shiftTarget;
+    if (initialOrder?.hourlyTarget && initialOrder.hourlyTarget > 0) return initialOrder.hourlyTarget * 8;
+    return initialOrder?.targetQuantity || 1200;
+  });
   const [operatorCount, setOperatorCount] = useState<number>(
     initialOrder?.operatorCount || 24
   );
@@ -312,13 +326,30 @@ export function MobileProductionEntryPage({
 
   const handleSelectSection = (newSec: string) => {
     setSection(newSec);
+
+    // Dynamic Section-Wise WIP Target & SMV linkage
+    const activePO = availableBuyerOrders.find((bo) => bo.orderNumber === orderNumber);
+    const secTarget = getSectionTargetForOrder(activePO, newSec);
+    setSmvTarget(secTarget.smv);
+    setHourlyTarget(secTarget.hourlyTarget);
+    setShiftTarget(secTarget.dailyTarget || secTarget.hourlyTarget * 8);
+    if (secTarget.manpower) setOperatorCount(secTarget.manpower);
+
+    // Sync all hourly slots in mobile sheet
+    setHourlyData((prev) =>
+      prev.map((h) => ({
+        ...h,
+        targetQty: secTarget.hourlyTarget,
+      }))
+    );
+
     const presets = SECTION_LINE_PRESETS[newSec];
     if (presets && presets.length > 0) {
       setLineId(presets[0].name);
       setSupervisorName(presets[0].chief);
       setQualityInspector(presets[0].qc);
-      showToast(`Selected section: ${newSec}`);
     }
+    showToast(`✓ Switched to ${secTarget.sectionName} • Hourly Target: ${secTarget.hourlyTarget} pcs/hr (SMV ${secTarget.smv}m)`);
   };
 
   const handleSelectLine = (selectedLineName: string) => {
@@ -435,11 +466,25 @@ export function MobileProductionEntryPage({
     setTargetQuantity(bo.orderQuantity);
     if (bo.shipDate) setDueDate(bo.shipDate.split('T')[0]);
 
-    if (bo.smv && bo.smv > 0) {
-      setSmvTarget(bo.smv);
-    }
+    // Section-Wise Target resolution from Buyer Order WIP & IE Planning
+    const secTarget = getSectionTargetForOrder(bo, section);
+    setSmvTarget(secTarget.smv);
+    setHourlyTarget(secTarget.hourlyTarget);
+    setShiftTarget(secTarget.dailyTarget || secTarget.hourlyTarget * 8);
+    if (secTarget.manpower) setOperatorCount(secTarget.manpower);
+
+    // Sync all hourly slots
+    setHourlyData((prev) =>
+      prev.map((h) => ({
+        ...h,
+        targetQty: secTarget.hourlyTarget,
+      }))
+    );
+
     setIsPoDropdownOpen(false);
-    showToast(`Loaded PO: ${bo.orderNumber} (${bo.buyerName})`);
+    showToast(
+      `✓ Loaded PO: ${bo.orderNumber} • ${secTarget.sectionName} Hourly Target: ${secTarget.hourlyTarget} pcs/hr (SMV ${secTarget.smv}m)`
+    );
   };
 
   // ==========================================
@@ -707,6 +752,8 @@ export function MobileProductionEntryPage({
       supervisorName: supervisorName,
       qualityInspector: qualityInspector,
       smvTarget: smvTarget,
+      hourlyTarget: hourlyTarget,
+      shiftTarget: shiftTarget,
       top3Defects: top3Defects,
       remarks: remarks || `Logged via Mobile Entry on ${new Date().toLocaleTimeString()}`,
       createdAt: initialOrder?.createdAt || new Date().toISOString(),

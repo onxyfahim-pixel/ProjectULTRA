@@ -163,6 +163,63 @@ export interface DefectItem {
   severity: DefectSeverity;
   count: number;
   location: string;
+  photoUrl?: string;
+  remark?: string;
+}
+
+export interface InspectionPhotoEvidence {
+  id: string;
+  url: string;
+  photoUrl?: string;
+  caption?: string;
+  remark?: string;
+  category?: string;
+  timestamp?: string;
+  capturedAt?: string;
+}
+
+export interface InspectionTestRecord {
+  id: string;
+  testName: string;
+  status: 'PASS' | 'FAIL' | 'PENDING';
+  result?: 'PASS' | 'FAIL';
+  value?: string;
+  notes?: string;
+  photos?: string[];
+  photoUrl?: string;
+  remark?: string;
+  timestamp?: string;
+}
+
+export type VisualComplianceCategory =
+  | 'CARTON'
+  | 'STICKER'
+  | 'ACCESSORIES'
+  | 'FRONT_BACK_VIEW'
+  | 'RATIO'
+  | 'LABELS'
+  | 'POLY_HANGER'
+  | 'OTHER';
+
+export interface InspectionCompliancePhoto {
+  id: string;
+  category: VisualComplianceCategory;
+  categoryLabel?: string;
+  categoryTitle?: string;
+  photoUrl: string;
+  remark?: string;
+  timestamp?: string;
+  capturedAt?: string;
+}
+
+export interface PackingZeroToleranceItem {
+  id: string;
+  name: string;
+  hasDefect: boolean;
+  isPass?: boolean;
+  defectCount?: number;
+  defectPhoto?: string;
+  notes?: string;
 }
 
 export interface MeasurementAuditItem {
@@ -262,6 +319,18 @@ export interface InspectionRecord {
   defects?: DefectItem[];
   measurements?: MeasurementAuditItem[];
   checkpoints?: CheckpointItem[];
+
+  // Enhanced Mobile Inspection Fields
+  poSheetPhotos?: InspectionPhotoEvidence[];
+  sampleCartonPhotos?: InspectionPhotoEvidence[];
+  testRecords?: InspectionTestRecord[];
+  compliancePhotos?: InspectionCompliancePhoto[];
+  packingZeroToleranceChecks?: PackingZeroToleranceItem[];
+  hasZeroToleranceFail?: boolean;
+  measurementSheetPhotos?: InspectionPhotoEvidence[];
+  representativeName?: string;
+  representativeSignature?: string;
+  isMobileEntry?: boolean;
 }
 
 export type LineStatus = 'RUNNING' | 'COMPLETED' | 'PAUSED';
@@ -310,6 +379,8 @@ export interface ProductionOrder {
   styleNumber?: string;
   itemInfo?: string; // Item / fabric description pulled from buyer order BOM
   smvTarget?: number; // Standard Minute Value (SMV) Target
+  hourlyTarget?: number; // Section-wise Hourly Target (pcs/hour) linked from Order WIP & Planning
+  shiftTarget?: number; // Scheduled Shift Target (hourlyTarget * shiftHours)
   unit?: string; // Manufacturing Unit / Plant (e.g., 'Unit 01', 'Unit 02')
   section?: string; // Manufacturing Section (e.g., 'Sewing Line 04', 'Cutting Floor')
   targetQuantity: number;

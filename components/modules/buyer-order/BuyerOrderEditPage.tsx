@@ -38,6 +38,10 @@ import {
   Info,
   Paperclip,
   Palette,
+  Target,
+  Shirt,
+  PackageCheck,
+  Calculator,
 } from 'lucide-react';
 import {
   BuyerOrder,
@@ -47,7 +51,17 @@ import {
   LogisticsDetail,
   BuyerOrderWIPRecord,
   OrderColorSizeBreakdown,
+  ProductionSectionKey,
+  SectionTargetConfig,
+  SectionWiseTargets,
 } from '@/lib/types/modules';
+import {
+  SECTION_KEYS,
+  SECTION_METADATA,
+  getDefaultSectionTargets,
+  calculateHourlyTarget,
+  normalizeSectionKey,
+} from '@/lib/utils/section-target-utils';
 import {
   computeWIPRecordForPO,
   syncWIPToStages,
@@ -190,6 +204,88 @@ export function BuyerOrderEditPage({
       order.productionTracking?.stages
     )
   );
+
+  // Section-Wise WIP SMV & Hourly Targets State (Linked to Production Entry & IE)
+  const [sectionTargets, setSectionTargets] = useState<SectionWiseTargets>(() => {
+    if (order.sectionTargets) return order.sectionTargets;
+    if (order.wipRecord?.sectionTargets) return order.wipRecord.sectionTargets;
+    return getDefaultSectionTargets(
+      order.smv,
+      order.productionTarget || order.dailyTarget,
+      Boolean(order.wipRecord?.washApplicable)
+    );
+  });
+
+  const handleUpdateSectionTarget = (
+    key: ProductionSectionKey,
+    field: keyof SectionTargetConfig,
+    value: any
+  ) => {
+    setSectionTargets((prev) => {
+      const current = { ...prev[key] };
+      const updated: SectionTargetConfig = { ...current, [field]: value };
+
+      if (field === 'hourlyTarget') {
+        const h = Math.max(0, parseInt(value, 10) || 0);
+        updated.hourlyTarget = h;
+        updated.dailyTarget = h * (updated.workingHours || 8);
+      } else if (field === 'dailyTarget') {
+        const d = Math.max(0, parseInt(value, 10) || 0);
+        updated.dailyTarget = d;
+        updated.hourlyTarget = Math.max(1, Math.round(d / (updated.workingHours || 8)));
+      } else if (field === 'smv' || field === 'manpower' || field === 'efficiency') {
+        const sVal = field === 'smv' ? Math.max(0.1, parseFloat(value) || 1) : updated.smv;
+        const mVal = field === 'manpower' ? Math.max(1, parseInt(value, 10) || 1) : updated.manpower || 20;
+        const eVal = field === 'efficiency' ? Math.max(1, parseFloat(value) || 80) : updated.efficiency || 80;
+        if (field === 'smv') updated.smv = sVal;
+        if (field === 'manpower') updated.manpower = mVal;
+        if (field === 'efficiency') updated.efficiency = eVal;
+        const newH = calculateHourlyTarget(sVal, mVal, eVal);
+        updated.hourlyTarget = newH;
+        updated.dailyTarget = newH * (updated.workingHours || 8);
+      }
+
+      const nextTargets: SectionWiseTargets = { ...prev, [key]: updated };
+      setFormData((f) => ({ ...f, sectionTargets: nextTargets }));
+      setWipData((w) => ({ ...w, sectionTargets: nextTargets }));
+      return nextTargets;
+    });
+  };
+
+  const handleRecalculateAllSectionTargets = () => {
+    setSectionTargets((prev) => {
+      const next: SectionWiseTargets = { ...prev };
+      SECTION_KEYS.forEach((key) => {
+        const item = next[key];
+        const newHourly = calculateHourlyTarget(
+          item.smv,
+          item.manpower || 20,
+          item.efficiency || 80
+        );
+        next[key] = {
+          ...item,
+          hourlyTarget: newHourly,
+          dailyTarget: newHourly * (item.workingHours || 8),
+        };
+      });
+      setFormData((f) => ({ ...f, sectionTargets: next }));
+      setWipData((w) => ({ ...w, sectionTargets: next }));
+      showToast('✓ Auto-calculated all Section Hourly Targets from IE Manpower & SMVs');
+      return next;
+    });
+  };
+
+  const handleResetSectionTargetsToDefault = () => {
+    const defaults = getDefaultSectionTargets(
+      formData.smv,
+      formData.productionTarget || formData.dailyTarget,
+      Boolean(wipData.washApplicable)
+    );
+    setSectionTargets(defaults);
+    setFormData((f) => ({ ...f, sectionTargets: defaults }));
+    setWipData((w) => ({ ...w, sectionTargets: defaults }));
+    showToast('↺ Reset Section SMVs & Hourly Targets to factory standard ratios');
+  };
 
   // Sync when PO or Order changes or background events fire
   useEffect(() => {
@@ -513,7 +609,11 @@ export function BuyerOrderEditPage({
 
     const finalOrder: BuyerOrder = {
       ...formData,
-      wipRecord: wipData,
+      sectionTargets,
+      wipRecord: {
+        ...wipData,
+        sectionTargets,
+      },
       productionTracking: {
         currentStage: formData.status,
         overallProgressPercent: metrics.overallProgressPercent,
@@ -521,7 +621,11 @@ export function BuyerOrderEditPage({
       },
     };
     onSave(finalOrder);
-    showToast(`Successfully saved WIP Record & Order ${formData.orderNumber}`);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('erp_buyer_orders_updated'));
+      window.dispatchEvent(new CustomEvent('erp_wip_records_updated'));
+    }
+    showToast(`Successfully saved Section WIP Targets & Order ${formData.orderNumber}`);
   };
 
   const pipelineMetrics = calculateWIPPipelineMetrics(wipData, formData.orderQuantity);
@@ -1821,6 +1925,177 @@ export function BuyerOrderEditPage({
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* SECTION-WISE WIP TARGET & SMV CONFIGURATION (HOURLY TARGETS LINKED TO PRODUCTION ENTRY & PLANNING/IE) */}
+          <div className="pt-4 border-t border-slate-100 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-slate-50 border border-blue-200/80 rounded-2xl">
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Target className="w-4 h-4 text-blue-600" />
+                  <span>Section-Wise WIP Target &amp; SMV Settings (Hourly Line Targets)</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white shadow-2xs">
+                    Linked to Production Entry &amp; IE
+                  </span>
+                </h4>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  Set hourly targets and SMVs per section (Cutting, Sewing, Washing, Finishing, Packing, QA). 
+                  When recording production in the <strong>Production Entry page</strong>, selecting that section automatically loads these hourly targets.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleRecalculateAllSectionTargets}
+                  className="px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-white hover:bg-blue-50 border border-blue-200 rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                  title="Recalculate all hourly targets from SMV, Manpower & Efficiency"
+                >
+                  <Calculator className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Auto-Calc (IE Formula)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetSectionTargetsToDefault}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title="Reset section targets based on garment standard ratios"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Reset Ratios</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
+                    <th className="py-2.5 px-3">Manufacturing Section</th>
+                    <th className="py-2.5 px-3 text-right">Section SMV (min)</th>
+                    <th className="py-2.5 px-3 text-right font-bold text-indigo-700 bg-indigo-50/60">
+                      Hourly Target (pcs/hr) ★
+                    </th>
+                    <th className="py-2.5 px-3 text-right">Shift Target (8 hrs)</th>
+                    <th className="py-2.5 px-3 text-center">Manpower (Ops)</th>
+                    <th className="py-2.5 px-3 text-center">Target Eff (%)</th>
+                    <th className="py-2.5 px-3 text-right">Live Section WIP</th>
+                    <th className="py-2.5 px-3 text-center">Floor Linkage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-800">
+                  {SECTION_KEYS.map((key) => {
+                    const cfg = sectionTargets[key] || getDefaultSectionTargets(formData.smv, formData.dailyTarget)[key];
+                    const meta = SECTION_METADATA[key];
+                    const isWash = key === 'washing';
+                    const isBypassed = isWash && !wipData.washApplicable;
+
+                    // Compute live wip for this stage
+                    let stageWip = 0;
+                    if (key === 'cutting') stageWip = wipData.cuttingPlanned - wipData.cuttingActual;
+                    else if (key === 'sewing') stageWip = pipelineMetrics.sewingFloorWip;
+                    else if (key === 'washing') stageWip = pipelineMetrics.washFloorWip;
+                    else if (key === 'finishing') stageWip = pipelineMetrics.finishingFloorWip;
+                    else if (key === 'packing') stageWip = pipelineMetrics.packingFloorWip;
+                    else if (key === 'qa') stageWip = pipelineMetrics.inspectionWip;
+
+                    return (
+                      <tr key={key} className={`hover:bg-slate-50/60 transition-colors ${isBypassed ? 'opacity-50 bg-slate-50/40' : ''}`}>
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-bold ${meta.badgeBg}`}>
+                              {key === 'cutting' && <Scissors className="w-3.5 h-3.5" />}
+                              {key === 'sewing' && <Shirt className="w-3.5 h-3.5" />}
+                              {key === 'washing' && <Droplets className="w-3.5 h-3.5" />}
+                              {key === 'finishing' && <Sparkles className="w-3.5 h-3.5" />}
+                              {key === 'packing' && <PackageCheck className="w-3.5 h-3.5" />}
+                              {key === 'qa' && <ShieldCheck className="w-3.5 h-3.5" />}
+                            </span>
+                            <div>
+                              <span className="font-bold text-slate-900 block">{meta.name}</span>
+                              <span className="text-[10px] text-slate-400 block">{meta.description}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-2 px-3 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0.1"
+                              disabled={isBypassed}
+                              value={cfg.smv}
+                              onChange={(e) => handleUpdateSectionTarget(key, 'smv', e.target.value)}
+                              className="w-16 px-2 py-1 text-right font-mono font-bold text-xs rounded-lg border border-slate-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                            />
+                            <span className="text-[10px] text-slate-400">m</span>
+                          </div>
+                        </td>
+
+                        <td className="py-2 px-3 text-right bg-indigo-50/40">
+                          <div className="inline-flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              disabled={isBypassed}
+                              value={cfg.hourlyTarget}
+                              onChange={(e) => handleUpdateSectionTarget(key, 'hourlyTarget', e.target.value)}
+                              className="w-20 px-2 py-1 text-right font-mono font-bold text-xs text-indigo-700 rounded-lg border border-indigo-300 bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500 outline-none shadow-2xs"
+                            />
+                            <span className="text-[10px] font-bold text-indigo-600">/hr</span>
+                          </div>
+                        </td>
+
+                        <td className="py-2 px-3 text-right font-mono font-bold text-slate-800">
+                          {isBypassed ? '0 pcs' : `${(cfg.dailyTarget || cfg.hourlyTarget * 8).toLocaleString()} pcs`}
+                        </td>
+
+                        <td className="py-2 px-3 text-center">
+                          <input
+                            type="number"
+                            min="1"
+                            disabled={isBypassed}
+                            value={cfg.manpower || meta.defaultManpower}
+                            onChange={(e) => handleUpdateSectionTarget(key, 'manpower', e.target.value)}
+                            className="w-14 px-2 py-1 text-center font-mono text-xs rounded-lg border border-slate-300 bg-white focus:border-blue-500 outline-none"
+                          />
+                        </td>
+
+                        <td className="py-2 px-3 text-center">
+                          <div className="inline-flex items-center gap-0.5">
+                            <input
+                              type="number"
+                              min="1"
+                              max="100"
+                              disabled={isBypassed}
+                              value={cfg.efficiency || meta.defaultEff}
+                              onChange={(e) => handleUpdateSectionTarget(key, 'efficiency', e.target.value)}
+                              className="w-14 px-2 py-1 text-center font-mono text-xs rounded-lg border border-slate-300 bg-white focus:border-blue-500 outline-none"
+                            />
+                            <span className="text-[10px] text-slate-400">%</span>
+                          </div>
+                        </td>
+
+                        <td className="py-2 px-3 text-right font-mono font-bold text-slate-700">
+                          {isBypassed ? (
+                            <span className="text-slate-400 text-[10px]">Non-Wash</span>
+                          ) : (
+                            <span>{stageWip.toLocaleString()} pcs</span>
+                          )}
+                        </td>
+
+                        <td className="py-2 px-3 text-center">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${meta.badgeBg}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                            <span>Auto-Linked</span>
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 

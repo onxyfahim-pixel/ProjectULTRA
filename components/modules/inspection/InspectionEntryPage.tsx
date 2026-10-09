@@ -550,6 +550,18 @@ export function InspectionEntryPage({
       measurements: [],
       checkpoints,
       sizeBreakdown,
+      // Preserve mobile inspection evidence and digital signatures
+      poSheetPhotos: record?.poSheetPhotos || [],
+      sampleCartonPhotos: record?.sampleCartonPhotos || [],
+      testRecords: record?.testRecords || [],
+      compliancePhotos: record?.compliancePhotos || [],
+      packingZeroToleranceChecks: record?.packingZeroToleranceChecks || [],
+      hasZeroToleranceFail: record?.hasZeroToleranceFail || false,
+      measurementSheetPhotos: record?.measurementSheetPhotos || [],
+      representativeName: record?.representativeName || '',
+      representativeSignature: record?.representativeSignature || '',
+      inspectorSignature: record?.inspectorSignature || '',
+      isMobileEntry: record?.isMobileEntry || false,
     };
 
     onSave(finalizedRecord);
