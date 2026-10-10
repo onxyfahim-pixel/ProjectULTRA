@@ -48,6 +48,7 @@ import { TexpediaView } from '@/components/views/TexpediaView';
 import { SettingsView } from '@/components/views/SettingsView';
 
 // Modals
+import { DemoSalesBar } from '@/components/demo/DemoSalesBar';
 import { StockAdjustModal } from '@/components/modals/StockAdjustModal';
 import { NewInspectionModal } from '@/components/modals/NewInspectionModal';
 import { InwardBatchModal } from '@/components/modals/InwardBatchModal';
@@ -685,21 +686,25 @@ function ErpAppContent() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-slate-100 transition-colors">
-      {/* Unified Standard Sidebar - Positioned full-height on the left */}
-      <ErpSidebar
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        isOpenMobile={isMobileSidebarOpen}
-        onCloseMobile={() => setIsMobileSidebarOpen(false)}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-      />
+    <div className="h-screen w-screen overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-slate-100 transition-colors">
+      {/* Interactive Commercial Demo Showcase & Persona Switcher */}
+      <DemoSalesBar onNavigateTab={setActiveTab} />
 
-      {/* Right Column: Top Bar + Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Universal Topbar */}
-        <ErpHeader
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Unified Standard Sidebar - Positioned full-height on the left */}
+        <ErpSidebar
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+        />
+
+        {/* Right Column: Top Bar + Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+          {/* Universal Topbar */}
+          <ErpHeader
           onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           isSidebarOpen={isMobileSidebarOpen}
           isCollapsed={isSidebarCollapsed}
@@ -867,6 +872,7 @@ function ErpAppContent() {
             )}
           </div>
         </main>
+      </div>
       </div>
 
       {/* Modals */}

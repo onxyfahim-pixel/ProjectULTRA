@@ -568,6 +568,35 @@ export function LoginPage() {
               </div>
             )}
 
+            {/* Quick Demo Launch CTA for Prospective Buyers & Evaluators */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  setErrorMsg(null);
+                  setIsSubmitting(true);
+                  const result = await login('admin', 'admin');
+                  if (!result.success) {
+                    setErrorMsg(result.error || 'Failed to start demo.');
+                    setIsSubmitting(false);
+                  }
+                }}
+                disabled={isSubmitting}
+                className="w-full py-2.5 px-4 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 active:scale-[0.99] transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer border border-emerald-400/30 group"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                <span>Launch Instant Demo (Super Admin)</span>
+              </button>
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Or Sign In / Select Persona
+                </span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+            </div>
+
             {/* Login Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Username Input */}
@@ -670,21 +699,33 @@ export function LoginPage() {
               </button>
 
               {isQuickOpen && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-2 animate-in fade-in slide-in-from-top-1">
+                <div className="grid grid-cols-2 gap-2 pt-2 animate-in fade-in slide-in-from-top-1">
                   {QUICK_ACCOUNTS.map((acc) => (
                     <button
                       key={acc.username}
                       type="button"
-                      onClick={() => handleSelectQuickAccount(acc)}
-                      className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${identifier === acc.username
+                      onClick={async () => {
+                        setIdentifier(acc.username);
+                        setPassword(acc.pass);
+                        setErrorMsg(null);
+                        setIsSubmitting(true);
+                        const result = await login(acc.username, acc.pass);
+                        if (!result.success) {
+                          setErrorMsg(result.error || 'Login failed.');
+                          setIsSubmitting(false);
+                        }
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        identifier === acc.username
                           ? 'border-blue-500 bg-blue-50/80 text-blue-900 shadow-2xs font-bold'
                           : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                        }`}
+                      }`}
                     >
-                      <div className="text-[11px] font-bold truncate">{acc.label}</div>
-                      <div className="text-[9px] font-mono text-slate-500 truncate">
-                        u: {acc.username}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900 truncate">{acc.label}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold shrink-0">1-Click</span>
                       </div>
+                      <div className="text-[10px] text-slate-500 truncate mt-0.5">{acc.desc}</div>
                     </button>
                   ))}
                 </div>
