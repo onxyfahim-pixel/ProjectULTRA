@@ -44,6 +44,7 @@ import {
   GeneratedReportResult,
   LivePlanningReportContext,
 } from '@/lib/utils/planning-ie-live-data';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface ReportsAuditTabProps {
   productionOrders?: ProductionOrderPlan[];
@@ -446,6 +447,23 @@ export function ReportsAuditTab({
               </table>
             </div>
           </div>
+
+          {/* Universal Live Audit & View History Component */}
+          <RecordAuditHistory
+            moduleName="Planning & IE"
+            recordId="PLAN-IE-REGISTRY"
+            recordCode="PLANNING-IE-MASTER"
+            data={{
+              totalPlans: productionOrders.length,
+              totalTargets: targets.length,
+              totalBulletins: bulletins.length,
+              totalExecutions: executions.length,
+            }}
+            createdBy="Planning & IE Head"
+            createdAt="2026-01-01"
+            lastUpdatedBy="IE Industrial Engineering Lead"
+            lastUpdatedAt={new Date().toISOString()}
+          />
         </div>
       )}
 

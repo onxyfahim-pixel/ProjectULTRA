@@ -43,6 +43,12 @@ import { DeleteCalibrationModal } from '../modules/calibration/DeleteCalibration
 import { CalibrationExportModal } from '../modules/calibration/CalibrationExportModal';
 import { CalibrationSingleExportModal } from '../modules/calibration/CalibrationSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { useErpAuth } from '@/hooks/use-erp-auth';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 
 type CalibrationSubView =
   | { type: 'none' }
@@ -51,6 +57,7 @@ type CalibrationSubView =
   | { type: 'edit'; device: CalibrationDevice };
 
 export function CalibrationView() {
+  const { user } = useErpAuth();
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('calibration');
   const [devices, setDevices] = useLiveModuleData<CalibrationDevice[]>('calibration_devices', MOCK_CALIBRATION_DEVICES);
@@ -102,10 +109,35 @@ export function CalibrationView() {
 
   // CRUD Handlers
   const handleSaveDevice = (deviceToSave: CalibrationDevice) => {
-    const exists = devices.some((d) => d.id === deviceToSave.id);
-    if (exists) {
+    const existing = devices.find((d) => d.id === deviceToSave.id);
+    if (existing) {
+      trackEntityUpdate(
+        'CALIBRATION',
+        deviceToSave.id,
+        deviceToSave.deviceTag,
+        existing,
+        deviceToSave,
+        {
+          userName: user?.name || 'Metrology Lead',
+          userRole: user?.role || 'CALIBRATION_OFFICER',
+          userId: user?.id,
+          summary: `Updated calibration device ${deviceToSave.deviceTag} (${deviceToSave.deviceName})`,
+        }
+      );
       setDevices(devices.map((d) => (d.id === deviceToSave.id ? deviceToSave : d)));
     } else {
+      trackEntityCreate(
+        'CALIBRATION',
+        deviceToSave.id,
+        deviceToSave.deviceTag,
+        deviceToSave,
+        {
+          userName: user?.name || 'Metrology Lead',
+          userRole: user?.role || 'CALIBRATION_OFFICER',
+          userId: user?.id,
+          summary: `Registered calibration equipment ${deviceToSave.deviceTag} (${deviceToSave.deviceName})`,
+        }
+      );
       setDevices([deviceToSave, ...devices]);
     }
     setSubView({ type: 'details', device: deviceToSave });
@@ -121,6 +153,20 @@ export function CalibrationView() {
   const confirmDelete = () => {
     if (!deleteModal || deleteModal.devices.length === 0) return;
     const idsToDelete = new Set(deleteModal.devices.map((d) => d.id));
+    for (const d of deleteModal.devices) {
+      trackEntityDelete(
+        'CALIBRATION',
+        d.id,
+        d.deviceTag,
+        d,
+        {
+          userName: user?.name || 'Metrology Lead',
+          userRole: user?.role || 'CALIBRATION_OFFICER',
+          userId: user?.id,
+          summary: `Deleted calibration equipment ${d.deviceTag} (${d.deviceName})`,
+        }
+      );
+    }
     setDevices((prev) => prev.filter((d) => !idsToDelete.has(d.id)));
 
     if (subView.type === 'details' && idsToDelete.has(subView.device.id)) {

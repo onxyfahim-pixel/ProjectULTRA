@@ -39,10 +39,57 @@ export interface PdfHeaderSettings {
   showConfidentialNotice: boolean;
   confidentialNoticeText: string;
 
+  // Signatures & Endorsement Block
+  signatureSettings?: PdfSignatureSettings;
+
   // Module Scope (Applies to all ERP modules)
   appliedModules: string[];
   lastUpdatedAt?: string;
 }
+
+export type PdfSignatureMode = 'dual' | 'triple' | 'single' | 'none';
+
+export interface SignatureSlotConfig {
+  title: string;        // e.g. "PREPARED & INSPECTED BY"
+  designation: string;  // e.g. "Lead Quality Auditor / Merchandiser"
+  department?: string;  // e.g. "Quality Assurance & Operations"
+  name?: string;        // e.g. "Md. Rafiqul Islam" (or empty for line)
+}
+
+export interface PdfSignatureSettings {
+  enabled: boolean;          // Overall default toggle: true | false (makes it optional)
+  mode: PdfSignatureMode;    // 'dual' | 'triple' | 'single' | 'none'
+  style: 'classic_line' | 'bordered_card' | 'modern_minimal';
+  showDate: boolean;         // Show Date line underneath
+  slot1: SignatureSlotConfig; // Initiator / Prepared By (left)
+  slot2: SignatureSlotConfig; // Reviewer / Verified By (middle, in triple mode)
+  slot3: SignatureSlotConfig; // Approver / Authorized By (right)
+}
+
+export const DEFAULT_PDF_SIGNATURE_SETTINGS: PdfSignatureSettings = {
+  enabled: true,
+  mode: 'dual',
+  style: 'classic_line',
+  showDate: true,
+  slot1: {
+    title: 'PREPARED & INSPECTED BY',
+    designation: 'Lead Quality Auditor / Merchandiser',
+    department: 'Quality Assurance & Operations',
+    name: '',
+  },
+  slot2: {
+    title: 'CHECKED & REVIEWED BY',
+    designation: 'Technical Manager / QMS Lead',
+    department: 'Quality & Process Engineering',
+    name: '',
+  },
+  slot3: {
+    title: 'AUTHORIZED & APPROVED BY',
+    designation: 'General Manager / Operations Head',
+    department: 'Executive Factory Directorate',
+    name: '',
+  },
+};
 
 export interface ModuleCustomHeaderConfig {
   registerTitle?: string;
@@ -495,6 +542,7 @@ export const DEFAULT_PDF_HEADER_SETTINGS: PdfHeaderSettings = {
     'process_flow',
     'communication',
   ],
+  signatureSettings: DEFAULT_PDF_SIGNATURE_SETTINGS,
   lastUpdatedAt: new Date().toISOString(),
 };
 
@@ -548,6 +596,22 @@ export function loadPdfHeaderSettings(): PdfHeaderSettings {
           },
           moduleWiseConfigs: {
             ...(parsed.moduleWiseConfigs || {}),
+          },
+          signatureSettings: {
+            ...DEFAULT_PDF_SIGNATURE_SETTINGS,
+            ...(parsed.signatureSettings || {}),
+            slot1: {
+              ...DEFAULT_PDF_SIGNATURE_SETTINGS.slot1,
+              ...(parsed.signatureSettings?.slot1 || {}),
+            },
+            slot2: {
+              ...DEFAULT_PDF_SIGNATURE_SETTINGS.slot2,
+              ...(parsed.signatureSettings?.slot2 || {}),
+            },
+            slot3: {
+              ...DEFAULT_PDF_SIGNATURE_SETTINGS.slot3,
+              ...(parsed.signatureSettings?.slot3 || {}),
+            },
           },
         };
       }
@@ -914,3 +978,137 @@ export function renderPdfHeaderHtml(
     </header>
   `;
 }
+
+export interface RenderSignaturesOptions {
+  signatureMode?: PdfSignatureMode;
+  enabled?: boolean;
+  dateStr?: string;
+  slot1Override?: Partial<SignatureSlotConfig>;
+  slot2Override?: Partial<SignatureSlotConfig>;
+  slot3Override?: Partial<SignatureSlotConfig>;
+}
+
+/**
+ * Universal PDF Footer Signatures Renderer
+ * Renders customizable authorization sign-off blocks based on settings or modal overrides.
+ * Returns empty string if signatures are disabled or mode is 'none'.
+ */
+export function renderPdfFooterSignaturesHtml(
+  pdfSettings?: PdfHeaderSettings | null,
+  options?: RenderSignaturesOptions
+): string {
+  const sig = pdfSettings?.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS;
+
+  // If explicitly disabled or mode is 'none', render nothing
+  if (options?.enabled === false) return '';
+  if (options?.signatureMode === 'none') return '';
+  if (options?.signatureMode === undefined && !sig.enabled) return '';
+
+  const mode: PdfSignatureMode = options?.signatureMode || sig.mode || 'dual';
+  if (mode === 'none') return '';
+
+  const dateText = options?.dateStr || new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  const slot1: SignatureSlotConfig = {
+    ...sig.slot1,
+    ...(options?.slot1Override || {}),
+  };
+  const slot2: SignatureSlotConfig = {
+    ...sig.slot2,
+    ...(options?.slot2Override || {}),
+  };
+  const slot3: SignatureSlotConfig = {
+    ...sig.slot3,
+    ...(options?.slot3Override || {}),
+  };
+
+  const style = sig.style || 'classic_line';
+  const showDate = sig.showDate !== false;
+
+  const renderSlotHtml = (slot: SignatureSlotConfig) => {
+    if (style === 'bordered_card') {
+      return `
+        <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; background: #f8fafc; text-align: center;">
+          <div style="font-size: 7.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.4px;">
+            ${slot.title}
+          </div>
+          <div style="height: 38px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #cbd5e1;">
+            ${slot.name ? `<strong style="font-size: 10px; color: #0f172a; font-family: monospace;">${slot.name}</strong>` : `<span style="font-size: 7.5px; color: #94a3b8; font-style: italic;">Official Signature Stamp</span>`}
+          </div>
+          <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; margin-top: 2px;">
+            ${slot.name ? slot.name : slot.designation}
+          </div>
+          <div style="font-size: 7.5px; color: #64748b;">
+            ${slot.name ? slot.designation : slot.department || ''}
+            ${showDate ? ` • ${dateText}` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    if (style === 'modern_minimal') {
+      return `
+        <div style="text-align: center; padding: 6px 10px;">
+          <div style="height: 32px; border-bottom: 1.5px solid #0f172a; margin-bottom: 5px; display: flex; align-items: flex-end; justify-content: center;">
+            ${slot.name ? `<strong style="font-size: 9.5px; color: #0f172a; margin-bottom: 2px;">${slot.name}</strong>` : ''}
+          </div>
+          <div style="font-size: 8px; font-weight: 800; text-transform: uppercase; color: #0f172a; letter-spacing: 0.3px;">
+            ${slot.title}
+          </div>
+          <div style="font-size: 7.5px; color: #475569;">${slot.designation}</div>
+          ${showDate ? `<div style="font-size: 7px; color: #94a3b8; font-family: monospace;">Date: ${dateText}</div>` : ''}
+        </div>
+      `;
+    }
+
+    // Default: classic_line
+    return `
+      <div style="text-align: center;">
+        <div style="height: 36px; border-bottom: 1px dashed #64748b; margin-bottom: 5px; display: flex; align-items: flex-end; justify-content: center;">
+          ${slot.name ? `<strong style="font-size: 9.5px; color: #1e293b; padding-bottom: 2px; font-family: monospace;">${slot.name}</strong>` : ''}
+        </div>
+        <div style="font-size: 8px; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: 0.3px;">
+          ${slot.title}
+        </div>
+        <div style="font-size: 7.5px; color: #64748b;">
+          ${slot.designation}
+        </div>
+        ${slot.department ? `<div style="font-size: 7px; color: #94a3b8;">${slot.department}</div>` : ''}
+        ${showDate ? `<div style="font-size: 7px; color: #94a3b8; margin-top: 1px; font-family: monospace;">Date: ${dateText}</div>` : ''}
+      </div>
+    `;
+  };
+
+  if (mode === 'single') {
+    return `
+      <div style="display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid;">
+        <div style="width: 250px;">
+          ${renderSlotHtml(slot3)}
+        </div>
+      </div>
+    `;
+  }
+
+  if (mode === 'triple') {
+    return `
+      <div style="margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; page-break-inside: avoid;">
+        ${renderSlotHtml(slot1)}
+        ${renderSlotHtml(slot2)}
+        ${renderSlotHtml(slot3)}
+      </div>
+    `;
+  }
+
+  // Dual mode (default)
+  return `
+    <div style="margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 48px; max-width: 650px; margin-left: auto; margin-right: auto; page-break-inside: avoid;">
+      ${renderSlotHtml(slot1)}
+      ${renderSlotHtml(slot3)}
+    </div>
+  `;
+}
+

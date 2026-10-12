@@ -27,6 +27,7 @@ import {
 import { JobDescriptionItem, JobDescriptionStatus } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { JobDescriptionSingleExportModal } from './JobDescriptionSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface JobDescriptionDetailsPageProps {
   job: JobDescriptionItem;
@@ -498,6 +499,18 @@ export function JobDescriptionDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Job Descriptions"
+        recordId={job.id}
+        recordCode={job.roleCode || job.title}
+        data={job}
+        createdBy={job.supervisorName || 'HR Lead'}
+        createdAt={job.createdAt || job.effectiveDate || '2026-01-01'}
+        lastUpdatedBy={job.approvedBy || job.supervisorName || 'HR Lead'}
+        lastUpdatedAt={job.updatedAt || job.effectiveDate || '2026-01-01'}
+      />
       </div>
 
       {/* Single Job Description Export Modal */}

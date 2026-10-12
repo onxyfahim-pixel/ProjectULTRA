@@ -4,6 +4,8 @@ export interface ModulePermission {
   edit: boolean;
   delete: boolean;
   export: boolean;
+  approve?: boolean;
+  review?: boolean;
 }
 
 export interface RoleDefinition {
@@ -108,6 +110,8 @@ export function createFullPermissions(): Record<string, ModulePermission> {
       edit: true,
       delete: true,
       export: true,
+      approve: true,
+      review: true,
     };
   });
   return perms;
@@ -122,6 +126,8 @@ export function createEmptyPermissions(): Record<string, ModulePermission> {
       edit: false,
       delete: false,
       export: false,
+      approve: false,
+      review: false,
     };
   });
   return perms;
@@ -140,7 +146,7 @@ export const DEFAULT_SYSTEM_ROLES: RoleDefinition[] = [
   {
     id: 'qc_manager',
     name: 'QC Manager',
-    description: 'Can manage all QC data, reports, and settings.',
+    description: 'Can manage all QC data, reports, settings, approve inventory inward/issues, and review production records.',
     isSystemRole: false,
     permissions: (() => {
       const p = createEmptyPermissions();
@@ -152,10 +158,12 @@ export const DEFAULT_SYSTEM_ROLES: RoleDefinition[] = [
           edit: true,
           delete: id !== 'settings',
           export: true,
+          approve: id === 'inventory' || id === 'incoming_qc' || id === 'inspections',
+          review: id === 'production' || id === 'incoming_qc' || id === 'inspections' || id === 'audit',
         };
       });
       // Restrict critical system administration
-      p['settings'] = { view: true, create: false, edit: false, delete: false, export: false };
+      p['settings'] = { view: true, create: false, edit: false, delete: false, export: false, approve: false, review: false };
       return p;
     })(),
     createdAt: '2026-01-01T00:00:00Z',
@@ -226,6 +234,8 @@ export const DEFAULT_SYSTEM_ROLES: RoleDefinition[] = [
           edit: true,
           delete: id !== 'dashboard',
           export: true,
+          approve: id === 'inventory' || id === 'planning_ie',
+          review: id === 'production' || id === 'planning_ie',
         };
       });
       return p;

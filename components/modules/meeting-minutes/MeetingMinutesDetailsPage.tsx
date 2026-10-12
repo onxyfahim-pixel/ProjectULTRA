@@ -37,6 +37,7 @@ import {
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { MEETING_TYPE_LABELS } from './meeting-minutes-data';
 import { MeetingSingleExportModal } from './MeetingSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface MeetingMinutesDetailsPageProps {
   meeting: MeetingMinutesItem;
@@ -909,6 +910,18 @@ export function MeetingMinutesDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Meeting Minutes"
+        recordId={currentMeeting.id}
+        recordCode={currentMeeting.meetingCode || currentMeeting.title}
+        data={currentMeeting}
+        createdBy={currentMeeting.preparedBy || currentMeeting.scribeName || 'QA Documentation Officer'}
+        createdAt={currentMeeting.meetingDate}
+        lastUpdatedBy={currentMeeting.approvedBy || currentMeeting.chairperson}
+        lastUpdatedAt={currentMeeting.meetingDate}
+      />
       </div>
 
       {/* Single Meeting Export Modal */}

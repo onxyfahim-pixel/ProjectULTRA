@@ -36,8 +36,17 @@ export function ProductionSingleExportModal({
   const pdfSettings = loadPdfHeaderSettings();
   const variance = (order.completedQuantity || 0) - (order.targetQuantity || 0);
 
+  const [includeSignatures, setIncludeSignatures] = React.useState<boolean>(
+    () => pdfSettings.signatureSettings?.enabled ?? true
+  );
+  const [signatureMode, setSignatureMode] = React.useState<'dual' | 'triple' | 'single'>(
+    () => (pdfSettings.signatureSettings?.mode === 'triple' ? 'triple' : pdfSettings.signatureSettings?.mode === 'single' ? 'single' : 'dual')
+  );
+
   const handleExportPdf = () => {
-    exportSingleProductionOrderPdf(order);
+    exportSingleProductionOrderPdf(order, {
+      signatureMode: includeSignatures ? signatureMode : 'none',
+    });
     onClose();
   };
 
@@ -128,6 +137,68 @@ export function ProductionSingleExportModal({
                 </span>
               </div>
             </div>
+
+            {/* Review Status & User / Role Indicator */}
+            {(order.isReviewed || order.reviewStatus === 'REVIEWED' || order.reviewedBy) ? (
+              <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between text-[11px] bg-purple-50/70 -mx-3.5 -mb-2 p-2.5 rounded-b-xl">
+                <div className="flex items-center gap-1.5 text-purple-900">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                  <span>
+                    Reviewed By: <strong className="font-bold text-purple-950">{order.reviewedBy}</strong>
+                    <span className="text-purple-700 font-medium"> ({order.reviewedByRole || 'QC Manager'})</span>
+                  </span>
+                </div>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-200/80 text-purple-800 border border-purple-300">
+                  REVIEWED
+                </span>
+              </div>
+            ) : (
+              <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
+                <span>Technical Review Status:</span>
+                <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  Pending Review
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Optional Signature Endorsement Control */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={includeSignatures}
+                  onChange={(e) => setIncludeSignatures(e.target.checked)}
+                  className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                />
+                <span>Include Official Signatures at Bottom</span>
+              </label>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                  includeSignatures
+                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                    : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {includeSignatures ? 'Signatures ON' : 'Signatures OFF'}
+              </span>
+            </div>
+
+            {includeSignatures && (
+              <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/80 text-[11px]">
+                <span className="text-slate-500 font-medium">Signature Layout:</span>
+                <select
+                  value={signatureMode}
+                  onChange={(e) => setSignatureMode(e.target.value as any)}
+                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 cursor-pointer"
+                >
+                  <option value="dual">Dual (Prepared &amp; Approved)</option>
+                  <option value="triple">Triple (Prepared, Checked &amp; Approved)</option>
+                  <option value="single">Single (Authorization Only)</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Export Format Cards */}

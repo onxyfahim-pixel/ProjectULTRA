@@ -19,7 +19,7 @@ import {
   exportSingleTrainingExcel,
   downloadTrainingCsv,
 } from './training-export-utils';
-import { loadPdfHeaderSettings, getModuleExportConfig } from '@/lib/pdf/pdf-header-store';
+import { loadPdfHeaderSettings, getModuleExportConfig, PdfSignatureMode } from '@/lib/pdf/pdf-header-store';
 
 interface TrainingSingleExportModalProps {
   isOpen: boolean;
@@ -36,6 +36,13 @@ export function TrainingSingleExportModal({
 
   const pdfSettings = loadPdfHeaderSettings();
 
+  const [includeSignatures, setIncludeSignatures] = useState<boolean>(
+    pdfSettings.signatureSettings?.enabled ?? true
+  );
+  const [signatureMode, setSignatureMode] = useState<PdfSignatureMode>(
+    pdfSettings.signatureSettings?.mode || 'triple'
+  );
+
   if (!isOpen || !course) return null;
 
   const moduleConfig = getModuleExportConfig(pdfSettings, 'training', 'single', course.courseCode);
@@ -45,7 +52,9 @@ export function TrainingSingleExportModal({
   const handlePdfExport = () => {
     setIsExporting('pdf');
     try {
-      exportSingleTrainingPdf(course);
+      exportSingleTrainingPdf(course, {
+        signatureMode: includeSignatures ? signatureMode : 'none',
+      });
     } finally {
       setIsExporting(null);
     }
@@ -215,6 +224,45 @@ export function TrainingSingleExportModal({
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Signature Configuration Toggle */}
+          <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={includeSignatures}
+                  onChange={(e) => setIncludeSignatures(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                />
+                <span>Include Official Signatures at Bottom</span>
+              </label>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                  includeSignatures
+                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+                    : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                }`}
+              >
+                {includeSignatures ? 'Signatures ON' : 'Signatures OFF'}
+              </span>
+            </div>
+
+            {includeSignatures && (
+              <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/80 dark:border-slate-800 text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Signature Layout:</span>
+                <select
+                  value={signatureMode}
+                  onChange={(e) => setSignatureMode(e.target.value as any)}
+                  className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer"
+                >
+                  <option value="dual">Dual (Instructor &amp; HR Head)</option>
+                  <option value="triple">Triple (Instructor, HR &amp; QA Mgr)</option>
+                  <option value="single">Single (Authorization Only)</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Export Options */}

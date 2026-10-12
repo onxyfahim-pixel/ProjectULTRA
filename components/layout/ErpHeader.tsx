@@ -100,6 +100,7 @@ export function ErpHeader({
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [allNotifications, setAllNotifications] = useState<ErpNotificationItem[]>([]);
   const [notifConfig, setNotifConfig] = useState(NotificationService.getConfig());
   const [notifFilter, setNotifFilter] = useState<'all' | 'unread' | 'buyer' | 'production' | 'quality'>('all');
@@ -279,74 +280,149 @@ export function ErpHeader({
 
   return (
     <header className={headerBg}>
-      <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4">
-        {/* Left Section: Mobile Drawer Toggle / Desktop Collapse & Universal Search Bar */}
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          {/* Mobile Sidebar Toggle */}
-          <button
-            id="mobile-sidebar-toggle-btn"
-            onClick={onToggleSidebar}
-            aria-label="Toggle navigation drawer"
-            title="Open navigation menu"
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 lg:hidden transition-colors cursor-pointer border border-slate-200 shadow-2xs"
-          >
-            {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+      <div className="w-full max-w-[1920px] mx-auto px-2.5 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between gap-1.5 sm:gap-4">
+        {isMobileSearchOpen ? (
+          /* Mobile Full-Width Interactive Search Bar */
+          <div className="flex items-center gap-2 w-full animate-in fade-in duration-150">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-blue-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                placeholder="Search orders, styles, buyers, QC, audits..."
+                className="w-full bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs pl-9 pr-8 py-2 rounded-xl border border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-2xs"
+              />
+              {globalSearch && (
+                <button
+                  type="button"
+                  onClick={() => setGlobalSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
 
-          {/* Desktop Sidebar Toggle Button */}
-          {onToggleCollapse && (
-            <button
-              id="desktop-sidebar-collapse-btn"
-              onClick={onToggleCollapse}
-              aria-label="Toggle sidebar collapse (Ctrl+B)"
-              title={isCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
-              className="hidden lg:flex p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer border border-slate-200 shadow-2xs"
-            >
-              <Menu className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Universal Search Bar matching QMS reference design */}
-          <div className="relative flex-1 max-w-xl">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={globalSearch}
-              onChange={(e) => setGlobalSearch(e.target.value)}
-              onFocus={() => setIsSearchFocused(true)}
-              placeholder="Search anything... (Orders, PO, Style, Buyer, Inspection, Defects, CAPA, Audit, Documents, Reports)"
-              className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white text-slate-900 text-xs pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder-slate-400 transition-all shadow-2xs"
-            />
-
-            {/* Quick Search Results Dropdown */}
-            {isSearchFocused && matchedModules.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 max-h-72 overflow-y-auto">
-                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Matching Modules ({matchedModules.length})
+              {/* Mobile Quick Search Results Dropdown */}
+              {isSearchFocused && matchedModules.length > 0 && (
+                <div className="fixed inset-x-2 top-14 mt-1 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 py-2 z-50 animate-in fade-in zoom-in-95 max-h-[60vh] overflow-y-auto">
+                  <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Matching Modules ({matchedModules.length})
+                  </div>
+                  {matchedModules.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        if (onNavigateTab) onNavigateTab(m.id);
+                        setGlobalSearch('');
+                        setIsSearchFocused(false);
+                        setIsMobileSearchOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2 text-xs flex items-center justify-between hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                    >
+                      <span className="font-medium truncate">{m.label}</span>
+                      <span className="text-[10px] font-mono text-slate-400 shrink-0 ml-2">{m.category}</span>
+                    </button>
+                  ))}
                 </div>
-                {matchedModules.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      if (onNavigateTab) onNavigateTab(m.id);
-                      setGlobalSearch('');
-                      setIsSearchFocused(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-blue-50 text-slate-700 hover:text-blue-700 transition-colors cursor-pointer"
-                  >
-                    <span className="font-medium truncate">{m.label}</span>
-                    <span className="text-[10px] font-mono text-slate-400">{m.category}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+              )}
+            </div>
 
-        {/* Right Section: Notification, Calendar, Fullscreen, Theme, User Profile */}
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* Quick MySQL Database Status & Launcher Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileSearchOpen(false);
+                setIsSearchFocused(false);
+              }}
+              className="px-2.5 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Left Section: Mobile Drawer Toggle / Desktop Collapse & Universal Search Bar */}
+            <div className="flex items-center gap-1.5 sm:gap-3 flex-1 min-w-0">
+              {/* Mobile Sidebar Toggle */}
+              <button
+                id="mobile-sidebar-toggle-btn"
+                onClick={onToggleSidebar}
+                aria-label="Toggle navigation drawer"
+                title="Open navigation menu"
+                className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200 lg:hidden transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0"
+              >
+                {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+
+              {/* Desktop Sidebar Toggle Button */}
+              {onToggleCollapse && (
+                <button
+                  id="desktop-sidebar-collapse-btn"
+                  onClick={onToggleCollapse}
+                  aria-label="Toggle sidebar collapse (Ctrl+B)"
+                  title={isCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
+                  className="hidden lg:flex p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0"
+                >
+                  <Menu className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Mobile Search Icon Trigger Button (Shown only on mobile < sm) */}
+              <button
+                type="button"
+                id="mobile-search-toggle-btn"
+                onClick={() => setIsMobileSearchOpen(true)}
+                title="Search anything (Orders, PO, Styles, QC...)"
+                aria-label="Open search"
+                className="sm:hidden p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+
+              {/* Desktop/Tablet Universal Search Bar (Hidden on mobile < sm) */}
+              <div className="hidden sm:block relative flex-1 max-w-md lg:max-w-xl">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={globalSearch}
+                  onChange={(e) => setGlobalSearch(e.target.value)}
+                  onFocus={() => setIsSearchFocused(true)}
+                  placeholder="Search anything... (Orders, PO, Style, Buyer, Inspection, Defects, CAPA, Audit, Documents, Reports)"
+                  className="w-full bg-slate-50/70 hover:bg-slate-50 focus:bg-white dark:bg-slate-800/80 dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder-slate-400 transition-all shadow-2xs"
+                />
+
+                {/* Quick Search Results Dropdown */}
+                {isSearchFocused && matchedModules.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50 animate-in fade-in zoom-in-95 max-h-72 overflow-y-auto">
+                    <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Matching Modules ({matchedModules.length})
+                    </div>
+                    {matchedModules.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          if (onNavigateTab) onNavigateTab(m.id);
+                          setGlobalSearch('');
+                          setIsSearchFocused(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                      >
+                        <span className="font-medium truncate">{m.label}</span>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0 ml-2">{m.category}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Section: Notification, Calendar, Fullscreen, Theme, User Profile */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Quick MySQL Database Status & Launcher Button (Visible on Large screens) */}
           <button
             type="button"
             id="topbar-mysql-status-btn"
@@ -360,10 +436,10 @@ export function ErpHeader({
               }
             }}
             title="MySQL Enterprise Database Manager & Setup Wizard"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all text-xs font-bold shadow-2xs cursor-pointer group"
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-all text-xs font-bold shadow-2xs cursor-pointer group"
           >
-            <Database className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform" />
-            <span className="hidden md:inline font-mono text-[11px] text-slate-700">MySQL Setup</span>
+            <Database className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+            <span className="font-mono text-[11px] text-slate-700 dark:text-slate-300">MySQL Setup</span>
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Database Connected / Ready"></span>
           </button>
 
@@ -378,7 +454,7 @@ export function ErpHeader({
               }}
               title="Quality & Plant Alerts"
               aria-label="Quality & Plant Alerts"
-              className="relative p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-2xs"
+              className="relative p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
@@ -390,7 +466,7 @@ export function ErpHeader({
 
             {/* Role-Based Notification Panel Dropdown */}
             {isNotificationOpen && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 md:w-[420px] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden flex flex-col max-h-[85vh]">
+              <div className="fixed sm:absolute inset-x-2 sm:inset-x-auto top-14 sm:top-full sm:right-0 mt-1 sm:mt-2 w-auto sm:w-96 md:w-[420px] max-w-[calc(100vw-1rem)] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-50 animate-in fade-in zoom-in-95 duration-100 overflow-hidden flex flex-col max-h-[85vh]">
                 {/* Header */}
                 <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 shrink-0">
                   <div className="flex items-center justify-between gap-2">
@@ -572,17 +648,17 @@ export function ErpHeader({
             )}
           </div>
 
-          {/* Calendar Quick Action */}
+          {/* Calendar Quick Action (Visible on Tablet & Desktop) */}
           <button
             type="button"
             onClick={() => onNavigateTab && onNavigateTab('events')}
             title="Quality Calendar &amp; Buyer Schedules"
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer shadow-2xs"
+            className="hidden sm:flex p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
           >
             <Calendar className="w-4 h-4" />
           </button>
 
-          {/* Fullscreen Button */}
+          {/* Fullscreen Button (Visible on Desktop / Medium screens) */}
           <button
             type="button"
             id="topbar-fullscreen-toggle-btn"
@@ -593,13 +669,13 @@ export function ErpHeader({
             }}
             title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen (F11)'}
             aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-            className={`p-2 rounded-xl transition-all cursor-pointer shadow-2xs border ${
+            className={`hidden md:flex p-2 rounded-xl transition-all cursor-pointer shadow-2xs border shrink-0 ${
               isFullscreen
-                ? 'bg-blue-50 text-blue-600 border-blue-200'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 border-slate-200'
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'
             }`}
           >
-            {isFullscreen ? <Minimize className="w-4 h-4 text-blue-600" /> : <Maximize className="w-4 h-4" />}
+            {isFullscreen ? <Minimize className="w-4 h-4 text-blue-600 dark:text-blue-400" /> : <Maximize className="w-4 h-4" />}
           </button>
 
           {/* Theme Mode Toggle synchronized with Appearance */}
@@ -611,20 +687,20 @@ export function ErpHeader({
               setIsDarkMode(next === 'dark');
             }}
             title="Toggle Light/Dark Theme"
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer shadow-2xs"
+            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shadow-2xs shrink-0"
           >
             {appearance.theme === 'dark' ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
           </button>
 
-          {/* User Profile matching the screenshot layout: Avatar + Name + Designation */}
-          <div className="relative">
+          {/* User Profile: Responsive Avatar Button */}
+          <div className="relative shrink-0">
             <button
               id="user-profile-menu-btn"
               onClick={() => {
                 setIsUserMenuOpen(!isUserMenuOpen);
                 setIsNotificationOpen(false);
               }}
-              className="flex items-center gap-2.5 pl-2 pr-3 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left text-xs cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+              className="flex items-center gap-2 p-1 md:pl-2 md:pr-3 md:py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left text-xs cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
             >
               {user.avatarUrl ? (
                 <img
@@ -637,20 +713,20 @@ export function ErpHeader({
                   {user.name ? user.name.charAt(0) : 'F'}
                 </div>
               )}
-              <div className="hidden sm:block text-left">
+              <div className="hidden md:block text-left">
                 <div className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">
                   {user.name || 'Fahim'}
                 </div>
-                <div className="text-[10px] text-slate-400 font-medium leading-tight">
+                <div className="text-[10px] text-slate-400 font-medium leading-tight truncate max-w-[120px]">
                   {user.designation || (user.role === 'ADMIN' ? 'QMS Executive' : (user.role as string).replace('_', ' '))}
                 </div>
               </div>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180 text-blue-600' : ''}`} />
+              <ChevronDown className={`hidden md:block w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180 text-blue-600' : ''}`} />
             </button>
 
-            {/* User Dropdown Menu: Shows ONLY User Profile and Logout */}
+            {/* User Dropdown Menu */}
             {isUserMenuOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+              <div className="fixed sm:absolute right-2 sm:right-0 top-14 sm:top-full mt-1 sm:mt-2 w-[calc(100vw-1rem)] sm:w-72 max-w-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-2 z-50 animate-in fade-in zoom-in-95 duration-100">
                 {/* User Summary Header */}
                 <div className="px-3 py-2.5 mb-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center gap-3">
                   {user.avatarUrl ? (
@@ -680,7 +756,7 @@ export function ErpHeader({
                   </div>
                 </div>
 
-                {/* Actions: User Profile, Appearance Setting, Users & Roles (Super Admin Only), Logout */}
+                {/* Actions: User Profile, Appearance Setting, Database Wizard, Quality Calendar, Users & Roles, Logout */}
                 <div className="space-y-1">
                   <button
                     type="button"
@@ -734,6 +810,59 @@ export function ErpHeader({
                       </div>
                     </div>
                     <ArrowRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-purple-500 group-hover:translate-x-0.5 transition-all" />
+                  </button>
+
+                  {/* Quick Access to MySQL Setup & Database Backup (handy on mobile/tablet) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('settings_active_tab', 'database_backup');
+                        window.dispatchEvent(new CustomEvent('navigate-settings-subtab', { detail: 'database_backup' }));
+                      }
+                      if (onNavigateTab) {
+                        onNavigateTab('settings');
+                      }
+                      setIsUserMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all cursor-pointer group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform border border-emerald-200/60 dark:border-emerald-900/60 shrink-0">
+                      <Database className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="font-bold text-xs leading-tight flex items-center gap-1.5">
+                        <span>MySQL &amp; Database Backup</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      </div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal leading-tight truncate">
+                        Enterprise sync, dumps &amp; connection wizard
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
+                  </button>
+
+                  {/* Quick Access to Quality Calendar */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onNavigateTab) {
+                        onNavigateTab('events');
+                      }
+                      setIsUserMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-all cursor-pointer group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-105 transition-transform border border-blue-200/60 dark:border-blue-900/60 shrink-0">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="font-bold text-xs leading-tight">Quality Calendar</div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal leading-tight truncate">
+                        Buyer visits, inspection milestones &amp; audits
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
                   </button>
 
                   {(user?.isSuperAdmin || user?.role === 'Super Admin' || user?.role === 'ADMIN') && (
@@ -790,19 +919,22 @@ export function ErpHeader({
             )}
           </div>
         </div>
-      </div>
+      </>
+    )}
+  </div>
 
-      {/* Backdrop for open dropdown menus */}
-      {(isUserMenuOpen || isNotificationOpen || isSearchFocused) && (
-        <div
-          className="fixed inset-0 z-40 bg-transparent"
-          onClick={() => {
-            setIsUserMenuOpen(false);
-            setIsNotificationOpen(false);
-            setIsSearchFocused(false);
-          }}
-        />
-      )}
-    </header>
-  );
+  {/* Backdrop for open dropdown menus */}
+  {(isUserMenuOpen || isNotificationOpen || isSearchFocused || isMobileSearchOpen) && (
+    <div
+      className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40 backdrop-blur-2xs sm:bg-transparent"
+      onClick={() => {
+        setIsUserMenuOpen(false);
+        setIsNotificationOpen(false);
+        setIsSearchFocused(false);
+        setIsMobileSearchOpen(false);
+      }}
+    />
+  )}
+</header>
+);
 }

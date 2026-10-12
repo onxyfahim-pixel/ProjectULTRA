@@ -28,6 +28,7 @@ import { ControlledDocument, DocumentAttachment, DocumentRevision } from '@/lib/
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { DeleteDocumentModal } from './DeleteDocumentModal';
 import { DocumentControlSingleExportModal } from './DocumentControlSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface DocumentControlDetailsPageProps {
   doc: ControlledDocument;
@@ -562,6 +563,18 @@ export function DocumentControlDetailsPage({
             </p>
           </div>
         </div>
+
+        {/* Universal Audit Trail & Live View Dossier */}
+        <RecordAuditHistory
+          moduleName="Document Control & ISO"
+          recordId={doc.id}
+          recordCode={doc.docNumber}
+          data={doc}
+          createdBy={doc.preparedBy || 'Document Controller'}
+          createdAt={doc.effectiveDate}
+          lastUpdatedBy={doc.approvedBy || doc.preparedBy || 'Document Controller'}
+          lastUpdatedAt={doc.updatedAt || doc.nextReviewDate || doc.effectiveDate}
+        />
       </div>
 
       {/* ─── MODALS ─────────────────────────────────────────────────────────── */}

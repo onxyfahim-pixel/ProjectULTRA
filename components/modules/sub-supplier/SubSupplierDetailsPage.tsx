@@ -32,6 +32,7 @@ import { SubSupplier } from '@/lib/types/modules';
 import { StatusBadge } from '@/components/ui/Badge';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { SubSupplierSingleExportModal } from './SubSupplierSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface SubSupplierDetailsPageProps {
   supplier: SubSupplier;
@@ -443,6 +444,20 @@ export function SubSupplierDetailsPage({
           </div>
         )}
       </div>
+
+        {/* Comprehensive Record Audit Trail & View Tracking System */}
+        <RecordAuditHistory
+          entity="SubSupplier"
+          entityId={supplier.id}
+          entityCode={supplier.code || supplier.name}
+          moduleName="Sub-Supplier Profiles & Audits"
+          createdAt="2026-07-15T08:00:00.000Z"
+          createdBy="Sourcing & Vendor Evaluation Team"
+          createdByRole="SOURCING_MANAGER"
+          updatedAt={new Date().toISOString()}
+          updatedBy={supplier.contactPerson}
+          updatedByRole="COMPLIANCE_LEAD"
+        />
       </div>
 
       <SubSupplierSingleExportModal

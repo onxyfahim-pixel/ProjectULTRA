@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { ProcessFlowChart, ProcessFlowStep } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface ProcessFlowDetailsPageProps {
   flow: ProcessFlowChart;
@@ -458,6 +459,18 @@ export function ProcessFlowDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Process Engineering Flows"
+        recordId={flow.id}
+        recordCode={flow.flowCode || flow.title}
+        data={flow}
+        createdBy={flow.author || 'Industrial Engineering Lead'}
+        createdAt={flow.createdAt || flow.effectiveDate || '2026-01-01'}
+        lastUpdatedBy={flow.approvedBy || flow.author}
+        lastUpdatedAt={flow.updatedAt || flow.reviewDate || '2026-01-01'}
+      />
       </div>
     </div>
   );

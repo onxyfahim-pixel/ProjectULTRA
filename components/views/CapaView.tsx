@@ -34,6 +34,12 @@ import { CapaItem, CapaSource, CapaStatus } from '@/lib/types/modules';
 import { MOCK_CAPA } from '@/lib/db/modules-mock-data';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { useErpAuth } from '@/hooks/use-erp-auth';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 
 // Subcomponents
 import { CapaDetailsPage } from '../modules/capa/CapaDetailsPage';
@@ -49,6 +55,7 @@ type CapaSubView =
   | { type: 'edit'; capa: CapaItem };
 
 export function CapaView() {
+  const { user } = useErpAuth();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('capa');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [capas, setCapas] = useLiveModuleData<CapaItem[]>('capa_records', MOCK_CAPA);
@@ -128,6 +135,36 @@ export function CapaView() {
 
   // Save / Update Handler
   const handleSaveCapa = (savedCapa: CapaItem) => {
+    const existing = capas.find((c) => c.id === savedCapa.id);
+    if (existing) {
+      trackEntityUpdate(
+        'CAPA',
+        savedCapa.id,
+        savedCapa.capaNumber,
+        existing,
+        savedCapa,
+        {
+          userName: user?.name || savedCapa.responsiblePerson || 'QA Manager',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Updated CAPA 8D ${savedCapa.capaNumber} (${savedCapa.issueTitle}) - Status: ${savedCapa.status}`,
+        }
+      );
+    } else {
+      trackEntityCreate(
+        'CAPA',
+        savedCapa.id,
+        savedCapa.capaNumber,
+        savedCapa,
+        {
+          userName: user?.name || savedCapa.responsiblePerson || 'QA Manager',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Raised new CAPA 8D ${savedCapa.capaNumber} (${savedCapa.issueTitle}) - Severity: ${savedCapa.severity}`,
+        }
+      );
+    }
+
     setCapas((prev) => {
       const exists = prev.some((c) => c.id === savedCapa.id);
       if (exists) {
@@ -156,6 +193,20 @@ export function CapaView() {
   const confirmDelete = () => {
     if (!deleteModal) return;
     const idsToDelete = new Set(deleteModal.capas.map((c) => c.id));
+    for (const c of deleteModal.capas) {
+      trackEntityDelete(
+        'CAPA',
+        c.id,
+        c.capaNumber,
+        c,
+        {
+          userName: user?.name || 'QA Manager',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Deleted CAPA 8D Record ${c.capaNumber} (${c.issueTitle})`,
+        }
+      );
+    }
     setCapas((prev) => prev.filter((c) => !idsToDelete.has(c.id)));
     if (subView.type === 'details' && idsToDelete.has(subView.capa.id)) {
       setSubView({ type: 'none' });

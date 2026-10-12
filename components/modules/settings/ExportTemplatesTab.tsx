@@ -42,6 +42,10 @@ import {
   getGeneralSettingsFromStorage,
   getModuleExportConfig,
   renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  DEFAULT_PDF_SIGNATURE_SETTINGS,
+  PdfSignatureSettings,
+  PdfSignatureMode,
 } from '@/lib/pdf/pdf-header-store';
 
 const COLOR_PRESETS = [
@@ -215,6 +219,7 @@ export function ExportTemplatesTab() {
     new Date().toISOString().split('T')[0],
     sample.dept
   );
+  const liveSignaturesHtml = renderPdfFooterSignaturesHtml(settings);
 
   // Open real print window preview
   const handleTestPrint = () => {
@@ -225,6 +230,7 @@ export function ExportTemplatesTab() {
       new Date().toISOString().split('T')[0],
       sample.dept
     );
+    const signaturesHtml = renderPdfFooterSignaturesHtml(settings);
 
     const printWin = window.open('', '_blank');
     if (!printWin) {
@@ -236,7 +242,7 @@ export function ExportTemplatesTab() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${sample.code} - Official PDF Header Test</title>
+          <title>${sample.code} - Official PDF Export & Signatures Test</title>
           <meta charset="utf-8" />
           <style>
             @page { size: ${canvasViewMode === 'landscape' ? 'A4 landscape' : 'A4 portrait'}; margin: 10mm; }
@@ -263,8 +269,9 @@ export function ExportTemplatesTab() {
           ${headerHtml}
           <div class="sample-body-box">
             <h3 style="margin: 0 0 8px 0; color: #334155;">Document Body Content Area</h3>
-            <p style="margin: 0; font-size: 12px;">This printable preview confirms your header layout (${settings.layoutStyle}) rendering accurately for ${sample.module}.</p>
+            <p style="margin: 0; font-size: 12px;">This printable preview confirms your header layout (${settings.layoutStyle}) and optional signature blocks rendering accurately for ${sample.module}.</p>
           </div>
+          ${signaturesHtml}
           <script>
             window.onload = function() { window.print(); };
           </script>
@@ -703,6 +710,423 @@ export function ExportTemplatesTab() {
                   />
                 </label>
               </div>
+            </div>
+          </div>
+
+          {/* Card: Document Signatures & Authorization Sign-Off Configuration */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    Document Signatures &amp; Authorization Sign-Off
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Make signatures optional or edit signatory titles, roles, designations, and names printed at the bottom of export pages
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSettings((prev) => ({
+                    ...prev,
+                    signatureSettings: DEFAULT_PDF_SIGNATURE_SETTINGS,
+                  }));
+                  setStatusMessage({
+                    type: 'info',
+                    text: 'Restored standard ISO QMS signatures to factory defaults.',
+                  });
+                  setTimeout(() => setStatusMessage(null), 3500);
+                }}
+                className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
+                title="Reset signatures to default"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Defaults</span>
+              </button>
+            </div>
+
+            {/* Global Enable / Optional Toggle */}
+            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-xs font-semibold cursor-pointer">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-2.5 h-2.5 rounded-full ${settings.signatureSettings?.enabled ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-slate-300'}`} />
+                <div>
+                  <span className="font-bold text-slate-900 dark:text-white block">
+                    Include Signatures on PDF Exports
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-normal">
+                    Turn on/off globally (or customize per record in each module export modal)
+                  </span>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.signatureSettings?.enabled ?? true}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setSettings((prev) => ({
+                    ...prev,
+                    signatureSettings: {
+                      ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                      enabled: val,
+                    },
+                  }));
+                }}
+                className="rounded text-blue-600 w-4 h-4 cursor-pointer"
+              />
+            </label>
+
+            {/* Signature Layout Modes & Presentation Style */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 block">
+                  Signature Layout Mode
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { id: 'dual', label: 'Dual (2)' },
+                    { id: 'triple', label: 'Triple (3)' },
+                    { id: 'single', label: 'Single (1)' },
+                  ].map((m) => {
+                    const isSelected = (settings.signatureSettings?.mode || 'dual') === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setSettings((prev) => ({
+                            ...prev,
+                            signatureSettings: {
+                              ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                              mode: m.id as any,
+                            },
+                          }));
+                        }}
+                        className={`py-1.5 px-2 rounded-xl border text-[11px] font-bold text-center transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-blue-600 bg-blue-600 text-white shadow-2xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 block">
+                  Visual Presentation Style
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { id: 'classic_line', label: 'Dashed Line' },
+                    { id: 'bordered_card', label: 'Bordered Box' },
+                    { id: 'modern_minimal', label: 'Clean Solid' },
+                  ].map((st) => {
+                    const isSelected = (settings.signatureSettings?.style || 'classic_line') === st.id;
+                    return (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => {
+                          setSettings((prev) => ({
+                            ...prev,
+                            signatureSettings: {
+                              ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                              style: st.id as any,
+                            },
+                          }));
+                        }}
+                        className={`py-1.5 px-2 rounded-xl border text-[11px] font-bold text-center transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-purple-600 bg-purple-600 text-white shadow-2xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        {st.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Show Date Underneath Checkbox */}
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={settings.signatureSettings?.showDate ?? true}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setSettings((prev) => ({
+                    ...prev,
+                    signatureSettings: {
+                      ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                      showDate: val,
+                    },
+                  }));
+                }}
+                className="rounded text-blue-600 w-3.5 h-3.5 cursor-pointer"
+              />
+              <span>Print Sign-Off Date on Signature Blocks</span>
+            </label>
+
+            {/* Editable Signature Slots Grid */}
+            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Edit Signature Titles, Designations &amp; Names
+                </label>
+                <span className="text-[10px] font-mono text-slate-400">
+                  Mode: {settings.signatureSettings?.mode?.toUpperCase() || 'DUAL'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Slot 1: Initiator / Left */}
+                <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-2.5">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-700">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Signature 1 (Initiator / Left)
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                      Prepared / Issued
+                    </span>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 mb-0.5 block">Sign-off Title / Label:</label>
+                    <input
+                      type="text"
+                      value={settings.signatureSettings?.slot1?.title ?? 'PREPARED & INSPECTED BY'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSettings((prev) => ({
+                          ...prev,
+                          signatureSettings: {
+                            ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                            slot1: {
+                              ...((prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS).slot1),
+                              title: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder="PREPARED & INSPECTED BY"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 mb-0.5 block">Designation / Role:</label>
+                    <input
+                      type="text"
+                      value={settings.signatureSettings?.slot1?.designation ?? 'Lead Quality Auditor / Merchandiser'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSettings((prev) => ({
+                          ...prev,
+                          signatureSettings: {
+                            ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                            slot1: {
+                              ...((prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS).slot1),
+                              designation: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder="Lead Quality Auditor / Merchandiser"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 mb-0.5 block">Printed Signatory Name (Optional):</label>
+                    <input
+                      type="text"
+                      value={settings.signatureSettings?.slot1?.name ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSettings((prev) => ({
+                          ...prev,
+                          signatureSettings: {
+                            ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                            slot1: {
+                              ...((prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS).slot1),
+                              name: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder="Leave blank for signature line only"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Slot 3: Approver / Right */}
+                <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-2.5">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-700">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Signature 2 / 3 (Approver / Right)
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                      Approved / Executive
+                    </span>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 mb-0.5 block">Sign-off Title / Label:</label>
+                    <input
+                      type="text"
+                      value={settings.signatureSettings?.slot3?.title ?? 'AUTHORIZED & APPROVED BY'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSettings((prev) => ({
+                          ...prev,
+                          signatureSettings: {
+                            ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                            slot3: {
+                              ...((prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS).slot3),
+                              title: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder="AUTHORIZED & APPROVED BY"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 mb-0.5 block">Designation / Role:</label>
+                    <input
+                      type="text"
+                      value={settings.signatureSettings?.slot3?.designation ?? 'General Manager / Operations Head'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSettings((prev) => ({
+                          ...prev,
+                          signatureSettings: {
+                            ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                            slot3: {
+                              ...((prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS).slot3),
+                              designation: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder="General Manager / Operations Head"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 mb-0.5 block">Printed Signatory Name (Optional):</label>
+                    <input
+                      type="text"
+                      value={settings.signatureSettings?.slot3?.name ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSettings((prev) => ({
+                          ...prev,
+                          signatureSettings: {
+                            ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                            slot3: {
+                              ...((prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS).slot3),
+                              name: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder="Leave blank for signature line only"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Slot 2: Reviewer / Middle (Shown when Triple mode selected) */}
+              {settings.signatureSettings?.mode === 'triple' && (
+                <div className="p-3.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-950/20 space-y-2.5">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-purple-200 dark:border-purple-800">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Signature (Middle / Reviewer — Triple Mode)
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
+                      Checked / Verified
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 mb-0.5 block">Sign-off Title / Label:</label>
+                      <input
+                        type="text"
+                        value={settings.signatureSettings?.slot2?.title ?? 'CHECKED & REVIEWED BY'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSettings((prev) => ({
+                            ...prev,
+                            signatureSettings: {
+                              ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                              slot2: {
+                                ...((prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS).slot2),
+                                title: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder="CHECKED & REVIEWED BY"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 mb-0.5 block">Designation / Role:</label>
+                      <input
+                        type="text"
+                        value={settings.signatureSettings?.slot2?.designation ?? 'Technical Manager / QMS Lead'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSettings((prev) => ({
+                            ...prev,
+                            signatureSettings: {
+                              ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                              slot2: {
+                                ...((prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS).slot2),
+                                designation: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder="Technical Manager / QMS Lead"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 mb-0.5 block">Printed Name (Optional):</label>
+                      <input
+                        type="text"
+                        value={settings.signatureSettings?.slot2?.name ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSettings((prev) => ({
+                            ...prev,
+                            signatureSettings: {
+                              ...(prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS),
+                              slot2: {
+                                ...((prev.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS).slot2),
+                                name: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder="Leave blank for line"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1193,6 +1617,16 @@ export function ExportTemplatesTab() {
                     Page 1 of 1 • Project ULTRA ERP Universal Print Engine
                   </div>
                 </div>
+
+                {/* Live Real-time Signatures Preview Block */}
+                {settings.signatureSettings?.enabled && (
+                  <div className="mt-4 pt-2 border-t border-slate-200">
+                    <div className="text-[9px] font-bold text-purple-600 uppercase tracking-wider mb-2 text-center flex items-center justify-center gap-1">
+                      <span>✓ Official Signatures Preview ({settings.signatureSettings?.mode?.toUpperCase() || 'DUAL'} MODE)</span>
+                    </div>
+                    <div dangerouslySetInnerHTML={{ __html: liveSignaturesHtml }} />
+                  </div>
+                )}
               </div>
             </div>
 

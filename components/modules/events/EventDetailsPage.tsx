@@ -39,6 +39,7 @@ import {
 import { EVENT_TYPE_CONFIG } from './events-data';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { EventSingleExportModal } from './EventSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface EventDetailsPageProps {
   event: FactoryEventItem;
@@ -868,6 +869,18 @@ export function EventDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Company Events & Audits"
+        recordId={event.id}
+        recordCode={event.eventCode || event.title}
+        data={event}
+        createdBy={event.leadOrganizer || 'Event Coordinator'}
+        createdAt={event.createdAt || event.eventDate || '2026-01-01'}
+        lastUpdatedBy={event.leadOrganizer || 'Event Coordinator'}
+        lastUpdatedAt={event.updatedAt || event.eventDate || '2026-01-01'}
+      />
       </div>
 
       {/* Single Event Export Modal */}

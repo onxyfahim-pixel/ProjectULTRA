@@ -180,6 +180,7 @@ export function IssueMaterialModal({
       receivedByFloor: formData.receivedByFloor,
       purpose: formData.purpose,
       notes: formData.notes,
+      approvalStatus: 'PENDING',
     };
 
     // Calculate updated stock item

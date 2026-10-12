@@ -6,10 +6,12 @@ import {
 import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
   getModuleExportConfig,
 } from '@/lib/pdf/pdf-header-store';
 
-export type FooterSignatureMode = 'dual' | 'triple' | 'none';
+export type FooterSignatureMode = PdfSignatureMode;
 
 export interface ExportPdfOptions {
   signatureMode?: FooterSignatureMode;
@@ -84,45 +86,20 @@ export function computePlanningKpis(
 // SIGNATURES FOOTER RENDERER
 // -------------------------------------------------------------
 
-function renderFooterSignaturesHtml(mode: FooterSignatureMode = 'triple'): string {
-  if (mode === 'none') return '';
+function renderFooterSignaturesHtml(mode?: FooterSignatureMode): string {
+  const pdfSettings = loadPdfHeaderSettings();
+  const effectiveMode: FooterSignatureMode =
+    mode !== undefined
+      ? mode
+      : pdfSettings.signatureSettings?.enabled
+      ? pdfSettings.signatureSettings?.mode || 'triple'
+      : 'none';
 
-  if (mode === 'triple') {
-    return `
-      <div style="margin-top: 26px; padding-top: 14px; border-top: 1px solid #cbd5e1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        <div style="text-align: center;">
-          <div style="height: 38px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-          <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Prepared By: Production Planning Lead</div>
-          <div style="font-size: 7.5px; color: #64748b;">PPC &amp; Order Scheduling Desk</div>
-        </div>
-        <div style="text-align: center;">
-          <div style="height: 38px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-          <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Verified By: Senior IE Engineer</div>
-          <div style="font-size: 7.5px; color: #64748b;">Method Study &amp; Line Balancing Unit</div>
-        </div>
-        <div style="text-align: center;">
-          <div style="height: 38px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-          <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Approved By: General Manager / Director</div>
-          <div style="font-size: 7.5px; color: #64748b;">Factory Operations &amp; Manufacturing</div>
-        </div>
-      </div>
-    `;
-  }
+  if (effectiveMode === 'none') return '';
 
-  return `
-    <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #cbd5e1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-      <div style="text-align: center;">
-        <div style="height: 36px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-        <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Prepared By: Planning &amp; IE Lead</div>
-        <div style="font-size: 7.5px; color: #64748b;">Master Planning Division</div>
-      </div>
-      <div style="text-align: center;">
-        <div style="height: 36px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-        <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Authorized By: Operations Director</div>
-        <div style="font-size: 7.5px; color: #64748b;">Enterprise Plant Operations</div>
-      </div>
-    </div>
-  `;
+  return renderPdfFooterSignaturesHtml(pdfSettings, {
+    signatureMode: effectiveMode,
+  });
 }
 
 // =============================================================
@@ -397,7 +374,7 @@ export function exportPlanningSummaryPdf(
 
           ${bulletinsHtml}
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'triple')}
+          ${renderFooterSignaturesHtml(options?.signatureMode)}
 
           <div class="footer-note">
             <span>Project ULTRA ERP &bull; Planning &amp; Industrial Engineering Division</span>
@@ -869,7 +846,7 @@ export function exportSingleProductionOrderPlanPdf(
               : ''
           }
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'dual')}
+          ${renderFooterSignaturesHtml(options?.signatureMode)}
 
           <div style="margin-top: 14px; font-size: 7.5px; color: #94a3b8; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 4px;">
             <span>Project ULTRA ERP &bull; Production Planning &amp; IE Control</span>
@@ -1160,7 +1137,7 @@ export function exportSingleOperationBulletinPdf(
             </tfoot>
           </table>
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'triple')}
+          ${renderFooterSignaturesHtml(options?.signatureMode)}
 
           <div style="margin-top: 14px; font-size: 7.5px; color: #94a3b8; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 4px;">
             <span>Project ULTRA ERP &bull; Industrial Engineering &amp; Line Balancing</span>

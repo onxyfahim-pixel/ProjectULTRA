@@ -2,6 +2,8 @@ import { SopItem } from '@/lib/types/modules';
 import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
   getModuleExportConfig,
 } from '@/lib/pdf/pdf-header-store';
 
@@ -69,7 +71,10 @@ export function downloadSopCsv(
  */
 export function exportSopRegisterPdf(
   sops: SopItem[],
-  scopeLabel: string = 'All Standard Operating Procedures'
+  scopeLabel: string = 'All Standard Operating Procedures',
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
 ): void {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
@@ -317,24 +322,21 @@ export function exportSopRegisterPdf(
         </table>
 
         <!-- Sign-off Block -->
-        <div class="sign-block">
-          <div class="sign-box">
-            <div class="sign-title">Document Controller</div>
-            <div class="sign-sub">Archive & Version Verification</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Process Technical Lead</div>
-            <div class="sign-sub">Operational Procedure Review</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Head of QA & Compliance</div>
-            <div class="sign-sub">QMS System Conformance</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Plant / General Manager</div>
-            <div class="sign-sub">Executive Authorization</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Document Controller',
+            designation: 'Archive & Version Verification',
+          },
+          slot2Override: {
+            title: 'Process Technical Lead',
+            designation: 'Operational Procedure Review',
+          },
+          slot3Override: {
+            title: 'Head of QA & Compliance',
+            designation: 'QMS System Conformance',
+          },
+        })}
 
         <!-- Footer Strip -->
         <div class="footer-strip">
@@ -468,7 +470,12 @@ export function exportSopRegisterExcel(sops: SopItem[]): void {
 /**
  * Export Individual SOP Procedure Manual PDF
  */
-export function exportSingleSopPdf(sop: SopItem): void {
+export function exportSingleSopPdf(
+  sop: SopItem,
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
+): void {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
     alert('Please allow pop-ups to generate PDF exports.');
@@ -695,20 +702,24 @@ export function exportSingleSopPdf(sop: SopItem): void {
         ${stepsHtml || '<div style="color: #64748b; padding: 10px; text-align: center;">No discrete procedure steps logged.</div>'}
 
         <!-- Signatures -->
-        <div class="sign-block">
-          <div class="sign-box">
-            <div class="sign-title">Prepared By</div>
-            <div class="sign-sub">${sop.preparedBy || 'Quality Assurance Specialist'}</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Reviewed By</div>
-            <div class="sign-sub">${sop.reviewedBy || 'Technical / Department Head'}</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Approved By</div>
-            <div class="sign-sub">${sop.approvedBy || 'Operations Director'}</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Prepared By',
+            designation: sop.preparedBy || 'Quality Assurance Specialist',
+            name: sop.preparedBy,
+          },
+          slot2Override: {
+            title: 'Reviewed By',
+            designation: sop.reviewedBy || 'Technical / Department Head',
+            name: sop.reviewedBy,
+          },
+          slot3Override: {
+            title: 'Approved By',
+            designation: sop.approvedBy || 'Operations Director',
+            name: sop.approvedBy,
+          },
+        })}
 
         <div class="footer-strip">
           <div>Doc Code: <strong>${docCode}</strong> • Ref: ${sop.sopNumber}</div>

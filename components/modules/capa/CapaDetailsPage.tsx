@@ -35,6 +35,7 @@ import { CapaItem, CapaStatus, CapaEvidenceImage } from '@/lib/types/modules';
 import { DeleteCapaModal } from './DeleteCapaModal';
 import { CapaSingleExportModal } from './CapaSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface CapaDetailsPageProps {
   capa: CapaItem;
@@ -865,6 +866,20 @@ export function CapaDetailsPage({
           </div>
         </div>
       )}
+
+      {/* Comprehensive Record Audit Trail & View Tracking System */}
+      <RecordAuditHistory
+        entity="CapaItem"
+        entityId={capa.id}
+        entityCode={capa.capaNumber}
+        moduleName="CAPA (8D Corrective Action)"
+        createdAt="2026-09-18T11:20:00.000Z"
+        createdBy={capa.responsiblePerson || 'Tania Ahmed'}
+        createdByRole="QA_MANAGER"
+        updatedAt={new Date().toISOString()}
+        updatedBy={capa.responsiblePerson || 'Tania Ahmed'}
+        updatedByRole="QA_SPECIALIST"
+      />
 
       {/* ─── ADD PHOTO MODAL ──────────────────────────────────────────────── */}
       {isAddPhotoOpen && (

@@ -58,6 +58,7 @@ import { syncRecordCheckpoints } from './inspection-checkpoints';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { InspectionSizeBreakdownSection } from './InspectionSizeBreakdownSection';
 import { deriveSizeBreakdownFromBuyerOrder } from './inspection-size-utils';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface InspectionDetailsPageProps {
   record: InspectionRecord;
@@ -1725,6 +1726,20 @@ export function InspectionDetailsPage({
             </div>
           </div>
         )}
+
+        {/* Comprehensive Record Audit Trail & View Tracking System */}
+        <RecordAuditHistory
+          entity="InspectionRecord"
+          entityId={record.id}
+          entityCode={record.inspectionCode || record.orderNumber}
+          moduleName="Quality Inspections"
+          createdAt={record.createdAt}
+          createdBy={record.inspectorName || 'Rafiqul Islam'}
+          createdByRole={record.status === 'PASSED' ? 'QA_INSPECTOR' : 'QC_AUDITOR'}
+          updatedAt={record.createdAt}
+          updatedBy={record.inspectorName}
+          updatedByRole="QA_MANAGER"
+        />
       </div>
 
       {/* FULL-SCREEN LIGHTBOX MODAL */}

@@ -35,6 +35,12 @@ import { QualityAudit, AuditCategory, AuditTypeDefinition, AuditChecklistItem } 
 import { MOCK_AUDITS } from '@/lib/db/modules-mock-data';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { useErpAuth } from '@/hooks/use-erp-auth';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 import {
   getStoredAuditTypes,
   convertManagedQuestionToChecklistItem,
@@ -61,6 +67,7 @@ type AuditSubView =
   | { type: 'edit'; audit: QualityAudit };
 
 export function AuditView() {
+  const { user } = useErpAuth();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('audit');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [audits, setAudits] = useLiveModuleData<QualityAudit[]>('audit_records', MOCK_AUDITS);
@@ -151,10 +158,35 @@ export function AuditView() {
 
   // CRUD Handlers
   const handleSaveAudit = (auditToSave: QualityAudit) => {
-    const exists = audits.some((a) => a.id === auditToSave.id);
-    if (exists) {
+    const existing = audits.find((a) => a.id === auditToSave.id);
+    if (existing) {
+      trackEntityUpdate(
+        'AUDIT',
+        auditToSave.id,
+        auditToSave.auditCode,
+        existing,
+        auditToSave,
+        {
+          userName: user?.name || auditToSave.auditorName || 'Lead Auditor',
+          userRole: user?.role || 'COMPLIANCE_MANAGER',
+          userId: user?.id,
+          summary: `Updated Quality Audit ${auditToSave.auditCode} (${auditToSave.auditType}) - Score: ${auditToSave.scorePercentage}%`,
+        }
+      );
       setAudits((prev) => prev.map((a) => (a.id === auditToSave.id ? auditToSave : a)));
     } else {
+      trackEntityCreate(
+        'AUDIT',
+        auditToSave.id,
+        auditToSave.auditCode,
+        auditToSave,
+        {
+          userName: user?.name || auditToSave.auditorName || 'Lead Auditor',
+          userRole: user?.role || 'COMPLIANCE_MANAGER',
+          userId: user?.id,
+          summary: `Created Quality Audit ${auditToSave.auditCode} (${auditToSave.auditType}) - ${auditToSave.standard || ''}`,
+        }
+      );
       setAudits((prev) => [auditToSave, ...prev]);
     }
     setSubView({ type: 'details', audit: auditToSave });
@@ -170,6 +202,20 @@ export function AuditView() {
   const confirmDelete = () => {
     if (!deleteModal || deleteModal.audits.length === 0) return;
     const idsToDelete = new Set(deleteModal.audits.map((a) => a.id));
+    for (const a of deleteModal.audits) {
+      trackEntityDelete(
+        'AUDIT',
+        a.id,
+        a.auditCode,
+        a,
+        {
+          userName: user?.name || 'Lead Auditor',
+          userRole: user?.role || 'COMPLIANCE_MANAGER',
+          userId: user?.id,
+          summary: `Deleted Quality Audit ${a.auditCode} (${a.auditType})`,
+        }
+      );
+    }
     setAudits((prev) => prev.filter((a) => !idsToDelete.has(a.id)));
 
     if (subView.type === 'details' && idsToDelete.has(subView.audit.id)) {

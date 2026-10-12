@@ -254,7 +254,7 @@ export function UsersRbacTab() {
 
   const handlePermissionChange = (
     moduleId: string,
-    action: 'view' | 'create' | 'edit' | 'delete' | 'export',
+    action: 'view' | 'create' | 'edit' | 'delete' | 'export' | 'approve' | 'review',
     value: boolean
   ) => {
     if (roleForm.isSystemRole || roleForm.id === 'super_admin') {
@@ -268,10 +268,12 @@ export function UsersRbacTab() {
         edit: false,
         delete: false,
         export: false,
+        approve: false,
+        review: false,
       };
 
       const updatedMod = { ...currentMod, [action]: value };
-      // If creating/editing/deleting/exporting, view should automatically be true
+      // If creating/editing/deleting/exporting/approving/reviewing, view should automatically be true
       if (value && action !== 'view') {
         updatedMod.view = true;
       }
@@ -298,6 +300,8 @@ export function UsersRbacTab() {
           edit: check,
           delete: check,
           export: check,
+          approve: check,
+          review: check,
         };
       });
       return { ...prev, permissions: nextPerms };
@@ -665,10 +669,26 @@ export function UsersRbacTab() {
                       </button>
                     </div>
 
-                    {/* Role Description */}
+                    {/* Role Description & Capabilities */}
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 leading-relaxed min-h-[38px]">
                       {role.description || 'Custom role with defined module permissions.'}
                     </p>
+
+                    {/* Inventory Approval & Production Review Indicator Badges */}
+                    <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                      {(isSuper || role.permissions?.inventory?.approve) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          Inventory Approver
+                        </span>
+                      )}
+                      {(isSuper || role.permissions?.production?.review || role.permissions?.production?.approve) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                          <Check className="w-3 h-3 text-purple-600" />
+                          Production Reviewer
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Bottom Row: User Count + View Permissions */}
@@ -907,7 +927,7 @@ export function UsersRbacTab() {
       {/* ========================================================================= */}
       {isRoleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-5 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col my-auto overflow-hidden animate-in zoom-in-95 duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-5xl xl:max-w-6xl max-h-[92vh] flex flex-col my-auto overflow-hidden animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="p-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div>
@@ -986,16 +1006,18 @@ export function UsersRbacTab() {
                 </div>
 
                 {/* Permissions Matrix Table matching Image 2 */}
-                <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-                  <table className="w-full text-left border-collapse">
+                <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto bg-white dark:bg-slate-900">
+                  <table className="w-full min-w-[720px] text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                        <th className="py-3 px-4 w-1/3">Module</th>
-                        <th className="py-3 px-3 text-center">View</th>
-                        <th className="py-3 px-3 text-center">Create</th>
-                        <th className="py-3 px-3 text-center">Edit</th>
-                        <th className="py-3 px-3 text-center">Manage / Delete</th>
-                        <th className="py-3 px-3 text-center">Export</th>
+                        <th className="py-3 px-4 min-w-[220px]">Module</th>
+                        <th className="py-3 px-2.5 text-center min-w-[60px]">View</th>
+                        <th className="py-3 px-2.5 text-center min-w-[60px]">Create</th>
+                        <th className="py-3 px-2.5 text-center min-w-[60px]">Edit</th>
+                        <th className="py-3 px-2.5 text-center min-w-[95px]">Manage / Delete</th>
+                        <th className="py-3 px-2.5 text-center min-w-[60px]">Export</th>
+                        <th className="py-3 px-2.5 text-center min-w-[65px]">Approve</th>
+                        <th className="py-3 px-2.5 text-center min-w-[65px]">Review</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70 text-xs">
@@ -1010,7 +1032,7 @@ export function UsersRbacTab() {
                               onClick={() => handleToggleCategoryAccordion(group.category)}
                               className="bg-slate-50/70 dark:bg-slate-800/40 hover:bg-slate-100/60 dark:hover:bg-slate-800/80 cursor-pointer select-none transition-colors border-t border-slate-200 dark:border-slate-800"
                             >
-                              <td colSpan={6} className="py-2.5 px-4 font-bold text-slate-700 dark:text-slate-200">
+                              <td colSpan={8} className="py-2.5 px-4 font-bold text-slate-700 dark:text-slate-200">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
                                     {isExpanded ? (
@@ -1060,6 +1082,8 @@ export function UsersRbacTab() {
                                   edit: false,
                                   delete: false,
                                   export: false,
+                                  approve: false,
+                                  review: false,
                                 };
 
                                 return (
@@ -1071,9 +1095,21 @@ export function UsersRbacTab() {
                                     <td className="py-2.5 px-4 pl-8">
                                       <div className="flex items-center gap-2.5">
                                         <IconComponent className="w-4 h-4 text-slate-400 shrink-0" />
-                                        <span className="font-semibold text-slate-800 dark:text-slate-200">
-                                          {mod.name}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                            {mod.name}
+                                          </span>
+                                          {mod.id === 'inventory' && (
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+                                              GRN &amp; SIV Approval
+                                            </span>
+                                          )}
+                                          {mod.id === 'production' && (
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+                                              Production Review
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </td>
 
@@ -1129,6 +1165,30 @@ export function UsersRbacTab() {
                                         disabled={isSuperAdminRole}
                                         onChange={(e) => handlePermissionChange(mod.id, 'export', e.target.checked)}
                                         className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                                      />
+                                    </td>
+
+                                    {/* Approve Checkbox */}
+                                    <td className="py-2.5 px-3 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSuperAdminRole || Boolean(perm.approve)}
+                                        disabled={isSuperAdminRole}
+                                        onChange={(e) => handlePermissionChange(mod.id, 'approve', e.target.checked)}
+                                        className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                                        title={mod.id === 'inventory' ? 'Inventory Approval: Authorize Receive (GRN) and Issue (SIV) transactions' : 'Approve capability'}
+                                      />
+                                    </td>
+
+                                    {/* Review Checkbox */}
+                                    <td className="py-2.5 px-3 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSuperAdminRole || Boolean(perm.review)}
+                                        disabled={isSuperAdminRole}
+                                        onChange={(e) => handlePermissionChange(mod.id, 'review', e.target.checked)}
+                                        className="w-4 h-4 rounded text-purple-600 accent-purple-600 focus:ring-purple-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                                        title={mod.id === 'production' ? 'Production & Quality Review: Sign off and verify production and quality records' : 'Review capability'}
                                       />
                                     </td>
                                   </tr>

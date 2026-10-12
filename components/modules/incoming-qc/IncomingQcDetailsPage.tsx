@@ -28,6 +28,7 @@ import { GradeBadge } from '@/components/ui/Badge';
 import { InventoryItem } from '@/lib/types/erp';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { IncomingQcSingleExportModal } from './IncomingQcSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface IncomingQcDetailsPageProps {
   lot: IncomingQCLot;
@@ -586,6 +587,18 @@ export function IncomingQcDetailsPage({
           </div>
         )}
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Incoming QC"
+        recordId={lot.id}
+        recordCode={lot.lotNumber}
+        data={lot}
+        createdBy={lot.inspectorName || 'QC Inspector'}
+        createdAt={lot.inspectionDate}
+        lastUpdatedBy={lot.inspectorName}
+        lastUpdatedAt={lot.inspectionDate}
+      />
       </div>
 
       {/* SINGLE QC CERTIFICATE EXPORT MODAL */}

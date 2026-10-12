@@ -28,6 +28,7 @@ import {
 import { InventoryItem } from '@/lib/types/erp';
 import { GradeBadge, StatusBadge } from '@/components/ui/Badge';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface InventoryDetailsPageProps {
   item: InventoryItem;
@@ -390,6 +391,20 @@ export function InventoryDetailsPage({
             </div>
           </div>
         </div>
+
+        {/* Comprehensive Record Audit Trail & View Tracking System */}
+        <RecordAuditHistory
+          entity="InventoryItem"
+          entityId={item.id}
+          entityCode={item.sku || item.batchLot}
+          moduleName="Raw Material Inventory"
+          createdAt="2026-08-01T08:00:00.000Z"
+          createdBy="Karim Ullah (Store In-Charge)"
+          createdByRole="WAREHOUSE_OFFICER"
+          updatedAt={new Date().toISOString()}
+          updatedBy="Tania Ahmed (QA Lead)"
+          updatedByRole="QA_MANAGER"
+        />
       </div>
     </div>
   </div>

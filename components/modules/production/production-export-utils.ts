@@ -3,14 +3,36 @@ import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
   getModuleExportConfig,
+  renderPdfFooterSignaturesHtml,
 } from '@/lib/pdf/pdf-header-store';
 import { INITIAL_PRODUCTION_ORDERS } from '@/lib/db/mock-data';
 
-export type FooterSignatureMode = 'dual' | 'single' | 'none';
+export type FooterSignatureMode = 'dual' | 'triple' | 'single' | 'none';
 
 export interface ExportPdfOptions {
   signatureMode?: FooterSignatureMode;
   includeHourlyBreakdown?: boolean;
+}
+
+// -------------------------------------------------------------
+// HELPER: SIGNATURE HTML (CALLS UNIVERSAL PDF SIGNATURE ENGINE)
+// -------------------------------------------------------------
+export function renderFooterSignaturesHtml(
+  mode: FooterSignatureMode = 'none',
+  leftRole = 'PRODUCTION SUPERVISOR',
+  leftDept = 'Floor Operations & Sewing Dept',
+  rightRole = 'QUALITY ASSURANCE MANAGER',
+  rightDept = 'Quality Control Directorate'
+): string {
+  if (mode === 'none') {
+    return '';
+  }
+  const pdfSettings = loadPdfHeaderSettings();
+  return renderPdfFooterSignaturesHtml(pdfSettings, {
+    signatureMode: mode,
+    slot1Override: leftRole ? { title: leftRole, designation: leftDept || '' } : undefined,
+    slot3Override: rightRole ? { title: rightRole, designation: rightDept || '' } : undefined,
+  });
 }
 
 /**
@@ -101,45 +123,7 @@ export function computeProductionKpis(orders: ProductionOrder[]) {
   };
 }
 
-// -------------------------------------------------------------
-// HELPER: SIGNATURE HTML (DEFAULT NONE)
-// -------------------------------------------------------------
-export function renderFooterSignaturesHtml(
-  mode: FooterSignatureMode = 'none',
-  leftRole = 'PRODUCTION SUPERVISOR',
-  leftDept = 'Floor Operations & Sewing Dept',
-  rightRole = 'QUALITY ASSURANCE MANAGER',
-  rightDept = 'Quality Control Directorate'
-): string {
-  if (!mode || mode === 'none') {
-    return '';
-  }
-  if (mode === 'single') {
-    return `
-      <div style="display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid;">
-        <div style="width: 250px; text-align: center;">
-          <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-          <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${rightRole}</div>
-          <div style="font-size: 8px; color: #64748b;">${rightDept}</div>
-        </div>
-      </div>
-    `;
-  }
-  return `
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 48px; max-width: 650px; margin: 22px auto 0 auto; padding-top: 14px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid;">
-      <div style="text-align: center;">
-        <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-        <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${leftRole}</div>
-        <div style="font-size: 8px; color: #64748b;">${leftDept}</div>
-      </div>
-      <div style="text-align: center;">
-        <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-        <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${rightRole}</div>
-        <div style="font-size: 8px; color: #64748b;">${rightDept}</div>
-      </div>
-    </div>
-  `;
-}
+
 
 // =============================================================
 // 1. GLOBAL PRODUCTION SUMMARY EXPORTS (PDF & EXCEL)
@@ -212,6 +196,19 @@ export function exportProductionSummaryPdf(
               </span>
             </td>
             <td style="font-size: 8.5px; color: #64748b;">${o.supervisorName || '-'}</td>
+            <td style="text-align: center; font-size: 8px;">
+              ${
+                o.isReviewed || o.reviewStatus === 'REVIEWED'
+                  ? `
+                    <span style="display: inline-block; font-size: 7.5px; font-weight: 700; padding: 1.5px 5px; border-radius: 4px; background: #faf5ff; color: #7e22ce; border: 1px solid #d8b4fe;">
+                      ✓ ${o.reviewedBy || 'Reviewed'}
+                    </span>
+                  `
+                  : `
+                    <span style="color: #94a3b8; font-size: 7.5px;">Pending</span>
+                  `
+              }
+            </td>
           </tr>
         `;
       })
@@ -450,6 +447,7 @@ export function exportProductionSummaryPdf(
                 <th style="width: 65px; text-align: center;">DHU %</th>
                 <th style="width: 75px; text-align: center;">Status</th>
                 <th style="width: 85px;">Supervisor</th>
+                <th style="width: 90px; text-align: center;">Reviewed By</th>
               </tr>
             </thead>
             <tbody>
@@ -496,7 +494,13 @@ export function exportProductionSummaryPdf(
             </tfoot>
           </table>
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'none')}
+          ${renderFooterSignaturesHtml(
+            options?.signatureMode !== undefined
+              ? options.signatureMode
+              : pdfSettings.signatureSettings?.enabled
+              ? pdfSettings.signatureSettings?.mode
+              : 'none'
+          )}
 
           <div class="footer-note">
             <span>Project ULTRA ERP • Production &amp; Floor Execution Module</span>
@@ -551,6 +555,8 @@ export function exportProductionSummaryExcel(
           <td>${o.status}</td>
           <td>${o.supervisorName || ''}</td>
           <td>${o.qualityInspector || ''}</td>
+          <td>${o.isReviewed || o.reviewStatus === 'REVIEWED' ? 'REVIEWED' : 'PENDING'}</td>
+          <td>${o.reviewedBy ? `${o.reviewedBy} (${o.reviewedByRole || ''})` : '-'}</td>
           <td>${o.remarks || ''}</td>
         </tr>
       `;
@@ -651,6 +657,8 @@ export function exportProductionSummaryExcel(
               <th>Status</th>
               <th>Supervisor</th>
               <th>QC Inspector</th>
+              <th>Review Status</th>
+              <th>Reviewed By</th>
               <th>Remarks</th>
             </tr>
             ${rows}
@@ -1043,7 +1051,53 @@ export function exportSingleProductionOrderPdf(
               : ''
           }
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'none')}
+          ${
+            order.isReviewed || order.reviewStatus === 'REVIEWED' || order.reviewedBy
+              ? `
+                <div style="margin-top: 14px; margin-bottom: 8px; padding: 10px 14px; background: #faf5ff; border: 1.5px solid #d8b4fe; border-radius: 8px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #7e22ce; letter-spacing: 0.5px;">
+                      Official Technical &amp; Quality Review Verification
+                    </div>
+                    <div style="font-size: 8px; font-weight: 700; color: #6b21a8; background: #f3e8ff; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc;">
+                      VERIFIED &amp; REVIEWED
+                    </div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 2fr 1.5fr 1.5fr; gap: 8px; font-size: 8.5px; color: #1e293b;">
+                    <div>
+                      <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; font-weight: 700; display: block;">Reviewed By</span>
+                      <strong style="color: #581c87; font-size: 10px;">${order.reviewedBy || 'Authorized Reviewer'}</strong>
+                    </div>
+                    <div>
+                      <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; font-weight: 700; display: block;">Role / Designation</span>
+                      <strong>${order.reviewedByRole || 'QC / Technical Reviewer'}</strong>
+                    </div>
+                    <div>
+                      <span style="color: #64748b; font-size: 7.5px; text-transform: uppercase; font-weight: 700; display: block;">Review Timestamp</span>
+                      <span style="font-family: monospace;">${order.reviewedAt || dateStr}</span>
+                    </div>
+                  </div>
+                  ${
+                    order.reviewNotes
+                      ? `
+                        <div style="margin-top: 6px; padding-top: 5px; border-top: 1px dashed #e9d5ff; font-size: 8px; color: #475569;">
+                          <strong>Review Observations:</strong> &ldquo;${order.reviewNotes}&rdquo;
+                        </div>
+                      `
+                      : ''
+                  }
+                </div>
+              `
+              : ''
+          }
+
+          ${renderFooterSignaturesHtml(
+            options?.signatureMode !== undefined
+              ? options.signatureMode
+              : pdfSettings.signatureSettings?.enabled
+              ? pdfSettings.signatureSettings?.mode
+              : 'none'
+          )}
 
           <div class="footer-note">
             <span>Project ULTRA ERP • Floor Execution &amp; Quality System</span>
@@ -1180,6 +1234,43 @@ export function exportSingleProductionOrderExcel(order: ProductionOrder): void {
               <td colspan="2">Grand Floor Totals</td>
             </tr>
           </table>
+
+          ${
+            order.isReviewed || order.reviewStatus === 'REVIEWED' || order.reviewedBy
+              ? `
+                <br />
+                <table style="border: 1px solid #c084fc; width: 100%;">
+                  <tr style="background-color: #faf5ff; font-weight: bold; color: #6b21a8;">
+                    <th colspan="4" style="background-color: #7e22ce; color: #ffffff; text-align: left; padding: 6px;">
+                      OFFICIAL TECHNICAL &amp; QUALITY REVIEW VERIFICATION
+                    </th>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: bold; width: 150px; background-color: #f8fafc;">Reviewed By:</td>
+                    <td>${order.reviewedBy || 'Authorized Reviewer'}</td>
+                    <td style="font-weight: bold; width: 150px; background-color: #f8fafc;">Role / Designation:</td>
+                    <td>${order.reviewedByRole || 'QC / Technical Reviewer'}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight: bold; background-color: #f8fafc;">Review Date &amp; Time:</td>
+                    <td>${order.reviewedAt || dateStr}</td>
+                    <td style="font-weight: bold; background-color: #f8fafc;">Status:</td>
+                    <td style="color: #7e22ce; font-weight: bold;">VERIFIED &amp; REVIEWED</td>
+                  </tr>
+                  ${
+                    order.reviewNotes
+                      ? `
+                        <tr>
+                          <td style="font-weight: bold; background-color: #f8fafc;">Review Observations:</td>
+                          <td colspan="3">${order.reviewNotes}</td>
+                        </tr>
+                      `
+                      : ''
+                  }
+                </table>
+              `
+              : ''
+          }
         </body>
       </html>
     `;

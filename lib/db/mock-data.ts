@@ -423,6 +423,12 @@ export const INITIAL_RECEIVE_REGISTRY: ReceiveRecord[] = [
     receivedBy: 'Rafiqul Islam (Store Officer)',
     inspectedBy: 'Kazi Farhan (Senior QC)',
     notes: 'ASTM 4-point inspected: 14 pts/100 sq.yd. Approved for spreading.',
+    approvalStatus: 'APPROVED',
+    approvedBy: 'Tanvir Hossain',
+    approvedById: 'usr_admin',
+    approvedByRole: 'Super Admin',
+    approvedAt: '2026-09-20 14:30',
+    approvalNotes: 'AQL 1.5 pass verified. Authorized for central inventory intake.',
   },
   {
     id: 'grn-02',
@@ -449,6 +455,12 @@ export const INITIAL_RECEIVE_REGISTRY: ReceiveRecord[] = [
     receivedBy: 'Rafiqul Islam',
     inspectedBy: 'Tania Ahmed',
     notes: 'Color shade tolerance deltaE < 0.3. Passed sewability test.',
+    approvalStatus: 'APPROVED',
+    approvedBy: 'Nasreen Akhtar',
+    approvedById: 'usr_qc_mgr',
+    approvedByRole: 'QC Manager',
+    approvedAt: '2026-09-19 11:15',
+    approvalNotes: 'Shade deltaE and tensile parameters verified.',
   },
   {
     id: 'grn-03',
@@ -475,6 +487,8 @@ export const INITIAL_RECEIVE_REGISTRY: ReceiveRecord[] = [
     receivedBy: 'Rafiqul Islam',
     inspectedBy: 'Kazi Farhan',
     notes: 'Puller strength tested at 350N. Passed nickel-free test.',
+    approvalStatus: 'PENDING',
+    approvalNotes: 'Awaiting QC Manager authorization.',
   },
   {
     id: 'grn-04',
@@ -497,6 +511,12 @@ export const INITIAL_RECEIVE_REGISTRY: ReceiveRecord[] = [
     receivedBy: 'Tania Ahmed',
     inspectedBy: 'Rafiqul Islam',
     notes: 'Color bowing observed on rolls 3 and 7. Lab wash fastness pending.',
+    approvalStatus: 'REJECTED',
+    approvedBy: 'Nasreen Akhtar',
+    approvedById: 'usr_qc_mgr',
+    approvedByRole: 'QC Manager',
+    approvedAt: '2026-09-17 16:45',
+    approvalNotes: 'Color bowing exceeds tolerance. Rejected for supplier replacement.',
   },
   {
     id: 'grn-05',
@@ -518,6 +538,12 @@ export const INITIAL_RECEIVE_REGISTRY: ReceiveRecord[] = [
     receivedBy: 'Rafiqul Islam',
     inspectedBy: 'Tania Ahmed',
     notes: 'Barcode verification 100% scannable. Heat-cut edges verified.',
+    approvalStatus: 'APPROVED',
+    approvedBy: 'Tanvir Hossain',
+    approvedById: 'usr_admin',
+    approvedByRole: 'Super Admin',
+    approvedAt: '2026-09-16 10:20',
+    approvalNotes: 'Packaging barcode scan 100% compliant.',
   },
 ];
 
@@ -542,6 +568,12 @@ export const INITIAL_ISSUE_REGISTRY: IssueRecord[] = [
     receivedByFloor: 'Kamal Hossain (Cutting Master)',
     purpose: 'Spreading lay #04 - Tee Front & Back panels',
     notes: 'Delivered with shade lot segregation tag #04A.',
+    approvalStatus: 'APPROVED',
+    approvedBy: 'Tanvir Hossain',
+    approvedById: 'usr_admin',
+    approvedByRole: 'Super Admin',
+    approvedAt: '2026-09-20 10:15',
+    approvalNotes: 'Requisition verified against Cutting Plan.',
   },
   {
     id: 'siv-02',
@@ -561,6 +593,8 @@ export const INITIAL_ISSUE_REGISTRY: IssueRecord[] = [
     issuedBy: 'Rafiqul Islam',
     receivedByFloor: 'Nasreen Begum (Line 03 Supervisor)',
     purpose: 'Overlock 4-thread and twin-needle neck rib attachment',
+    approvalStatus: 'PENDING',
+    approvalNotes: 'Awaiting line manager sign-off.',
   },
   {
     id: 'siv-03',
@@ -580,6 +614,12 @@ export const INITIAL_ISSUE_REGISTRY: IssueRecord[] = [
     issuedBy: 'Tania Ahmed',
     receivedByFloor: 'Abdul Latif (Line 07 Supervisor)',
     purpose: 'Fly zipper insertion for Denim 5-pocket pants',
+    approvalStatus: 'APPROVED',
+    approvedBy: 'Nasreen Akhtar',
+    approvedById: 'usr_qc_mgr',
+    approvedByRole: 'QC Manager',
+    approvedAt: '2026-09-19 09:30',
+    approvalNotes: 'Allocated for Line 07 denim assembly.',
   },
   {
     id: 'siv-04',
@@ -597,8 +637,14 @@ export const INITIAL_ISSUE_REGISTRY: IssueRecord[] = [
     issuedQty: 650,
     unit: 'Meters',
     issuedBy: 'Rafiqul Islam',
-    receivedByFloor: 'Rezaul Karim (Fusing Operator)',
+    receivedByFloor: 'Monirul Islam (Cutting Supervisor)',
     purpose: 'Collar and cuff fusing for Twill Chino shirts',
+    approvalStatus: 'APPROVED',
+    approvedBy: 'Kazi Farhan',
+    approvedById: 'usr_planner',
+    approvedByRole: 'Planning & IE Manager',
+    approvedAt: '2026-09-18 14:00',
+    approvalNotes: 'Approved according to fusing schedule.',
   },
   {
     id: 'siv-05',
@@ -612,12 +658,18 @@ export const INITIAL_ISSUE_REGISTRY: IssueRecord[] = [
     departmentDetail: 'Finishing Packing Table 01',
     poNumber: 'PO-HM-99201',
     styleNumber: 'STY-HM-2026-01',
-    requisitionNumber: 'REQ-PKG-089',
-    issuedQty: 5000,
+    requisitionNumber: 'REQ-FIN-0881',
+    issuedQty: 10000,
     unit: 'Pcs',
     issuedBy: 'Rafiqul Islam',
-    receivedByFloor: 'Shahidul Islam (Packing In-Charge)',
-    purpose: 'Individual garment folding and polybag packing',
+    receivedByFloor: 'Jalal Uddin (Finishing In-Charge)',
+    purpose: 'Polybag packaging of final inspected garments',
+    approvalStatus: 'APPROVED',
+    approvedBy: 'Tanvir Hossain',
+    approvedById: 'usr_admin',
+    approvedByRole: 'Super Admin',
+    approvedAt: '2026-09-17 11:30',
+    approvalNotes: 'Packaging materials issue approved.',
   },
 ];
 
@@ -1012,11 +1064,20 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
   }
 ];
 
+const getDaysAgoDate = (days: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
   {
     id: 'po-201',
     orderNumber: 'PO-IND-2026-88',
-    recordDate: '2026-09-21',
+    recordDate: getDaysAgoDate(0),
     shift: 'Shift A (Morning 08:00 - 16:30)',
     buyer: 'Inditex (Zara)',
     styleName: 'Slim Tapered Slub Denim Trouser',
@@ -1039,7 +1100,14 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     supervisorName: 'Kabir Hossain (Senior Line Sup)',
     qualityInspector: 'Md. Rafiqul Islam (Senior QC Auditor)',
     remarks: 'Pre-washed denim fabric. Inline needle breakage check verified.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 6).toISOString(),
+    isReviewed: true,
+    reviewStatus: 'REVIEWED',
+    reviewedBy: 'Nasreen Akhtar',
+    reviewedById: 'usr_qc_mgr',
+    reviewedByRole: 'QC Manager',
+    reviewedAt: '2026-10-10 11:30 AM',
+    reviewNotes: 'Hourly DHU and needle breakage reports verified against ISO 9001 quality criteria.',
+    createdAt: new Date().toISOString(),
     hourlyReports: [
       { id: 'hr-1', hourSlot: '08:00 - 09:00', targetQty: 140, checkedQty: 135, passedQty: 135, defectQty: 2, rejectQty: 0, defectRate: 1.48, topDefect: 'Skip Stitch', operatorId: 'Station 04', remarks: 'Machine tension tuned; defects repaired' },
       { id: 'hr-2', hourSlot: '09:00 - 10:00', targetQty: 150, checkedQty: 148, passedQty: 148, defectQty: 2, rejectQty: 0, defectRate: 1.35, topDefect: 'Open Seam', operatorId: 'Station 11', remarks: 'Normal pacing; rework cleared' },
@@ -1054,7 +1122,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
   {
     id: 'po-202',
     orderNumber: 'PO-HM-2026-14',
-    recordDate: '2026-09-21',
+    recordDate: getDaysAgoDate(1),
     shift: 'Shift A (Morning 08:00 - 16:30)',
     buyer: 'H&M Global',
     styleName: 'Essential Organic Tee Crew Neck',
@@ -1077,7 +1145,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     supervisorName: 'Nazmul Huda (Knit In-Charge)',
     qualityInspector: 'Farhana Yasmin (Floor QC Specialist)',
     remarks: 'High-speed flatlock rib collar attachment running at 105% target pace.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(),
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
     hourlyReports: [
       { id: 'hr-201', hourSlot: '08:00 - 09:00', targetQty: 480, checkedQty: 475, passedQty: 475, defectQty: 3, rejectQty: 0, defectRate: 0.63, topDefect: 'Raw Edge', operatorId: 'Line 01-A', remarks: 'Smooth start; alterations cleared' },
       { id: 'hr-202', hourSlot: '09:00 - 10:00', targetQty: 500, checkedQty: 510, passedQty: 509, defectQty: 4, rejectQty: 1, defectRate: 0.78, topDefect: 'Skip Stitch', operatorId: 'Line 01-B', remarks: '1 fabric hole scrap reject' },
@@ -1092,7 +1160,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
   {
     id: 'po-203',
     orderNumber: 'PO-NK-2026-55',
-    recordDate: '2026-09-20',
+    recordDate: getDaysAgoDate(3),
     shift: 'Shift A (Morning 08:00 - 16:30)',
     buyer: 'Nike Apparel',
     styleName: 'French Terry Club Pullover Hoodie',
@@ -1115,14 +1183,14 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     supervisorName: 'Shahidul Islam (Assembly Sup)',
     qualityInspector: 'Nasrin Akter (Inline Quality Inspector)',
     remarks: 'Kangaroo pocket alignment jig in use. Critical metal detection 100% passed.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
     hourlyReports: [
       { id: 'hr-301', hourSlot: '08:00 - 09:00', targetQty: 180, checkedQty: 175, passedQty: 175, defectQty: 3, rejectQty: 0, defectRate: 1.71, topDefect: 'Puckering', operatorId: 'Station 02', remarks: 'Seam tension calibrated' },
       { id: 'hr-302', hourSlot: '09:00 - 10:00', targetQty: 200, checkedQty: 198, passedQty: 198, defectQty: 2, rejectQty: 0, defectRate: 1.01, topDefect: 'Skip Stitch', operatorId: 'Station 09', remarks: 'Good pacing maintained' },
       { id: 'hr-303', hourSlot: '10:00 - 11:00', targetQty: 200, checkedQty: 202, passedQty: 201, defectQty: 3, rejectQty: 1, defectRate: 1.49, topDefect: 'Needle Mark', operatorId: 'Station 04', remarks: '1 needle puncture scrap reject' },
       { id: 'hr-304', hourSlot: '11:00 - 12:00', targetQty: 200, checkedQty: 195, passedQty: 195, defectQty: 2, rejectQty: 0, defectRate: 1.03, topDefect: 'Open Seam', operatorId: 'Station 14', remarks: 'Rework cleared immediately' },
       { id: 'hr-305', hourSlot: '12:00 - 13:00', targetQty: 200, checkedQty: 200, passedQty: 200, defectQty: 3, rejectQty: 0, defectRate: 1.50, topDefect: 'Oil Stain', operatorId: 'Station 21', remarks: 'Cleaned with solvent' },
-      { id: 'hr-306', hourSlot: '14:00 - 15:00', targetQty: 200, checkedQty: 196, passedQty: 196, defectQty: 4, rejectQty: 0, defectRate: 2.04, topDefect: 'Uneven Hem', operatorId: 'Station 17', remarks: 'Hem gauge adjusted' },
+      { id: 'hr-306', hourSlot: '14:00 - 15:00', targetQty: 200, checkedQty: 196, passedQty: 196, defectQty: 4, rejectQty: 0, defectRate: 2.04, topDefect: 'Uneven Hem', operatorId: 'Station 17', remarks: 'Hem guide adjusted' },
       { id: 'hr-307', hourSlot: '15:00 - 16:00', targetQty: 200, checkedQty: 204, passedQty: 204, defectQty: 2, rejectQty: 0, defectRate: 0.98, topDefect: 'Broken Stitch', operatorId: 'Station 08', remarks: 'Thread spool replaced' },
       { id: 'hr-308', hourSlot: '16:00 - 17:00', targetQty: 180, checkedQty: 182, passedQty: 182, defectQty: 2, rejectQty: 0, defectRate: 1.10, topDefect: 'Skip Stitch', operatorId: 'Station 11', remarks: 'Full shift output targets met' },
     ],
@@ -1130,7 +1198,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
   {
     id: 'po-204',
     orderNumber: 'PO-TH-2026-09',
-    recordDate: '2026-09-19',
+    recordDate: getDaysAgoDate(6),
     shift: 'Shift A (Morning 08:00 - 16:30)',
     buyer: 'Tommy Hilfiger',
     styleName: 'Classic Fit Stretch Chino Pant',
@@ -1153,7 +1221,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     supervisorName: 'Farid Ahmed (Master Tailor)',
     qualityInspector: 'Tariqul Anam (QA In-Charge)',
     remarks: 'All 12,000 pcs inspected and transferred to final finishing carton warehouse.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 6).toISOString(),
     hourlyReports: [
       { id: 'hr-401', hourSlot: '08:00 - 09:00', targetQty: 150, checkedQty: 150, passedQty: 150, defectQty: 1, rejectQty: 0, defectRate: 0.67, topDefect: 'Skip Stitch', operatorId: 'Line 03-A', remarks: 'Balanced start' },
       { id: 'hr-402', hourSlot: '09:00 - 10:00', targetQty: 160, checkedQty: 162, passedQty: 162, defectQty: 1, rejectQty: 0, defectRate: 0.62, topDefect: 'Open Seam', operatorId: 'Line 03-B', remarks: 'Excellent output' },
@@ -1168,6 +1236,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
   {
     id: 'po-205',
     orderNumber: 'PO-UQ-2026-31',
+    recordDate: getDaysAgoDate(12),
     buyer: 'Uniqlo (Fast Retailing)',
     styleName: 'Ultra Stretch Rib Long Sleeve Tee',
     styleNumber: 'STY-UQ-3310-04',
@@ -1188,7 +1257,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     operatorCount: 50,
     supervisorName: 'Mahmudur Rahman (QA Supervisor)',
     remarks: 'Micro-stitch tolerance within +/- 0.5mm. Zero shade deviation observed.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 12).toISOString(),
     hourlyReports: [
       { id: 'hr-501', hourSlot: '08:00 - 09:00', targetQty: 240, checkedQty: 238, passedQty: 238, defectQty: 2, rejectQty: 0, defectRate: 0.84, topDefect: 'Raw Edge', operatorId: 'Line 05-A', remarks: 'Feed dog synchronized' },
       { id: 'hr-502', hourSlot: '09:00 - 10:00', targetQty: 250, checkedQty: 252, passedQty: 252, defectQty: 1, rejectQty: 0, defectRate: 0.40, topDefect: 'Skip Stitch', operatorId: 'Line 05-B', remarks: 'Optimal rhythm' },
@@ -1203,6 +1272,8 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
   {
     id: 'po-206',
     orderNumber: 'PO-GAP-2026-19',
+    recordDate: getDaysAgoDate(0),
+    shift: 'Shift A (Morning 08:00 - 16:30)',
     buyer: 'Gap Inc.',
     styleName: 'Vintage Wash Denim Cargo Jogger',
     styleNumber: 'STY-GAP-9902-01',
@@ -1216,14 +1287,15 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
     rftRate: 97.8,
     efficiencyPercent: 82.5,
     rejectQuantity: 24,
-    sewingLine: 'Line 07 (Cargo & Utility)',
-    lineId: 'Line 07',
+    sewingLine: 'Finishing Line 01 (Steam Tunnel Pressing)',
+    lineId: 'FIN-01',
     status: 'RUNNING',
     dueDate: '2026-10-29',
     operatorCount: 44,
     supervisorName: 'Jashim Uddin (Finishing Head)',
-    remarks: 'Enzyme wash recipe approved by Gap country quality office.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+    qualityInspector: 'Zahirul Islam (Finishing QC Auditor)',
+    remarks: 'Enzyme wash recipe approved by Gap country quality office. Steam press and metal detector in operation.',
+    createdAt: new Date().toISOString(),
     hourlyReports: [
       { id: 'hr-601', hourSlot: '08:00 - 09:00', targetQty: 120, checkedQty: 118, passedQty: 118, defectQty: 2, rejectQty: 0, defectRate: 1.69, topDefect: 'Pocket Flap Misaligned', operatorId: 'Station 01', remarks: 'Pattern template checked' },
       { id: 'hr-602', hourSlot: '09:00 - 10:00', targetQty: 130, checkedQty: 129, passedQty: 129, defectQty: 1, rejectQty: 0, defectRate: 0.78, topDefect: 'Skip Stitch', operatorId: 'Station 03', remarks: 'Tension fine' },

@@ -30,6 +30,7 @@ import { CustomerComplaint } from '@/lib/types/modules';
 import { StatusBadge } from '@/components/ui/Badge';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { ComplaintSingleExportModal } from './ComplaintSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface ComplaintDetailsPageProps {
   complaint: CustomerComplaint;
@@ -437,6 +438,20 @@ export function ComplaintDetailsPage({
           </div>
         )}
       </div>
+
+        {/* Comprehensive Record Audit Trail & View Tracking System */}
+        <RecordAuditHistory
+          entity="CustomerComplaint"
+          entityId={complaint.id}
+          entityCode={complaint.complaintNumber}
+          moduleName="Customer Complaints"
+          createdAt="2026-09-25T10:00:00.000Z"
+          createdBy={complaint.buyerName || 'Buyer Quality Representative'}
+          createdByRole="BUYER_QA"
+          updatedAt={new Date().toISOString()}
+          updatedBy={complaint.assignedEngineer || 'Tanzim Ahmed'}
+          updatedByRole="CLAIMS_LEAD"
+        />
       </div>
 
       <ComplaintSingleExportModal

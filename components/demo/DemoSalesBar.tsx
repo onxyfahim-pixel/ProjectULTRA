@@ -139,23 +139,23 @@ export function DemoSalesBar({ onNavigateTab, onResetData }: DemoSalesBarProps) 
       {/* Main Demo Sales Bar */}
       {!isCollapsed && (
         <div className="relative z-30 w-full bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white border-b border-blue-500/20 shadow-md">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="max-w-7xl mx-auto px-2 sm:px-6 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar">
             {/* Left: Demo Indicator & Badge */}
-            <div className="flex items-center gap-2.5 shrink-0">
-              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold tracking-wide">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] sm:text-[11px] font-bold tracking-wide shrink-0">
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span>LIVE DEMO</span>
               </div>
 
-              <div className="hidden md:flex items-center gap-2 text-xs text-slate-300 font-medium">
+              <div className="hidden lg:flex items-center gap-2 text-xs text-slate-300 font-medium">
                 <span className="text-white font-bold">Project ULTRA</span>
                 <span className="text-slate-500">•</span>
-                <span className="text-slate-400">Garments QMS & Factory ERP</span>
+                <span className="text-slate-400">Garments QMS &amp; Factory ERP</span>
               </div>
             </div>
 
             {/* Center: Live Role Persona Quick-Switcher */}
-            <div className="flex items-center gap-1 overflow-x-auto py-0.5 scrollbar-none">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 shrink-0">
               <span className="hidden xl:inline text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
                 Role:
               </span>
@@ -167,7 +167,7 @@ export function DemoSalesBar({ onNavigateTab, onResetData }: DemoSalesBarProps) 
                     type="button"
                     onClick={() => handleRoleSelect(persona.role)}
                     title={`${persona.label} — ${persona.desc}`}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    className={`px-2 sm:px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
                       isActive
                         ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400'
                         : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 hover:text-white'
@@ -181,17 +181,16 @@ export function DemoSalesBar({ onNavigateTab, onResetData }: DemoSalesBarProps) 
               })}
             </div>
 
-            {/* Right: Actions (Tour, Reset, Buy License) */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Right: Actions (Tour, Reset, Buy License, Minimize) */}
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               {/* Guided Tour Button */}
               <button
                 type="button"
                 onClick={() => setIsTourOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
               >
                 <Compass className="w-3.5 h-3.5 text-blue-400" />
-                <span className="hidden sm:inline">Workflow Tour</span>
-                <span className="sm:hidden">Tour</span>
+                <span className="hidden sm:inline">Tour</span>
               </button>
 
               {/* Reset Demo Data Button */}
@@ -200,20 +199,21 @@ export function DemoSalesBar({ onNavigateTab, onResetData }: DemoSalesBarProps) 
                 onClick={handleReset}
                 disabled={isResetting}
                 title="Reset test modifications back to pristine demo data"
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60 shrink-0"
               >
                 <RotateCcw className={`w-3.5 h-3.5 text-slate-400 ${isResetting ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">{resetSuccess ? 'Reset Complete!' : 'Reset Data'}</span>
+                <span className="hidden md:inline">{resetSuccess ? 'Reset Complete!' : 'Reset Data'}</span>
               </button>
 
               {/* Request License / Buy CTA Button */}
               <button
                 type="button"
                 onClick={() => setIsInquiryOpen(true)}
-                className="px-3 py-1 rounded-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/30 transition-all cursor-pointer transform hover:scale-[1.02] active:scale-[0.98]"
+                className="px-2 sm:px-3 py-1 rounded-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-blue-600/30 transition-all cursor-pointer transform hover:scale-[1.02] active:scale-[0.98] shrink-0"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Buy / License</span>
+                <span className="hidden xs:inline">Buy License</span>
+                <span className="xs:hidden">Buy</span>
               </button>
 
               {/* Minimize Bar Button */}
@@ -221,7 +221,7 @@ export function DemoSalesBar({ onNavigateTab, onResetData }: DemoSalesBarProps) 
                 type="button"
                 onClick={() => setIsCollapsed(true)}
                 title="Minimize demo bar"
-                className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer ml-0.5"
+                className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer ml-0.5 shrink-0"
                 aria-label="Collapse demo bar"
               >
                 <ChevronUp className="w-4 h-4" />

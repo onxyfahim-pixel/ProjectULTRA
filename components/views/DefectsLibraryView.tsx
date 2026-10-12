@@ -35,6 +35,12 @@ import { DefectDefinition } from '@/lib/types/modules';
 import { MOCK_DEFECTS_LIBRARY } from '@/lib/db/modules-mock-data';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { useErpAuth } from '@/hooks/use-erp-auth';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 import { DefectDetailsPage } from '../modules/defect-library/DefectDetailsPage';
 import { DefectEntryPage } from '../modules/defect-library/DefectEntryPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
@@ -63,6 +69,7 @@ const ZONE_BADGES: Record<string, { label: string; cls: string }> = {
 };
 
 export function DefectsLibraryView() {
+  const { user } = useErpAuth();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('defects_library');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [defects, setDefects] = useLiveModuleData<DefectDefinition[]>('defects_library', MOCK_DEFECTS_LIBRARY);
@@ -135,12 +142,37 @@ export function DefectsLibraryView() {
 
   // Handlers for Save, Edit, Duplicate, Delete
   const handleSaveDefect = (savedDefect: DefectDefinition) => {
-    const index = defects.findIndex((d) => d.id === savedDefect.id);
-    if (index >= 0) {
+    const existing = defects.find((d) => d.id === savedDefect.id);
+    if (existing) {
+      trackEntityUpdate(
+        'DEFECT',
+        savedDefect.id,
+        savedDefect.defectCode,
+        existing,
+        savedDefect,
+        {
+          userName: user?.name || 'QA Standards Specialist',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Updated defect definition ${savedDefect.defectCode} (${savedDefect.name})`,
+        }
+      );
       setDefects(defects.map((d) => (d.id === savedDefect.id ? savedDefect : d)));
       showToast(`Updated defect definition ${savedDefect.defectCode}`);
       setSubView({ type: 'details', defect: savedDefect });
     } else {
+      trackEntityCreate(
+        'DEFECT',
+        savedDefect.id,
+        savedDefect.defectCode,
+        savedDefect,
+        {
+          userName: user?.name || 'QA Standards Specialist',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Registered quality defect ${savedDefect.defectCode} (${savedDefect.name})`,
+        }
+      );
       setDefects([savedDefect, ...defects]);
       showToast(`Registered new quality defect ${savedDefect.defectCode}`);
       setSubView({ type: 'none' });
@@ -162,6 +194,20 @@ export function DefectsLibraryView() {
   const handleConfirmDelete = () => {
     if (!deleteModal || deleteModal.defects.length === 0) return;
     const ids = deleteModal.defects.map((d) => d.id);
+    for (const d of deleteModal.defects) {
+      trackEntityDelete(
+        'DEFECT',
+        d.id,
+        d.defectCode,
+        d,
+        {
+          userName: user?.name || 'QA Standards Specialist',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Deleted defect definition ${d.defectCode} (${d.name})`,
+        }
+      );
+    }
     setDefects(defects.filter((d) => !ids.includes(d.id)));
 
     const count = deleteModal.defects.length;

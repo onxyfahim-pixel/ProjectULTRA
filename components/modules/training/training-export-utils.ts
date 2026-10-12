@@ -2,6 +2,8 @@ import { TrainingMatrixItem } from '@/lib/types/modules';
 import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
   getModuleExportConfig,
 } from '@/lib/pdf/pdf-header-store';
 
@@ -67,7 +69,10 @@ export function downloadTrainingCsv(
  */
 export function exportTrainingMatrixPdf(
   courses: TrainingMatrixItem[],
-  scopeLabel: string = 'All Training Programs'
+  scopeLabel: string = 'All Training Programs',
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
 ): void {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
@@ -294,24 +299,21 @@ export function exportTrainingMatrixPdf(
           </tbody>
         </table>
 
-        <div class="signatures">
-          <div class="sign-box">
-            <div class="sign-title">Prepared By</div>
-            <div class="sign-sub">Training Coordinator / HR Officer</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Reviewed By</div>
-            <div class="sign-sub">Quality Assurance Manager</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Approved By</div>
-            <div class="sign-sub">General Manager / Operations Head</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Social & Technical Auditor</div>
-            <div class="sign-sub">Buyer / WRAP Compliance Inspector</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Prepared By',
+            designation: 'Training Coordinator / HR Officer',
+          },
+          slot2Override: {
+            title: 'Reviewed By',
+            designation: 'Quality Assurance Manager',
+          },
+          slot3Override: {
+            title: 'Approved By',
+            designation: 'General Manager / Operations Head',
+          },
+        })}
 
         <script>
           window.onload = function() {
@@ -445,7 +447,12 @@ export function exportTrainingMatrixExcel(
 /**
  * Export Individual Training Program Dossier PDF
  */
-export function exportSingleTrainingPdf(course: TrainingMatrixItem): void {
+export function exportSingleTrainingPdf(
+  course: TrainingMatrixItem,
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
+): void {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
     alert('Please allow pop-ups to generate PDF exports.');
@@ -730,20 +737,21 @@ export function exportSingleTrainingPdf(course: TrainingMatrixItem): void {
         `
         }
 
-        <div class="signatures">
-          <div class="sign-box">
-            <div class="sign-title">Lead Instructor</div>
-            <div class="sign-sub">Curriculum Delivery</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Head of HR & Training</div>
-            <div class="sign-sub">Competency Endorsement</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Quality Assurance Manager</div>
-            <div class="sign-sub">Operational Sign-off</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Lead Instructor',
+            designation: 'Curriculum Delivery',
+          },
+          slot2Override: {
+            title: 'Head of HR & Training',
+            designation: 'Competency Endorsement',
+          },
+          slot3Override: {
+            title: 'Quality Assurance Manager',
+            designation: 'Operational Sign-off',
+          },
+        })}
 
         <script>
           window.onload = function() {

@@ -45,6 +45,7 @@ import { useModulePermission } from '@/hooks/use-module-permission';
 import { TraceabilityOrderSelectorModal } from './TraceabilityOrderSelectorModal';
 import { TraceabilityImageModal } from './TraceabilityImageModal';
 import { TraceabilitySingleExportModal } from './TraceabilitySingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 import {
   createDefaultLifecycleStages,
   STAGE_CONFIGS,
@@ -1470,6 +1471,18 @@ export function TraceabilityDetailsPage({
             </div>
           </div>
         )}
+
+        {/* Universal Audit Trail & Live View Dossier */}
+        <RecordAuditHistory
+          moduleName="Batch Traceability"
+          recordId={record.id}
+          recordCode={record.garmentSerial || record.cartonBarcode}
+          data={record}
+          createdBy={record.inspectorName || 'Supply Chain Auditor'}
+          createdAt={record.passedFinalDate || '2026-01-01'}
+          lastUpdatedBy={record.inspectorName || 'Supply Chain Auditor'}
+          lastUpdatedAt={record.updatedAt || record.passedFinalDate || '2026-01-01'}
+        />
 
         {/* PO / Article Selector Modal */}
         {isOrderSelectorOpen && (

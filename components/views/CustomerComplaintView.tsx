@@ -39,12 +39,19 @@ import { ComplaintExportModal } from '../modules/customer-complaint/ComplaintExp
 import { ComplaintSingleExportModal } from '../modules/customer-complaint/ComplaintSingleExportModal';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { useErpAuth } from '@/hooks/use-erp-auth';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 
 type ComplaintSubView =
   | { type: 'none' }
   | { type: 'details'; complaint: CustomerComplaint };
 
 export function CustomerComplaintView() {
+  const { user } = useErpAuth();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('customer_complaint');
   const [viewMode, setViewMode] = useState<'summary' | 'list' | 'capa'>('summary');
   const [complaints, setComplaints] = useLiveModuleData<CustomerComplaint[]>('customer_complaints', MOCK_CUSTOMER_COMPLAINTS);
@@ -95,14 +102,28 @@ export function CustomerComplaintView() {
   // CRUD Handlers
   const handleSaveComplaint = (complaintData: Partial<CustomerComplaint>) => {
     if (complaintToEdit) {
+      const updatedComplaint = { ...complaintToEdit, ...complaintData } as CustomerComplaint;
       const updated = complaints.map((c) =>
-        c.id === complaintToEdit.id ? ({ ...c, ...complaintData } as CustomerComplaint) : c
+        c.id === complaintToEdit.id ? updatedComplaint : c
       );
       setComplaints(updated);
+      trackEntityUpdate(
+        'COMPLAINT',
+        complaintToEdit.id,
+        complaintToEdit.complaintNumber,
+        complaintToEdit,
+        updatedComplaint,
+        {
+          userName: user?.name || updatedComplaint.assignedEngineer || 'QA Manager',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Updated Customer Claim ${complaintToEdit.complaintNumber} (${complaintToEdit.buyerName}) - Status: ${updatedComplaint.status}`,
+        }
+      );
       if (complaintSubView.type === 'details' && complaintSubView.complaint.id === complaintToEdit.id) {
         setComplaintSubView({
           type: 'details',
-          complaint: { ...complaintSubView.complaint, ...complaintData } as CustomerComplaint,
+          complaint: updatedComplaint,
         });
       }
       showToast(`Updated customer claim ${complaintData.complaintNumber}`);
@@ -133,6 +154,18 @@ export function CustomerComplaintView() {
         settlementType: complaintData.settlementType || 'RE_SCREENING',
       };
       setComplaints([newComplaint, ...complaints]);
+      trackEntityCreate(
+        'COMPLAINT',
+        newComplaint.id,
+        newComplaint.complaintNumber,
+        newComplaint,
+        {
+          userName: user?.name || newComplaint.assignedEngineer || 'QA Manager',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Logged Customer Claim ${newComplaint.complaintNumber} from ${newComplaint.buyerName} ($${newComplaint.claimAmountUSD.toLocaleString()})`,
+        }
+      );
       showToast(`Logged new customer claim ${newComplaint.complaintNumber}`);
     }
     setIsAddModalOpen(false);
@@ -153,6 +186,20 @@ export function CustomerComplaintView() {
   const confirmDeleteComplaints = () => {
     if (!deleteModal || deleteModal.complaints.length === 0) return;
     const idsToDelete = new Set(deleteModal.complaints.map((c) => c.id));
+    for (const c of deleteModal.complaints) {
+      trackEntityDelete(
+        'COMPLAINT',
+        c.id,
+        c.complaintNumber,
+        c,
+        {
+          userName: user?.name || 'QA Manager',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Deleted Customer Claim ${c.complaintNumber} (${c.buyerName})`,
+        }
+      );
+    }
     setComplaints((prev) => prev.filter((c) => !idsToDelete.has(c.id)));
 
     if (complaintSubView.type === 'details' && idsToDelete.has(complaintSubView.complaint.id)) {

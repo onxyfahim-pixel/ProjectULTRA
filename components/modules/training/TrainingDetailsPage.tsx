@@ -26,6 +26,7 @@ import {
 import { TrainingMatrixItem, TrainingStatus, TrainingAttendee } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { TrainingSingleExportModal } from './TrainingSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface TrainingDetailsPageProps {
   course: TrainingMatrixItem;
@@ -541,6 +542,18 @@ export function TrainingDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Training & Skill Matrix"
+        recordId={course.id}
+        recordCode={course.courseCode || course.title}
+        data={course}
+        createdBy={course.trainerName || 'HR Training Officer'}
+        createdAt={course.createdAt || course.nextScheduledDate || '2026-01-01'}
+        lastUpdatedBy={course.trainerName || 'HR Training Officer'}
+        lastUpdatedAt={course.nextScheduledDate || '2026-01-01'}
+      />
 
       {/* Individual Training Program Export Modal */}
       <TrainingSingleExportModal

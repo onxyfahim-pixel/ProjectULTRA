@@ -31,13 +31,23 @@ export function InspectionSingleExportModal({
   onClose,
   record,
 }: InspectionSingleExportModalProps) {
+  const pdfSettings = loadPdfHeaderSettings();
+
+  const [includeSignatures, setIncludeSignatures] = React.useState<boolean>(
+    () => pdfSettings.signatureSettings?.enabled ?? true
+  );
+  const [signatureMode, setSignatureMode] = React.useState<'dual' | 'triple' | 'single'>(
+    () => (pdfSettings.signatureSettings?.mode === 'triple' ? 'triple' : pdfSettings.signatureSettings?.mode === 'single' ? 'single' : 'dual')
+  );
+
   if (!isOpen || !record) return null;
 
-  const pdfSettings = loadPdfHeaderSettings();
   const poDisplay = record.poNumbers && record.poNumbers.length > 0 ? record.poNumbers.join(', ') : record.orderNumber || '-';
 
   const handleExportPdf = () => {
-    exportSingleInspectionPdf(record);
+    exportSingleInspectionPdf(record, {
+      signatureMode: includeSignatures ? signatureMode : 'none',
+    });
     onClose();
   };
 
@@ -180,6 +190,45 @@ export function InspectionSingleExportModal({
                 {record.inspectorSignature && record.representativeSignature ? '✓ Dual Signed' : 'Sign-Off Ready'}
               </span>
             </div>
+          </div>
+
+          {/* Optional Signature Endorsement Control */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={includeSignatures}
+                  onChange={(e) => setIncludeSignatures(e.target.checked)}
+                  className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                />
+                <span>Include Official Signatures at Bottom</span>
+              </label>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                  includeSignatures
+                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                    : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {includeSignatures ? 'Signatures ON' : 'Signatures OFF'}
+              </span>
+            </div>
+
+            {includeSignatures && (
+              <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/80 text-[11px]">
+                <span className="text-slate-500 font-medium">Signature Layout:</span>
+                <select
+                  value={signatureMode}
+                  onChange={(e) => setSignatureMode(e.target.value as any)}
+                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 cursor-pointer"
+                >
+                  <option value="dual">Dual (Auditor &amp; Vendor Rep)</option>
+                  <option value="triple">Triple (Auditor, Reviewer &amp; QA Head)</option>
+                  <option value="single">Single (Auditor Verification Only)</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Export Format Cards */}

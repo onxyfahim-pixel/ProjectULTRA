@@ -27,6 +27,7 @@ import {
 import { QualityManualSection, QualityManualStatus } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { QualityManualSingleExportModal } from './QualityManualSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface QualityManualDetailsPageProps {
   section: QualityManualSection;
@@ -459,6 +460,18 @@ export function QualityManualDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Quality Manual"
+        recordId={section.id}
+        recordCode={`${section.chapterNumber} - ${section.title}`}
+        data={section}
+        createdBy={section.author || 'QA Director'}
+        createdAt={section.createdAt || section.effectiveDate || '2026-01-01'}
+        lastUpdatedBy={section.approvedBy || section.reviewedBy}
+        lastUpdatedAt={section.updatedAt || section.effectiveDate}
+      />
       </div>
 
       <QualityManualSingleExportModal

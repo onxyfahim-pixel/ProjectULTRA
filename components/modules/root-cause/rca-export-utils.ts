@@ -2,6 +2,8 @@ import { RootCauseCase } from '@/lib/types/modules';
 import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
   getModuleExportConfig,
 } from '@/lib/pdf/pdf-header-store';
 
@@ -68,7 +70,10 @@ export function downloadRcaCsv(
  */
 export function exportRcaRegisterPdf(
   cases: RootCauseCase[],
-  scopeLabel: string = 'All RCA Cases'
+  scopeLabel: string = 'All RCA Cases',
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
 ): void {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
@@ -312,24 +317,21 @@ export function exportRcaRegisterPdf(
           </tbody>
         </table>
 
-        <div class="signatures">
-          <div class="sign-box">
-            <div class="sign-title">Lead Investigator</div>
-            <div class="sign-sub">Root Cause Analysis Lead</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">QA Operations Manager</div>
-            <div class="sign-sub">Technical Verification</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Head of Production</div>
-            <div class="sign-sub">CAPA Implementation Approval</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Buyer Quality Representative</div>
-            <div class="sign-sub">Audit Review & Acceptance</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Lead Investigator',
+            designation: 'Root Cause Analysis Lead',
+          },
+          slot2Override: {
+            title: 'QA Operations Manager',
+            designation: 'Technical Verification',
+          },
+          slot3Override: {
+            title: 'Head of Production',
+            designation: 'CAPA Implementation Approval',
+          },
+        })}
 
         <script>
           window.onload = function() {
@@ -469,7 +471,12 @@ export function exportRcaRegisterExcel(
 /**
  * Export Individual RCA Case Dossier PDF
  */
-export function exportSingleRcaPdf(rcaCase: RootCauseCase): void {
+export function exportSingleRcaPdf(
+  rcaCase: RootCauseCase,
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
+): void {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
     alert('Please allow pop-ups to generate PDF exports.');
@@ -803,20 +810,21 @@ export function exportSingleRcaPdf(rcaCase: RootCauseCase): void {
           <div class="card-body">${rcaCase.preventiveAction || 'Instituted shift-start digital verification checks; integrated optical sensor stop-motion into line automation.'}</div>
         </div>
 
-        <div class="signatures">
-          <div class="sign-box">
-            <div class="sign-title">Investigation Lead</div>
-            <div class="sign-sub">Analysis & Problem Solving</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">QA Operations Manager</div>
-            <div class="sign-sub">CAPA Mandate & Verification</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-title">Operations Director</div>
-            <div class="sign-sub">Executive Closure & Sign-off</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Investigation Lead',
+            designation: 'Analysis & Problem Solving',
+          },
+          slot2Override: {
+            title: 'QA Operations Manager',
+            designation: 'CAPA Mandate & Verification',
+          },
+          slot3Override: {
+            title: 'Operations Director',
+            designation: 'Executive Closure & Sign-off',
+          },
+        })}
 
         <script>
           window.onload = function() {

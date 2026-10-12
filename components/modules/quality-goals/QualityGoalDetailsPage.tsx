@@ -37,6 +37,7 @@ import {
 import { GOAL_PILLAR_CONFIG } from './quality-goals-data';
 import { QualityGoalSingleExportModal } from './QualityGoalSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface QualityGoalDetailsPageProps {
   goal: QualityGoal;
@@ -801,6 +802,18 @@ export function QualityGoalDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Quality Objectives & Goals"
+        recordId={currentGoal.id}
+        recordCode={currentGoal.goalCode || currentGoal.goalTitle}
+        data={currentGoal}
+        createdBy={currentGoal.ownerName || 'Quality Assurance Director'}
+        createdAt={currentGoal.createdAt || currentGoal.startDate || '2026-01-01'}
+        lastUpdatedBy={currentGoal.approvedBy || currentGoal.ownerName}
+        lastUpdatedAt={currentGoal.updatedAt || currentGoal.deadline || '2026-01-01'}
+      />
       </div>
 
       {/* Individual Goal Export Modal */}

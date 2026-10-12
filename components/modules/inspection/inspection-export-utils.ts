@@ -3,11 +3,13 @@ import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
   getModuleExportConfig,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
 } from '@/lib/pdf/pdf-header-store';
 import { syncRecordCheckpoints } from './inspection-checkpoints';
 import { deriveSizeBreakdownFromBuyerOrder } from './inspection-size-utils';
 
-export type FooterSignatureMode = 'dual' | 'single' | 'none';
+export type FooterSignatureMode = PdfSignatureMode;
 
 export interface ExportPdfOptions {
   signatureMode?: FooterSignatureMode;
@@ -48,43 +50,24 @@ export function computeInspectionKpis(records: InspectionRecord[]) {
 }
 
 // -------------------------------------------------------------
-// HELPER: SIGNATURE HTML (DEFAULT NONE)
+// HELPER: SIGNATURE HTML (CALLS UNIVERSAL PDF SIGNATURE ENGINE)
 // -------------------------------------------------------------
 export function renderFooterSignaturesHtml(
   mode: FooterSignatureMode = 'none',
-  leftRole = 'QUALITY CONTROL AUDITOR',
-  leftDept = 'Quality Assurance & AQL Dept',
-  rightRole = 'QA / QUALITY DIRECTOR',
-  rightDept = 'Quality Management Directorate'
+  leftRole?: string,
+  leftDept?: string,
+  rightRole?: string,
+  rightDept?: string
 ): string {
-  if (!mode || mode === 'none') {
+  if (mode === 'none') {
     return '';
   }
-  if (mode === 'single') {
-    return `
-      <div style="display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid;">
-        <div style="width: 250px; text-align: center;">
-          <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-          <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${rightRole}</div>
-          <div style="font-size: 8px; color: #64748b;">${rightDept}</div>
-        </div>
-      </div>
-    `;
-  }
-  return `
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 48px; max-width: 650px; margin: 22px auto 0 auto; padding-top: 14px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid;">
-      <div style="text-align: center;">
-        <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-        <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${leftRole}</div>
-        <div style="font-size: 8px; color: #64748b;">${leftDept}</div>
-      </div>
-      <div style="text-align: center;">
-        <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-        <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${rightRole}</div>
-        <div style="font-size: 8px; color: #64748b;">${rightDept}</div>
-      </div>
-    </div>
-  `;
+  const pdfSettings = loadPdfHeaderSettings();
+  return renderPdfFooterSignaturesHtml(pdfSettings, {
+    signatureMode: mode,
+    slot1Override: leftRole ? { title: leftRole, designation: leftDept || '' } : undefined,
+    slot3Override: rightRole ? { title: rightRole, designation: rightDept || '' } : undefined,
+  });
 }
 
 // =============================================================
@@ -296,7 +279,13 @@ export function exportInspectionSummaryPdf(
             </tbody>
           </table>
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'none')}
+          ${renderFooterSignaturesHtml(
+            options?.signatureMode !== undefined
+              ? options.signatureMode
+              : pdfSettings.signatureSettings?.enabled
+              ? pdfSettings.signatureSettings?.mode
+              : 'none'
+          )}
 
           <div class="footer-note">
             <span>Project ULTRA ERP • Quality Assurance &amp; ISO 2859-1 Inspection System</span>
@@ -964,31 +953,41 @@ export function exportSingleInspectionPdf(
               : ''
           }
 
-          <!-- Dual Authorization & Signature Endorsement -->
-          <div style="margin-top: 18px; page-break-inside: avoid;">
-            <div class="section-title" style="margin-bottom: 8px;">Official Quality Authorization &amp; Dual Sign-Off</div>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
-              <!-- Lead Quality Inspector -->
-              <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; background: #f8fafc; text-align: center;">
-                <div style="font-size: 7.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.3px;">Lead Quality Assurance Auditor</div>
-                <div style="height: 52px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #cbd5e1;">
-                  ${record.inspectorSignature ? `<img src="${record.inspectorSignature}" style="max-height: 48px; max-width: 100%; object-fit: contain;" />` : `<span style="font-size: 8px; color: #94a3b8; font-style: italic;">Auditor Signature On File</span>`}
-                </div>
-                <div style="font-size: 9px; font-weight: 800; color: #0f172a;">${record.inspectorName || 'Lead Auditor'}</div>
-                <div style="font-size: 7.5px; color: #64748b;">Auditor ID: ${record.inspectorId || 'QC-01'} • Date: ${dateStr}</div>
-              </div>
+          ${
+            (options?.signatureMode !== 'none' && (options?.signatureMode !== undefined || pdfSettings.signatureSettings?.enabled))
+              ? (
+                record.inspectorSignature || record.representativeSignature
+                  ? `
+                    <!-- Dual Authorization & Signature Endorsement -->
+                    <div style="margin-top: 18px; page-break-inside: avoid;">
+                      <div class="section-title" style="margin-bottom: 8px;">Official Quality Authorization &amp; Dual Sign-Off</div>
+                      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+                        <!-- Lead Quality Inspector -->
+                        <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; background: #f8fafc; text-align: center;">
+                          <div style="font-size: 7.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.3px;">${pdfSettings.signatureSettings?.slot1?.title || 'Lead Quality Assurance Auditor'}</div>
+                          <div style="height: 52px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #cbd5e1;">
+                            ${record.inspectorSignature ? `<img src="${record.inspectorSignature}" style="max-height: 48px; max-width: 100%; object-fit: contain;" />` : `<span style="font-size: 8px; color: #94a3b8; font-style: italic;">Auditor Signature On File</span>`}
+                          </div>
+                          <div style="font-size: 9px; font-weight: 800; color: #0f172a;">${record.inspectorName || pdfSettings.signatureSettings?.slot1?.name || 'Lead Auditor'}</div>
+                          <div style="font-size: 7.5px; color: #64748b;">${pdfSettings.signatureSettings?.slot1?.designation || 'Auditor'} • ID: ${record.inspectorId || 'QC-01'} • Date: ${dateStr}</div>
+                        </div>
 
-              <!-- Factory Representative -->
-              <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; background: #f8fafc; text-align: center;">
-                <div style="font-size: 7.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.3px;">Factory / Vendor Authorized Representative</div>
-                <div style="height: 52px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #cbd5e1;">
-                  ${record.representativeSignature ? `<img src="${record.representativeSignature}" style="max-height: 48px; max-width: 100%; object-fit: contain;" />` : `<span style="font-size: 8px; color: #94a3b8; font-style: italic;">Factory Representative Sign</span>`}
-                </div>
-                <div style="font-size: 9px; font-weight: 800; color: #0f172a;">${record.representativeName || 'Factory Representative'}</div>
-                <div style="font-size: 7.5px; color: #64748b;">Production Floor: ${record.factoryUnit || 'Unit 01'} • Date: ${dateStr}</div>
-              </div>
-            </div>
-          </div>
+                        <!-- Factory Representative -->
+                        <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; background: #f8fafc; text-align: center;">
+                          <div style="font-size: 7.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.3px;">${pdfSettings.signatureSettings?.slot3?.title || 'Factory / Vendor Authorized Representative'}</div>
+                          <div style="height: 52px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #cbd5e1;">
+                            ${record.representativeSignature ? `<img src="${record.representativeSignature}" style="max-height: 48px; max-width: 100%; object-fit: contain;" />` : `<span style="font-size: 8px; color: #94a3b8; font-style: italic;">Factory Representative Sign</span>`}
+                          </div>
+                          <div style="font-size: 9px; font-weight: 800; color: #0f172a;">${record.representativeName || pdfSettings.signatureSettings?.slot3?.name || 'Factory Representative'}</div>
+                          <div style="font-size: 7.5px; color: #64748b;">${pdfSettings.signatureSettings?.slot3?.designation || 'Production Floor'} • Unit: ${record.factoryUnit || 'Unit 01'} • Date: ${dateStr}</div>
+                        </div>
+                      </div>
+                    </div>
+                  `
+                  : renderFooterSignaturesHtml(options?.signatureMode !== undefined ? options.signatureMode : (pdfSettings.signatureSettings?.enabled ? pdfSettings.signatureSettings?.mode : 'none'))
+              )
+              : ''
+          }
 
           <div class="footer-note">
             <span>Project ULTRA ERP • Quality Assurance &amp; Technical Inspection Directorate</span>

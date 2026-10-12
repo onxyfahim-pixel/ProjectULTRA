@@ -398,6 +398,7 @@ export function ReceiveMaterialModal({
       receivedBy: formData.receivedBy,
       inspectedBy: formData.inspectedBy,
       notes: formData.notes,
+      approvalStatus: 'PENDING',
     };
 
     const itemUpdate: Partial<InventoryItem> = {

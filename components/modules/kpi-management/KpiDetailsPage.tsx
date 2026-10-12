@@ -41,6 +41,7 @@ import {
 import { KPI_CATEGORY_CONFIG } from './kpi-management-data';
 import { KpiSingleExportModal } from './KpiSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface KpiDetailsPageProps {
   kpi: KpiMetric;
@@ -801,6 +802,18 @@ export function KpiDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="KPI Management"
+        recordId={currentKpi.id}
+        recordCode={currentKpi.kpiCode || currentKpi.metricName}
+        data={currentKpi}
+        createdBy={currentKpi.ownerName || 'KPI Manager'}
+        createdAt={currentKpi.createdAt || currentKpi.lastUpdated || '2026-01-01'}
+        lastUpdatedBy={currentKpi.ownerName || 'KPI Manager'}
+        lastUpdatedAt={currentKpi.lastUpdated || '2026-01-01'}
+      />
       </div>
 
       {/* Individual KPI Export Modal */}

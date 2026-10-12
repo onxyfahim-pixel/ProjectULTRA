@@ -2,6 +2,8 @@ import { RiskFmeaItem } from '@/lib/types/modules';
 import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
   getModuleExportConfig,
 } from '@/lib/pdf/pdf-header-store';
 import { getRiskLevel } from './riskAssessmentData';
@@ -88,7 +90,10 @@ export function downloadRiskCsv(
  */
 export function exportRiskSummaryPdf(
   records: RiskFmeaItem[],
-  scopeLabel: string = 'All Risk Assessments'
+  scopeLabel: string = 'All Risk Assessments',
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
 ): void {
   try {
     const printWindow = window.open('', '_blank');
@@ -317,23 +322,21 @@ export function exportRiskSummaryPdf(
           </tbody>
         </table>
 
-        <div class="sign-grid">
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Cross-Functional Risk Team Lead</div>
-            <div class="sign-sub">Technical Risk Assessment (IE/QA/Cutting/Sewing)</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Technical Services & Production Manager</div>
-            <div class="sign-sub">Operational Controls & Action Approval</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Head of Quality Assurance</div>
-            <div class="sign-sub">Pre-Production Meeting & Buyer Sign-off</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Cross-Functional Risk Team Lead',
+            designation: 'Technical Risk Assessment (IE/QA/Cutting/Sewing)',
+          },
+          slot2Override: {
+            title: 'Technical Services & Production Manager',
+            designation: 'Operational Controls & Action Approval',
+          },
+          slot3Override: {
+            title: 'Head of Quality Assurance',
+            designation: 'Pre-Production Meeting & Buyer Sign-off',
+          },
+        })}
 
         <script>
           window.onload = function() {
@@ -493,7 +496,12 @@ export function exportRiskSummaryExcel(
 /**
  * Export official Single FMEA Risk Assessment Dossier (PDF)
  */
-export function exportSingleRiskPdf(record: RiskFmeaItem): void {
+export function exportSingleRiskPdf(
+  record: RiskFmeaItem,
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
+): void {
   try {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -790,23 +798,21 @@ export function exportSingleRiskPdf(record: RiskFmeaItem): void {
 
         ${sectionsHtml}
 
-        <div class="sign-grid">
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Risk Assessor: ${record.assessorName || 'Technical Lead'}</div>
-            <div class="sign-sub">IE / Pre-Production Engineer</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Production Manager</div>
-            <div class="sign-sub">Manufacturing Risk Controls Sign-off</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">QA Director</div>
-            <div class="sign-sub">Pre-Production Verification & Release</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: `Risk Assessor: ${record.assessorName || 'Technical Lead'}`,
+            name: record.assessorName,
+          },
+          slot2Override: {
+            title: 'Production Manager',
+            designation: 'Manufacturing Risk Controls Sign-off',
+          },
+          slot3Override: {
+            title: 'QA Director',
+            designation: 'Pre-Production Verification & Release',
+          },
+        })}
 
         <script>
           window.onload = function() {

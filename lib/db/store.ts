@@ -55,6 +55,32 @@ class ErpDataStore {
       this.productionRecords = this.productionOrders;
     }
 
+    const todayISO = new Date().toISOString().split('T')[0];
+    this.productionRecords = this.productionRecords.map((rec) => {
+      if (rec.id === 'po-206' && (!rec.recordDate || rec.recordDate === '2026-09-21' || rec.recordDate === '')) {
+        return {
+          ...rec,
+          recordDate: todayISO,
+          sewingLine: 'Finishing Line 01 (Steam Tunnel Pressing)',
+          lineId: 'FIN-01',
+          section: 'Finishing & Packing Section 01',
+        };
+      }
+      if (rec.id === 'po-201' && (!rec.recordDate || rec.recordDate === '2026-09-21' || rec.recordDate === '')) {
+        return {
+          ...rec,
+          recordDate: todayISO,
+        };
+      }
+      if (!rec.recordDate) {
+        return {
+          ...rec,
+          recordDate: rec.createdAt ? rec.createdAt.split('T')[0] : todayISO,
+        };
+      }
+      return rec;
+    });
+
     console.log(
       `[ERP Host Central] Loaded ${this.buyerOrders.length} buyer orders, ${this.inventory.length} inventory items, ${this.inspections.length} inspections from disk cache.`
     );
@@ -660,14 +686,14 @@ class ErpDataStore {
     return [...this.auditLogs];
   }
 
-  public addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>) {
+  public addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): AuditLog {
     const newLog: AuditLog = {
       ...log,
       id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       timestamp: new Date().toISOString(),
     };
     this.auditLogs.unshift(newLog);
-    if (this.auditLogs.length > 200) {
+    if (this.auditLogs.length > 500) {
       this.auditLogs.pop();
     }
     this.persistToDisk();
@@ -676,6 +702,8 @@ class ErpDataStore {
     mysqlManager.insertAuditLog(newLog).catch((err) => {
       console.error('[MySQL Error] Failed inserting audit log to MySQL:', err);
     });
+
+    return newLog;
   }
 
   // --- Aggregated Dashboard Stats ---
@@ -702,6 +730,7 @@ class ErpDataStore {
       passRate,
       activeOrders,
       avgDefectRate,
+      recentAuditLogs: this.auditLogs.slice(0, 50),
       inspectionCount: this.inspections.length,
       itemCount: this.inventory.length,
       buyerOrdersCount: this.buyerOrders.length,

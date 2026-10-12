@@ -36,6 +36,12 @@ import { SubSupplier } from '@/lib/types/modules';
 import { MOCK_SUB_SUPPLIERS } from '@/lib/db/modules-mock-data';
 import { useLiveModuleData } from '@/hooks/use-live-module-data';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { useErpAuth } from '@/hooks/use-erp-auth';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 import { AddSubSupplierModal } from '../modules/sub-supplier/AddSubSupplierModal';
 import { SubSupplierDetailsPage } from '../modules/sub-supplier/SubSupplierDetailsPage';
 import { DeleteConfirmationModal } from '../modules/buyer-order/DeleteConfirmationModal';
@@ -47,6 +53,7 @@ type SupplierSubView =
   | { type: 'details'; supplier: SubSupplier };
 
 export function SubSupplierView() {
+  const { user } = useErpAuth();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('sub_supplier');
   const [viewMode, setViewMode] = useState<'summary' | 'list' | 'profiles'>('summary');
   const [suppliers, setSuppliers] = useLiveModuleData<SubSupplier[]>(
@@ -103,12 +110,26 @@ export function SubSupplierView() {
   // CRUD Handlers
   const handleSaveSupplier = (supplierData: Partial<SubSupplier>) => {
     if (supplierToEdit) {
+      const updatedSupplier = { ...supplierToEdit, ...supplierData } as SubSupplier;
       const updated = suppliers.map((s) =>
-        s.id === supplierToEdit.id ? ({ ...s, ...supplierData } as SubSupplier) : s
+        s.id === supplierToEdit.id ? updatedSupplier : s
       );
       setSuppliers(updated);
+      trackEntityUpdate(
+        'SUB_SUPPLIER',
+        supplierToEdit.id,
+        supplierToEdit.code,
+        supplierToEdit,
+        updatedSupplier,
+        {
+          userName: user?.name || 'Supply Chain Auditor',
+          userRole: user?.role || 'COMPLIANCE_MANAGER',
+          userId: user?.id,
+          summary: `Updated sub-supplier ${supplierToEdit.name} (${supplierToEdit.code})`,
+        }
+      );
       if (supplierSubView.type === 'details' && supplierSubView.supplier.id === supplierToEdit.id) {
-        setSupplierSubView({ type: 'details', supplier: { ...supplierSubView.supplier, ...supplierData } as SubSupplier });
+        setSupplierSubView({ type: 'details', supplier: updatedSupplier });
       }
       showToast(`Updated sub-supplier ${supplierData.name}`);
     } else {
@@ -143,6 +164,18 @@ export function SubSupplierView() {
         materialsSupplied: supplierData.materialsSupplied || ['Combed Cotton Single Jersey 180 GSM'],
       };
       setSuppliers([newSupplier, ...suppliers]);
+      trackEntityCreate(
+        'SUB_SUPPLIER',
+        newSupplier.id,
+        newSupplier.code,
+        newSupplier,
+        {
+          userName: user?.name || 'Supply Chain Auditor',
+          userRole: user?.role || 'COMPLIANCE_MANAGER',
+          userId: user?.id,
+          summary: `Registered sub-supplier partner ${newSupplier.name} (${newSupplier.code})`,
+        }
+      );
       showToast(`Registered new sub-supplier ${newSupplier.name}`);
     }
     setIsAddModalOpen(false);
@@ -163,6 +196,20 @@ export function SubSupplierView() {
   const confirmDeleteSuppliers = () => {
     if (!deleteModal || deleteModal.suppliers.length === 0) return;
     const idsToDelete = new Set(deleteModal.suppliers.map((s) => s.id));
+    for (const s of deleteModal.suppliers) {
+      trackEntityDelete(
+        'SUB_SUPPLIER',
+        s.id,
+        s.code,
+        s,
+        {
+          userName: user?.name || 'Supply Chain Auditor',
+          userRole: user?.role || 'COMPLIANCE_MANAGER',
+          userId: user?.id,
+          summary: `Deleted sub-supplier profile ${s.name} (${s.code})`,
+        }
+      );
+    }
     setSuppliers((prev) => prev.filter((s) => !idsToDelete.has(s.id)));
 
     if (supplierSubView.type === 'details' && idsToDelete.has(supplierSubView.supplier.id)) {

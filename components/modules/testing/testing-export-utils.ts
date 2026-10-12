@@ -2,6 +2,8 @@ import { LabTestRecord } from '@/lib/types/modules';
 import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
   getModuleExportConfig,
 } from '@/lib/pdf/pdf-header-store';
 
@@ -68,7 +70,10 @@ export function downloadTestingCsv(
  */
 export function exportTestingSummaryPdf(
   tests: LabTestRecord[],
-  scopeLabel: string = 'All Lab Test Records'
+  scopeLabel: string = 'All Lab Test Records',
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
 ): void {
   try {
     const printWindow = window.open('', '_blank');
@@ -277,23 +282,21 @@ export function exportTestingSummaryPdf(
           </tbody>
         </table>
 
-        <div class="sign-grid">
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Lab Testing Technician</div>
-            <div class="sign-sub">Physical & Chemical Testing Lab</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Senior QA Lab Chemist / Manager</div>
-            <div class="sign-sub">Accredited ISO/IEC 17025 Lead</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Head of Quality Assurance</div>
-            <div class="sign-sub">Factory Compliance & Technical Sign-off</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Lab Testing Technician',
+            designation: 'Physical & Chemical Testing Lab',
+          },
+          slot2Override: {
+            title: 'Senior QA Lab Chemist / Manager',
+            designation: 'Accredited ISO/IEC 17025 Lead',
+          },
+          slot3Override: {
+            title: 'Head of Quality Assurance',
+            designation: 'Factory Compliance & Technical Sign-off',
+          },
+        })}
 
         <script>
           window.onload = function() {
@@ -446,7 +449,12 @@ export function exportTestingSummaryExcel(
 /**
  * Export official accredited Laboratory Test Certificate (PDF)
  */
-export function exportSingleTestPdf(test: LabTestRecord): void {
+export function exportSingleTestPdf(
+  test: LabTestRecord,
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
+): void {
   try {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -717,23 +725,21 @@ export function exportSingleTestPdf(test: LabTestRecord): void {
             : ''
         }
 
-        <div class="sign-grid">
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Tested By: ${test.testedBy}</div>
-            <div class="sign-sub">Certified Textile Lab Technologist</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Senior Lab Chemist</div>
-            <div class="sign-sub">Technical Review & ISO 17025 Compliance</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">QA / Technical Director</div>
-            <div class="sign-sub">Authorized Factory Release Signatory</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: `Tested By: ${test.testedBy || 'Technician'}`,
+            name: test.testedBy,
+          },
+          slot2Override: {
+            title: 'Senior Lab Chemist',
+            designation: 'Technical Review & ISO 17025 Compliance',
+          },
+          slot3Override: {
+            title: 'QA / Technical Director',
+            designation: 'Authorized Factory Release Signatory',
+          },
+        })}
 
         <script>
           window.onload = function() {

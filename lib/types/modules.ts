@@ -196,6 +196,10 @@ export interface BuyerOrder {
   bomItems?: BOMItem[];
   logistics?: LogisticsDetail;
   attachments?: OrderAttachment[];
+  createdBy?: string;
+  createdAt?: string;
+  lastUpdatedBy?: string;
+  lastUpdatedAt?: string;
 }
 
 export interface BuyerProfile {

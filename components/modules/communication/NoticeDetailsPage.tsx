@@ -34,6 +34,7 @@ import {
 } from '@/lib/types/modules';
 import { NOTICE_CATEGORY_CONFIG, NOTICE_URGENCY_CONFIG } from './communication-data';
 import { CommunicationSingleExportModal } from './CommunicationSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface NoticeDetailsPageProps {
@@ -563,6 +564,20 @@ export function NoticeDetailsPage({
           </div>
         </div>
       </div>
+
+      {/* Comprehensive Record Audit Trail & View Tracking System */}
+      <RecordAuditHistory
+        entity="CommunicationNotice"
+        entityId={currentNotice.id}
+        entityCode={currentNotice.noticeNumber || currentNotice.title}
+        moduleName="Communication & Floor Notices"
+        createdAt={currentNotice.publishedDate || '2026-09-01T08:00:00.000Z'}
+        createdBy={currentNotice.author || 'QMS Communication Desk'}
+        createdByRole="COMMUNICATION_LEAD"
+        updatedAt={new Date().toISOString()}
+        updatedBy={currentNotice.author || 'QMS Communication Desk'}
+        updatedByRole="QA_MANAGER"
+      />
 
       {/* Quick Sign-off Modal */}
       {showSignOffModal && (

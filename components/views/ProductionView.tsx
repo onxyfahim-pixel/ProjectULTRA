@@ -33,6 +33,7 @@ import {
   Shirt,
   PackageCheck,
   Droplets,
+  ClipboardCheck,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -48,7 +49,14 @@ import { DeleteConfirmationModal } from '@/components/modules/buyer-order/Delete
 import { ProductionManagementView } from '@/components/modules/production/ProductionManagementView';
 import { ProductionExportModal } from '@/components/modules/production/ProductionExportModal';
 import { ProductionSingleExportModal } from '@/components/modules/production/ProductionSingleExportModal';
+import { ProductionReviewModal } from '@/components/modules/production/ProductionReviewModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { useErpAuth } from '@/hooks/use-erp-auth';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 import { getProductionLines, INITIAL_PRODUCTION_UNITS } from '@/lib/db/production-management-store';
 import {
   getProductionRecords,
@@ -113,7 +121,8 @@ export function EfficiencyBar({ value }: { value: number }) {
 }
 
 export function ProductionView({ orders: propOrders, onUpdateOrders }: ProductionViewProps = {}) {
-  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('production');
+  const { user } = useErpAuth();
+  const { canCreate, canEdit, canDelete, canExport, canReview, canApprove } = useModulePermission('production');
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [orders, setOrders] = useState<ProductionOrder[]>(() => {
     if (propOrders && propOrders.length > 0) return propOrders;
@@ -127,6 +136,7 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
   const [isLogOutputOpen, setIsLogOutputOpen] = useState(false);
   const [logTargetOrderId, setLogTargetOrderId] = useState<string | null>(null);
   const [outputLogs, setOutputLogs] = useState<OutputLogEntry[]>([]);
+  const [orderForReview, setOrderForReview] = useState<ProductionOrder | null>(null);
 
   // Delete Confirmation Modal
   const [recordDeleteModal, setRecordDeleteModal] = useState<{
@@ -555,6 +565,19 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
       });
       updateOrders(updated);
       if (savedOrder!) {
+        trackEntityUpdate(
+          'PRODUCTION',
+          savedOrder.id,
+          savedOrder.orderNumber,
+          recordToEdit || {},
+          savedOrder,
+          {
+            userName: user?.name || savedOrder.supervisorName || 'Floor Manager',
+            userRole: user?.role || 'PRODUCTION_MANAGER',
+            userId: user?.id,
+            summary: `Updated Production record ${savedOrder.orderNumber} (${savedOrder.section || savedOrder.sewingLine})`,
+          }
+        );
         const syncRes = syncProductionRecordToBuyerOrders(savedOrder);
         const checkedQty = calculateRecordCheckedQty(savedOrder);
         const sectionName = savedOrder.section || savedOrder.sewingLine || 'Production';
@@ -589,10 +612,23 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
         operatorCount: data.operatorCount,
         supervisorName: data.supervisorName,
         remarks: data.remarks,
-        createdAt: new Date().toISOString(),
+        recordDate: data.recordDate || new Date().toISOString().split('T')[0],
+        createdAt: data.createdAt || new Date().toISOString(),
       };
       const updated = [savedOrder, ...orders];
       updateOrders(updated);
+      trackEntityCreate(
+        'PRODUCTION',
+        savedOrder.id,
+        savedOrder.orderNumber,
+        savedOrder,
+        {
+          userName: user?.name || savedOrder.supervisorName || 'Floor Manager',
+          userRole: user?.role || 'PRODUCTION_MANAGER',
+          userId: user?.id,
+          summary: `Created Production record ${savedOrder.orderNumber} (${savedOrder.section || savedOrder.sewingLine})`,
+        }
+      );
       const syncRes = syncProductionRecordToBuyerOrders(savedOrder);
       const checkedQty = calculateRecordCheckedQty(savedOrder);
       const sectionName = savedOrder.section || savedOrder.sewingLine || 'Production';
@@ -610,8 +646,33 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
     let updated: ProductionOrder[];
     if (existingIdx >= 0) {
       updated = orders.map((o) => (o.id === savedOrder.id ? savedOrder : o));
+      trackEntityUpdate(
+        'PRODUCTION',
+        savedOrder.id,
+        savedOrder.orderNumber,
+        orders[existingIdx],
+        savedOrder,
+        {
+          userName: user?.name || savedOrder.supervisorName || 'Floor Manager',
+          userRole: user?.role || 'PRODUCTION_MANAGER',
+          userId: user?.id,
+          summary: `Updated Production record ${savedOrder.orderNumber} (${savedOrder.section || savedOrder.sewingLine})`,
+        }
+      );
     } else {
       updated = [savedOrder, ...orders];
+      trackEntityCreate(
+        'PRODUCTION',
+        savedOrder.id,
+        savedOrder.orderNumber,
+        savedOrder,
+        {
+          userName: user?.name || savedOrder.supervisorName || 'Floor Manager',
+          userRole: user?.role || 'PRODUCTION_MANAGER',
+          userId: user?.id,
+          summary: `Created Production record ${savedOrder.orderNumber} (${savedOrder.section || savedOrder.sewingLine})`,
+        }
+      );
     }
     updateOrders(updated);
 
@@ -653,6 +714,69 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
     );
   };
 
+  // Quality & Technical Review Handler
+  const handleSaveReview = (
+    orderId: string,
+    reviewData: {
+      isReviewed: boolean;
+      reviewStatus: 'PENDING' | 'REVIEWED';
+      reviewedBy: string;
+      reviewedById?: string;
+      reviewedByRole: string;
+      reviewedAt: string;
+      reviewNotes: string;
+    }
+  ) => {
+    let targetOrder: ProductionOrder | undefined;
+    const updated = orders.map((o) => {
+      if (o.id === orderId) {
+        targetOrder = {
+          ...o,
+          isReviewed: reviewData.isReviewed,
+          reviewStatus: reviewData.reviewStatus,
+          reviewedBy: reviewData.reviewedBy,
+          reviewedById: reviewData.reviewedById,
+          reviewedByRole: reviewData.reviewedByRole,
+          reviewedAt: reviewData.reviewedAt,
+          reviewNotes: reviewData.reviewNotes,
+        };
+        return targetOrder;
+      }
+      return o;
+    });
+
+    updateOrders(updated);
+
+    // If currently viewing details of this order, update subView state as well
+    if (subView.type === 'details' && subView.order.id === orderId && targetOrder) {
+      setSubView({ type: 'details', order: targetOrder });
+    }
+
+    if (targetOrder) {
+      trackEntityUpdate(
+        'PRODUCTION',
+        targetOrder.id,
+        targetOrder.orderNumber,
+        { isReviewed: !reviewData.isReviewed },
+        targetOrder,
+        {
+          userName: reviewData.reviewedBy || user?.name || 'QC Manager',
+          userRole: reviewData.reviewedByRole || user?.role || 'QC_MANAGER',
+          userId: reviewData.reviewedById || user?.id,
+          summary: reviewData.isReviewed
+            ? `Officially Reviewed Production & Quality record ${targetOrder.orderNumber} (${reviewData.reviewedByRole})`
+            : `Marked Production & Quality record ${targetOrder.orderNumber} as Pending Review`,
+        }
+      );
+    }
+
+    showToast(
+      reviewData.isReviewed
+        ? `✓ Production record ${targetOrder?.orderNumber || ''} reviewed by ${reviewData.reviewedBy} (${reviewData.reviewedByRole})`
+        : `Record ${targetOrder?.orderNumber || ''} marked as Pending Review`
+    );
+  };
+
   // Delete Confirmation
   const confirmDeleteRecords = async () => {
     if (!recordDeleteModal || recordDeleteModal.orders.length === 0) return;
@@ -662,6 +786,18 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
 
     // Call backend DELETE API to remove permanently from MySQL & Central Host Store
     for (const ord of recordDeleteModal.orders) {
+      trackEntityDelete(
+        'PRODUCTION',
+        ord.id,
+        ord.orderNumber,
+        ord,
+        {
+          userName: user?.name || 'Floor Manager',
+          userRole: user?.role || 'PRODUCTION_MANAGER',
+          userId: user?.id,
+          summary: `Deleted Production record ${ord.orderNumber} (${ord.section || ord.sewingLine})`,
+        }
+      );
       deleteProductionRecordFromBackend(ord.id);
     }
 
@@ -894,7 +1030,24 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
       header: 'Status',
       sortable: true,
       accessor: (row) => row.status,
-      cell: (row) => <StatusChip status={row.status} />,
+      cell: (row) => (
+        <div className="flex flex-col gap-1">
+          <StatusChip status={row.status} />
+          {row.isReviewed || row.reviewStatus === 'REVIEWED' ? (
+            <span
+              className="inline-flex items-center gap-1 text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded w-fit"
+              title={`Reviewed by ${row.reviewedBy || 'QC'} (${row.reviewedByRole || 'Reviewer'})`}
+            >
+              <ClipboardCheck className="w-2.5 h-2.5 text-purple-600" />
+              Reviewed
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-1.5 py-0.2 rounded w-fit">
+              Pending
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'actions',
@@ -914,6 +1067,25 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
               title="Export Record (PDF or Excel)"
             >
               <FileDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {/* Review Action Button - Visible to authorized/approved users in RBAC */}
+          {(canReview || canApprove) && (
+            <button
+              type="button"
+              onClick={() => setOrderForReview(row)}
+              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                row.isReviewed || row.reviewStatus === 'REVIEWED'
+                  ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+              }`}
+              title={
+                row.isReviewed || row.reviewStatus === 'REVIEWED'
+                  ? `Reviewed by ${row.reviewedBy} (${row.reviewedByRole}) - Click to update`
+                  : 'Review & sign-off production record'
+              }
+            >
+              <ClipboardCheck className="w-3.5 h-3.5" />
             </button>
           )}
           {canEdit && (
@@ -1077,6 +1249,7 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
             setOrderForSingleExport(ord);
             setIsSingleExportModalOpen(true);
           }}
+          onReview={(ord) => setOrderForReview(ord)}
           showToast={showToast}
         />
       ) : subView.type === 'mobile_entry' ? (
@@ -2311,6 +2484,14 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
           setOrderForSingleExport(null);
         }}
         order={orderForSingleExport}
+      />
+
+      {/* Production & Quality Review Modal */}
+      <ProductionReviewModal
+        isOpen={Boolean(orderForReview)}
+        onClose={() => setOrderForReview(null)}
+        order={orderForReview}
+        onSaveReview={handleSaveReview}
       />
     </div>
   );

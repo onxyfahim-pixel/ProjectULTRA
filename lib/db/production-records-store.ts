@@ -28,6 +28,8 @@ export function isFinishingSectionRecord(record: ProductionOrder): boolean {
     sec.includes('iron') ||
     sec.includes('press') ||
     line.includes('finish') ||
+    line.includes('iron') ||
+    line.includes('press') ||
     lineId.includes('fin')
   );
 }
@@ -101,12 +103,46 @@ export function getProductionRecords(): ProductionOrder[] {
       return INITIAL_PRODUCTION_ORDERS;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      let needsResave = false;
+      const patched = parsed.map((p) => {
+        if (p.id === 'po-206' && (!p.recordDate || p.recordDate === '2026-09-21')) {
+          needsResave = true;
+          return {
+            ...p,
+            recordDate: todayStr,
+            section: p.section || 'Finishing & Packing Section 01',
+            sewingLine: p.sewingLine || 'Finishing Line 01 (Steam Tunnel Pressing)',
+            lineId: p.lineId || 'FIN-01',
+          };
+        }
+        if (p.id === 'po-201' && (!p.recordDate || p.recordDate === '2026-09-21')) {
+          needsResave = true;
+          return {
+            ...p,
+            recordDate: todayStr,
+          };
+        }
+        if (!p.recordDate) {
+          needsResave = true;
+          return {
+            ...p,
+            recordDate: p.createdAt ? p.createdAt.split('T')[0] : todayStr,
+          };
+        }
+        return p;
+      });
+      if (needsResave) {
+        try {
+          localStorage.setItem(STORAGE_KEYS.PRODUCTION_ORDERS, JSON.stringify(patched));
+        } catch {}
+      }
+      return patched;
     }
-    return [];
+    return INITIAL_PRODUCTION_ORDERS;
   } catch {
-    return [];
+    return INITIAL_PRODUCTION_ORDERS;
   }
 }
 

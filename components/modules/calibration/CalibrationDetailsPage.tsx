@@ -33,6 +33,7 @@ import { CalibrationCertificateModal } from './CalibrationCertificateModal';
 import { RecordCalibrationModal } from './RecordCalibrationModal';
 import { DeleteCalibrationModal } from './DeleteCalibrationModal';
 import { CalibrationSingleExportModal } from './CalibrationSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 import { useModulePermission } from '@/hooks/use-module-permission';
 
 interface CalibrationDetailsPageProps {
@@ -550,8 +551,22 @@ export function CalibrationDetailsPage({
         </div>
       </div>
 
-      {/* Modals */}
-      <CalibrationCertificateModal
+        {/* Comprehensive Record Audit Trail & View Tracking System */}
+        <RecordAuditHistory
+          entity="CalibrationDevice"
+          entityId={device.id}
+          entityCode={device.deviceTag || device.deviceName}
+          moduleName="Calibration & Metrology"
+          createdAt="2026-05-10T08:00:00.000Z"
+          createdBy="Metrology Laboratory Lead"
+          createdByRole="CALIBRATION_OFFICER"
+          updatedAt={new Date().toISOString()}
+          updatedBy={device.calibratedBy || 'Metrology Officer'}
+          updatedByRole="QA_ENGINEER"
+        />
+
+        {/* Modals */}
+        <CalibrationCertificateModal
         device={device}
         isOpen={isCertModalOpen}
         onClose={() => setIsCertModalOpen(false)}

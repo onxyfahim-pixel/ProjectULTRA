@@ -1,7 +1,13 @@
 import { QualityAudit, AuditChecklistItem } from '@/lib/types/modules';
-import { loadPdfHeaderSettings, renderPdfHeaderHtml, getModuleExportConfig } from '@/lib/pdf/pdf-header-store';
+import {
+  loadPdfHeaderSettings,
+  renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
+  getModuleExportConfig,
+} from '@/lib/pdf/pdf-header-store';
 
-export type FooterSignatureMode = 'dual' | 'triple' | 'none';
+export type FooterSignatureMode = PdfSignatureMode;
 
 export interface ExportPdfOptions {
   signatureMode?: FooterSignatureMode;
@@ -84,45 +90,20 @@ export function computeAuditKpis(audits: QualityAudit[]) {
 // SIGNATURES FOOTER RENDERER
 // -------------------------------------------------------------
 
-function renderFooterSignaturesHtml(mode: FooterSignatureMode = 'triple'): string {
-  if (mode === 'none') return '';
+function renderFooterSignaturesHtml(mode?: FooterSignatureMode): string {
+  const pdfSettings = loadPdfHeaderSettings();
+  const effectiveMode: FooterSignatureMode =
+    mode !== undefined
+      ? mode
+      : pdfSettings.signatureSettings?.enabled
+      ? pdfSettings.signatureSettings?.mode || 'triple'
+      : 'none';
 
-  if (mode === 'triple') {
-    return `
-      <div style="margin-top: 26px; padding-top: 14px; border-top: 1px solid #cbd5e1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        <div style="text-align: center;">
-          <div style="height: 38px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-          <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Lead Quality Auditor</div>
-          <div style="font-size: 7.5px; color: #64748b;">Inspection &amp; Assessment Lead</div>
-        </div>
-        <div style="text-align: center;">
-          <div style="height: 38px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-          <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">QA &amp; Compliance Manager</div>
-          <div style="font-size: 7.5px; color: #64748b;">Quality Management Systems (QMS)</div>
-        </div>
-        <div style="text-align: center;">
-          <div style="height: 38px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-          <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Managing Director / Factory GM</div>
-          <div style="font-size: 7.5px; color: #64748b;">Enterprise Governance &amp; Factory Ops</div>
-        </div>
-      </div>
-    `;
-  }
+  if (effectiveMode === 'none') return '';
 
-  return `
-    <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid #cbd5e1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-      <div style="text-align: center;">
-        <div style="height: 36px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-        <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Audited &amp; Verified By: Lead Auditor</div>
-        <div style="font-size: 7.5px; color: #64748b;">Quality Assurance Division</div>
-      </div>
-      <div style="text-align: center;">
-        <div style="height: 36px; border-bottom: 1px dashed #94a3b8; margin-bottom: 5px;"></div>
-        <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; text-transform: uppercase;">Authorized By: Factory Head / GM</div>
-        <div style="font-size: 7.5px; color: #64748b;">Plant Operations &amp; Compliance</div>
-      </div>
-    </div>
-  `;
+  return renderPdfFooterSignaturesHtml(pdfSettings, {
+    signatureMode: effectiveMode,
+  });
 }
 
 // =============================================================
@@ -362,7 +343,7 @@ export function exportAuditSummaryPdf(
             </tbody>
           </table>
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'triple')}
+          ${renderFooterSignaturesHtml(options?.signatureMode)}
 
           <div class="footer-note">
             <span>Project ULTRA ERP &bull; Quality Audits &amp; Compliance Management</span>
@@ -377,10 +358,42 @@ export function exportAuditSummaryPdf(
       printWindow.document.open();
       printWindow.document.write(html);
       printWindow.document.close();
-      printWindow.onload = () => {
-        printWindow.focus();
-        printWindow.print();
+      const triggerPrint = () => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch (e) {
+          console.warn('Print trigger fallback error:', e);
+        }
       };
+      if (printWindow.document.readyState === 'complete') {
+        setTimeout(triggerPrint, 250);
+      } else {
+        printWindow.onload = triggerPrint;
+        setTimeout(triggerPrint, 500);
+      }
+    } else {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+      const doc = iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(html);
+        doc.close();
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          setTimeout(() => {
+            if (document.body.contains(iframe)) document.body.removeChild(iframe);
+          }, 3000);
+        }, 500);
+      }
     }
   } catch (err) {
     console.error('Failed to export audit summary PDF:', err);
@@ -941,7 +954,7 @@ export function exportSingleAuditPdf(
               : ''
           }
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'dual')}
+          ${renderFooterSignaturesHtml(options?.signatureMode)}
 
           <div style="margin-top: 14px; font-size: 7.5px; color: #94a3b8; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 4px;">
             <span>Project ULTRA ERP &bull; Quality Audits &amp; Compliance Verification</span>
@@ -956,10 +969,42 @@ export function exportSingleAuditPdf(
       printWindow.document.open();
       printWindow.document.write(html);
       printWindow.document.close();
-      printWindow.onload = () => {
-        printWindow.focus();
-        printWindow.print();
+      const triggerPrint = () => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch (e) {
+          console.warn('Print trigger fallback error:', e);
+        }
       };
+      if (printWindow.document.readyState === 'complete') {
+        setTimeout(triggerPrint, 250);
+      } else {
+        printWindow.onload = triggerPrint;
+        setTimeout(triggerPrint, 500);
+      }
+    } else {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+      const doc = iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(html);
+        doc.close();
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          setTimeout(() => {
+            if (document.body.contains(iframe)) document.body.removeChild(iframe);
+          }, 3000);
+        }, 500);
+      }
     }
   } catch (err) {
     console.error('Failed to export single audit PDF:', err);

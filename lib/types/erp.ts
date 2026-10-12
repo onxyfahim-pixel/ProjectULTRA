@@ -103,6 +103,8 @@ export interface InventoryItem {
   shadeLot?: string;
 }
 
+export type InventoryApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
 export interface ReceiveRecord {
   id: string;
   grnNumber: string; // e.g. GRN-2026-0891
@@ -129,6 +131,13 @@ export interface ReceiveRecord {
   styleNumber?: string;
   bomItemId?: string;
   bomItemCode?: string;
+  // Transaction Approval Workflow
+  approvalStatus?: InventoryApprovalStatus;
+  approvedBy?: string;
+  approvedById?: string;
+  approvedByRole?: string;
+  approvedAt?: string;
+  approvalNotes?: string;
 }
 
 export interface IssueRecord {
@@ -151,8 +160,14 @@ export interface IssueRecord {
   purpose: string;
   rollsIssued?: number;
   buyerName?: string;
-  approvedBy?: string;
   notes?: string;
+  // Transaction Approval Workflow
+  approvalStatus?: InventoryApprovalStatus;
+  approvedBy?: string;
+  approvedById?: string;
+  approvedByRole?: string;
+  approvedAt?: string;
+  approvalNotes?: string;
 }
 
 export type InspectionType = 'INLINE' | 'PRE_FINAL' | 'FINAL';
@@ -402,6 +417,37 @@ export interface ProductionOrder {
   createdAt?: string;
   hourlyReports?: HourlyReportEntry[]; // Comprehensive hour-by-hour output and quality log
   top3Defects?: TopDefectSummary[]; // Top 3 defects aggregated across the record
+  // Technical & Quality Review Tracking
+  isReviewed?: boolean;
+  reviewStatus?: 'PENDING' | 'REVIEWED';
+  reviewedBy?: string;
+  reviewedById?: string;
+  reviewedByRole?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+}
+
+export interface RecordChangeDiff {
+  field: string;
+  fieldLabel?: string;
+  oldValue: any;
+  newValue: any;
+}
+
+export interface RecordViewEntry {
+  userId?: string;
+  userName: string;
+  userRole: string;
+  viewedAt: string;
+  device?: string;
+}
+
+export interface RecordViewStats {
+  viewCount: number;
+  lastViewedAt?: string;
+  lastViewedBy?: string;
+  lastViewedRole?: string;
+  history?: RecordViewEntry[];
 }
 
 export interface AuditLog {
@@ -409,10 +455,16 @@ export interface AuditLog {
   action: string;
   entity: string;
   entityId: string;
+  entityCode?: string;
+  moduleName?: string;
   performedBy: string;
-  userRole: Role;
+  userRole: Role | string;
+  userId?: string;
+  userAvatar?: string;
   timestamp: string;
   details?: string;
+  changes?: RecordChangeDiff[];
+  metadata?: Record<string, any>;
 }
 
 export interface RolePermissions {

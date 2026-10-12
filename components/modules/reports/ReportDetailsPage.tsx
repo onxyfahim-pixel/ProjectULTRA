@@ -30,6 +30,7 @@ import {
 } from './reports-data';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { ReportSingleExportModal } from './ReportSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface ReportDetailsPageProps {
   report: ReportRecord;
@@ -453,6 +454,18 @@ export function ReportDetailsPage({
             </div>
           </div>
         </div>
+
+        {/* Universal Audit Trail & Live View Dossier */}
+        <RecordAuditHistory
+          moduleName="Reports & Analytics"
+          recordId={report.id}
+          recordCode={report.title}
+          data={report}
+          createdBy={report.signOff?.preparedBy || report.generatedBy || 'Lead QA Analyst'}
+          createdAt={report.signOff?.date || report.generatedDate || '2026-01-01'}
+          lastUpdatedBy={report.signOff?.approvedBy || report.signOff?.reviewedBy || report.generatedBy}
+          lastUpdatedAt={report.signOff?.date || report.generatedDate || new Date().toISOString()}
+        />
       </div>
 
       {/* Individual Report Export Modal */}

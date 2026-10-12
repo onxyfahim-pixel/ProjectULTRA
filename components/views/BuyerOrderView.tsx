@@ -49,6 +49,12 @@ import { BuyerOrderExportModal } from '../modules/buyer-order/BuyerOrderExportMo
 import { BuyerOrderSingleExportModal } from '../modules/buyer-order/BuyerOrderSingleExportModal';
 import { InventoryItem, ReceiveRecord } from '@/lib/types/erp';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { useErpAuth } from '@/hooks/use-erp-auth';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 import { INITIAL_INVENTORY, INITIAL_RECEIVE_REGISTRY } from '@/lib/db/mock-data';
 
 export interface BuyerOrderViewProps {
@@ -78,6 +84,7 @@ export function BuyerOrderView({
   const [receiveRecords, setReceiveRecords] = useState<ReceiveRecord[]>(propReceiveRecords && propReceiveRecords.length > 0 ? propReceiveRecords : INITIAL_RECEIVE_REGISTRY);
   const [buyers, setBuyers] = useState<BuyerProfile[]>(MOCK_BUYER_PROFILES);
 
+  const { user } = useErpAuth();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('buyer_order');
 
   // Sync prop changes
@@ -168,14 +175,40 @@ export function BuyerOrderView({
     const updated = [newOrder, ...orders];
     setOrders(updated);
     onUpdateOrders?.(updated);
+    trackEntityCreate(
+      'BUYER_ORDER',
+      newOrder.id,
+      newOrder.orderNumber,
+      newOrder,
+      {
+        userName: user?.name || newOrder.createdBy || 'Authorized Merchandiser',
+        userRole: user?.role || 'MERCHANDISER',
+        userId: user?.id,
+        summary: `Created Purchase Order ${newOrder.orderNumber} for ${newOrder.buyerName} (${newOrder.orderQuantity.toLocaleString()} pcs)`,
+      }
+    );
     setOrderSubView({ type: 'details', order: newOrder });
     showToast(`Successfully created purchase order ${newOrder.orderNumber}`);
   };
 
   const handleUpdateOrder = (updatedOrder: BuyerOrder) => {
+    const oldOrder = orders.find((o) => o.id === updatedOrder.id);
     const updated = orders.map((o) => (o.id === updatedOrder.id ? updatedOrder : o));
     setOrders(updated);
     onUpdateOrders?.(updated);
+    trackEntityUpdate(
+      'BUYER_ORDER',
+      updatedOrder.id,
+      updatedOrder.orderNumber,
+      oldOrder || {},
+      updatedOrder,
+      {
+        userName: user?.name || updatedOrder.lastUpdatedBy || 'Authorized Merchandiser',
+        userRole: user?.role || 'MERCHANDISER',
+        userId: user?.id,
+        summary: `Updated Purchase Order ${updatedOrder.orderNumber}`,
+      }
+    );
     setOrderSubView({ type: 'details', order: updatedOrder });
     showToast(`Saved all updates to order ${updatedOrder.orderNumber}`);
   };
@@ -295,6 +328,18 @@ export function BuyerOrderView({
 
     // Call server DELETE endpoint to remove from MySQL & Central Host Store
     for (const ord of orderDeleteModal.orders) {
+      trackEntityDelete(
+        'BUYER_ORDER',
+        ord.id,
+        ord.orderNumber,
+        ord,
+        {
+          userName: user?.name || 'Authorized Merchandiser',
+          userRole: user?.role || 'MERCHANDISER',
+          userId: user?.id,
+          summary: `Deleted Purchase Order ${ord.orderNumber} (${ord.buyerName})`,
+        }
+      );
       try {
         await fetch(`/api/buyer-orders?id=${encodeURIComponent(ord.id)}`, { method: 'DELETE' });
       } catch (err) {

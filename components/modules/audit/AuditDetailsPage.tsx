@@ -47,6 +47,7 @@ import { AddQuestionModal } from './AddQuestionModal';
 import { SubSupplierSelectorModal } from './SubSupplierSelectorModal';
 import { AuditSingleExportModal } from './AuditSingleExportModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface AuditDetailsPageProps {
   audit: QualityAudit;
@@ -1247,6 +1248,20 @@ export function AuditDetailsPage({
           ...currentAudit,
           checklist,
         }}
+      />
+
+      {/* Comprehensive Record Audit Trail & View Tracking System */}
+      <RecordAuditHistory
+        entity="QualityAudit"
+        entityId={audit.id}
+        entityCode={audit.auditCode}
+        moduleName="Quality Audits (ISO & Social Compliance)"
+        createdAt="2026-09-10T08:00:00.000Z"
+        createdBy={audit.auditorName || 'Tania Ahmed'}
+        createdByRole="LEAD_AUDITOR"
+        updatedAt={new Date().toISOString()}
+        updatedBy={audit.auditorName || 'Tania Ahmed'}
+        updatedByRole="QA_MANAGER"
       />
       </div>
     </div>

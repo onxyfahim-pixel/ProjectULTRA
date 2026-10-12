@@ -29,6 +29,7 @@ import {
 import { LabTestRecord } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { TestingSingleExportModal } from './TestingSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface TestDetailsPageProps {
   test: LabTestRecord;
@@ -489,6 +490,18 @@ export function TestDetailsPage({
           </p>
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Lab Testing & Fabric Tests"
+        recordId={test.id}
+        recordCode={test.testReportNo}
+        data={test}
+        createdBy={test.testedBy || 'Accredited Lab Chemist'}
+        createdAt={test.testDate || '2026-01-01'}
+        lastUpdatedBy={test.testedBy || 'Accredited Lab Chemist'}
+        lastUpdatedAt={test.testDate || '2026-01-01'}
+      />
       </div>
 
       {/* SINGLE TEST EXPORT MODAL */}

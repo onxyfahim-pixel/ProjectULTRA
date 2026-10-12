@@ -45,6 +45,7 @@ import {
   exportSingleBuyerOrderPdf,
   exportSingleBuyerOrderExcel,
 } from './buyer-order-export-utils';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface BuyerOrderDetailsPageProps {
   order: BuyerOrder;
@@ -680,6 +681,20 @@ export function BuyerOrderDetailsPage({
           initialLogistics={order.logistics}
           showToast={showToast}
           readOnly={true}
+        />
+
+        {/* Comprehensive Record Audit Trail & View Tracking System */}
+        <RecordAuditHistory
+          entity="BuyerOrder"
+          entityId={order.id}
+          entityCode={order.orderNumber}
+          moduleName="Buyer Order Management"
+          createdAt={(order as any).createdAt || '2026-09-01T08:00:00.000Z'}
+          createdBy={(order as any).createdBy || order.merchandiserName || 'Sultana Razia'}
+          createdByRole="MERCHANDISER"
+          updatedAt={(order as any).updatedAt || (order as any).lastSyncedAt}
+          updatedBy={(order as any).updatedBy}
+          updatedByRole={(order as any).updatedByRole}
         />
       </div>
     </div>

@@ -11,7 +11,7 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   permissions: RolePermissions;
   roles: RoleDefinition[];
-  can: (moduleKey: string, action: 'view' | 'create' | 'edit' | 'delete' | 'export') => boolean;
+  can: (moduleKey: string, action: 'view' | 'create' | 'edit' | 'delete' | 'export' | 'approve' | 'review') => boolean;
   login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   switchRole: (role: Role) => Promise<void>;
@@ -168,7 +168,7 @@ export function ErpAuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshRoles]);
 
   const can = useCallback(
-    (moduleKey: string, action: 'view' | 'create' | 'edit' | 'delete' | 'export'): boolean => {
+    (moduleKey: string, action: 'view' | 'create' | 'edit' | 'delete' | 'export' | 'approve' | 'review'): boolean => {
       if (!user) return false;
       // Super Admin has full unrestricted access across all modules
       if (
@@ -200,6 +200,10 @@ export function ErpAuthProvider({ children }: { children: React.ReactNode }) {
       const mod = roleDef.permissions?.[moduleKey];
       if (!mod) {
         return false;
+      }
+
+      if (action === 'review') {
+        return Boolean(mod.review || mod.approve || false);
       }
 
       return Boolean(mod[action]);

@@ -2,7 +2,13 @@
 
 import { BuyerOrder } from '@/lib/types/modules';
 import { InventoryItem, ReceiveRecord } from '@/lib/types/erp';
-import { loadPdfHeaderSettings, renderPdfHeaderHtml, getModuleExportConfig } from '@/lib/pdf/pdf-header-store';
+import {
+  loadPdfHeaderSettings,
+  renderPdfHeaderHtml,
+  getModuleExportConfig,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
+} from '@/lib/pdf/pdf-header-store';
 import {
   computeWIPRecordForPO,
   calculateWIPPipelineMetrics,
@@ -62,7 +68,7 @@ export function computeBuyerOrderKpis(orders: BuyerOrder[]): ExportSummaryKpis {
   };
 }
 
-export type FooterSignatureMode = 'dual' | 'single' | 'none';
+export type FooterSignatureMode = PdfSignatureMode;
 
 export interface ExportPdfOptions {
   signatureMode?: FooterSignatureMode;
@@ -74,41 +80,20 @@ export interface ExportPdfOptions {
  */
 export function renderFooterSignaturesHtml(
   mode: FooterSignatureMode = 'none',
-  leftRole = 'ORDER ISSUED BY',
-  leftDept = 'Merchandising Sourcing Lead',
-  rightRole = 'COMMERCIAL APPROVAL',
-  rightDept = 'General Manager / Operations Head'
+  leftRole?: string,
+  leftDept?: string,
+  rightRole?: string,
+  rightDept?: string
 ): string {
-  if (!mode || mode === 'none') {
+  if (mode === 'none') {
     return '';
   }
-  if (mode === 'single') {
-    return `
-      <!-- Single Authorization Sign-Off -->
-      <div style="display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid;">
-        <div style="width: 260px; text-align: center;">
-          <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-          <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${rightRole}</div>
-          <div style="font-size: 8px; color: #64748b;">${rightDept}</div>
-        </div>
-      </div>
-    `;
-  }
-  return `
-    <!-- Streamlined Dual Sign-Off Grid -->
-    <div class="sign-grid">
-      <div class="sign-col">
-        <div class="sign-line"></div>
-        <div class="sign-role">${leftRole}</div>
-        <div class="sign-dept">${leftDept}</div>
-      </div>
-      <div class="sign-col">
-        <div class="sign-line"></div>
-        <div class="sign-role">${rightRole}</div>
-        <div class="sign-dept">${rightDept}</div>
-      </div>
-    </div>
-  `;
+  const pdfSettings = loadPdfHeaderSettings();
+  return renderPdfFooterSignaturesHtml(pdfSettings, {
+    signatureMode: mode,
+    slot1Override: leftRole ? { title: leftRole, designation: leftDept || '' } : undefined,
+    slot3Override: rightRole ? { title: rightRole, designation: rightDept || '' } : undefined,
+  });
 }
 
 /**
@@ -520,7 +505,11 @@ export function exportBuyerOrdersSummaryPdf(
           </div>
 
           ${renderFooterSignaturesHtml(
-            options?.signatureMode || 'none',
+            options?.signatureMode !== undefined
+              ? options.signatureMode
+              : pdfSettings.signatureSettings?.enabled
+              ? pdfSettings.signatureSettings?.mode
+              : 'none',
             'PREPARED BY',
             'Senior Merchandiser / Production Coordinator',
             'COMMERCIAL APPROVAL',
@@ -1419,7 +1408,11 @@ export function exportSingleBuyerOrderPdf(
           </table>
 
           ${renderFooterSignaturesHtml(
-            options?.signatureMode || 'none',
+            options?.signatureMode !== undefined
+              ? options.signatureMode
+              : pdfSettings.signatureSettings?.enabled
+              ? pdfSettings.signatureSettings?.mode
+              : 'none',
             'ORDER ISSUED BY',
             'Merchandising Sourcing Lead',
             'COMMERCIAL APPROVAL',

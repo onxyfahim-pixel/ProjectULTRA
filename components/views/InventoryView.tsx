@@ -29,10 +29,13 @@ import {
   Scissors,
   Factory,
   Package,
-  FileText,
   Clock,
   Sparkles,
   FileDown,
+  ShieldCheck,
+  XCircle,
+  X,
+  Check,
 } from 'lucide-react';
 import { DataTable, ColumnDef, BatchAction } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -55,6 +58,11 @@ import { BuyerOrder, SubSupplier } from '@/lib/types/modules';
 import { MOCK_BUYER_ORDERS, MOCK_SUB_SUPPLIERS } from '@/lib/db/modules-mock-data';
 import { useErpAuth } from '@/hooks/use-erp-auth';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 import { AddInventoryModal } from '../modules/inventory/AddInventoryModal';
 import { InventoryDetailsPage } from '../modules/inventory/InventoryDetailsPage';
 import { ReceiveMaterialModal } from '../modules/inventory/ReceiveMaterialModal';
@@ -105,13 +113,149 @@ export function InventoryView({
   // 4 Tabs: summary, stock (Master Ledger), receive (GRN), issue (SIV)
   const [viewMode, setViewMode] = useState<'summary' | 'stock' | 'receive' | 'issue'>('summary');
   
-  // Active state ledgers
+  // Active state ledgers with localStorage persistence
   const [items, setItems] = useState<InventoryItem[]>(initialItems && initialItems.length > 0 ? initialItems : INITIAL_INVENTORY);
-  const [receiveRecords, setReceiveRecords] = useState<ReceiveRecord[]>(INITIAL_RECEIVE_REGISTRY);
-  const [issueRecords, setIssueRecords] = useState<IssueRecord[]>(INITIAL_ISSUE_REGISTRY);
+  const [receiveRecords, setReceiveRecords] = useState<ReceiveRecord[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('erp_inventory_receive_records');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch (e) {}
+      }
+    }
+    return INITIAL_RECEIVE_REGISTRY;
+  });
+  const [issueRecords, setIssueRecords] = useState<IssueRecord[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('erp_inventory_issue_records');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch (e) {}
+      }
+    }
+    return INITIAL_ISSUE_REGISTRY;
+  });
+
+  // Sync to localStorage
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('erp_inventory_receive_records', JSON.stringify(receiveRecords));
+    }
+  }, [receiveRecords]);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('erp_inventory_issue_records', JSON.stringify(issueRecords));
+    }
+  }, [issueRecords]);
 
   const { user, permissions } = useErpAuth();
-  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('inventory');
+  const { canCreate, canEdit, canDelete, canExport, canApprove } = useModulePermission('inventory');
+
+  // Approval Modal State
+  const [approvalModal, setApprovalModal] = useState<{
+    isOpen: boolean;
+    type: 'receive' | 'issue';
+    record: ReceiveRecord | IssueRecord;
+  } | null>(null);
+  const [approvalDecision, setApprovalDecision] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
+  const [approvalNotes, setApprovalNotes] = useState<string>('');
+
+  const openApprovalDialog = (type: 'receive' | 'issue', record: ReceiveRecord | IssueRecord) => {
+    setApprovalModal({ isOpen: true, type, record });
+    setApprovalDecision(record.approvalStatus === 'REJECTED' ? 'REJECTED' : 'APPROVED');
+    setApprovalNotes(
+      record.approvalNotes ||
+        (type === 'receive'
+          ? 'Physical fabric/raw material inspection passed. Authorized for inventory intake.'
+          : 'Requisition verified against production line quota. Authorized for dispatch.')
+    );
+  };
+
+  const handleProcessApproval = (
+    type: 'receive' | 'issue',
+    recordId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    notes: string
+  ) => {
+    const approverName = user?.name || 'Authorized Supervisor';
+    const approverId = user?.id || 'usr_auth';
+    const approverRole = user?.role || 'QC Manager';
+    const nowISO = new Date().toISOString();
+    const formattedDate = nowISO.replace('T', ' ').substring(0, 16);
+
+    if (type === 'receive') {
+      setReceiveRecords((prev) =>
+        prev.map((r) => {
+          if (r.id === recordId) {
+            const updated: ReceiveRecord = {
+              ...r,
+              approvalStatus: decision,
+              approvedBy: approverName,
+              approvedById: approverId,
+              approvedByRole: approverRole,
+              approvedAt: formattedDate,
+              approvalNotes: notes || (decision === 'APPROVED' ? 'Approved for inventory receipt' : 'Rejected by authorized supervisor'),
+            };
+            trackEntityUpdate(
+              'INVENTORY_RECEIVE',
+              r.id,
+              r.grnNumber,
+              r,
+              updated,
+              {
+                userName: approverName,
+                userRole: approverRole,
+                userId: approverId,
+                summary: `${decision === 'APPROVED' ? 'Approved' : 'Rejected'} Inward GRN ${r.grnNumber} (${r.itemName})`,
+              }
+            );
+            return updated;
+          }
+          return r;
+        })
+      );
+      showToast(`✓ Inward GRN transaction ${decision === 'APPROVED' ? 'Approved' : 'Rejected'} by ${approverName} (${approverRole})`);
+    } else {
+      setIssueRecords((prev) =>
+        prev.map((s) => {
+          if (s.id === recordId) {
+            const updated: IssueRecord = {
+              ...s,
+              approvalStatus: decision,
+              approvedBy: approverName,
+              approvedById: approverId,
+              approvedByRole: approverRole,
+              approvedAt: formattedDate,
+              approvalNotes: notes || (decision === 'APPROVED' ? 'Approved for production floor dispatch' : 'Rejected by authorized supervisor'),
+            };
+            trackEntityUpdate(
+              'INVENTORY_ISSUE',
+              s.id,
+              s.sivNumber,
+              s,
+              updated,
+              {
+                userName: approverName,
+                userRole: approverRole,
+                userId: approverId,
+                summary: `${decision === 'APPROVED' ? 'Approved' : 'Rejected'} SIV Issue ${s.sivNumber} to ${s.departmentDetail}`,
+              }
+            );
+            return updated;
+          }
+          return s;
+        })
+      );
+      showToast(`✓ Store Issue SIV transaction ${decision === 'APPROVED' ? 'Approved' : 'Rejected'} by ${approverName} (${approverRole})`);
+    }
+
+    setApprovalModal(null);
+  };
 
   // Sub-view: Detailed single-item view
   const [inventorySubView, setInventorySubView] = useState<InventorySubView>({ type: 'none' });
@@ -241,14 +385,28 @@ export function InventoryView({
   // --- HANDLER: SAVE / EDIT ITEM ---
   const handleSaveItem = (itemData: Partial<InventoryItem>) => {
     if (itemToEdit) {
+      const updatedItem = { ...itemToEdit, ...itemData, lastUpdatedAt: new Date().toISOString() } as InventoryItem;
       const updated = items.map((i) =>
-        i.id === itemToEdit.id ? ({ ...i, ...itemData, lastUpdatedAt: new Date().toISOString() } as InventoryItem) : i
+        i.id === itemToEdit.id ? updatedItem : i
       );
       setItems(updated);
+      trackEntityUpdate(
+        'INVENTORY',
+        itemToEdit.id,
+        itemToEdit.sku,
+        itemToEdit,
+        updatedItem,
+        {
+          userName: user?.name || 'Warehouse Officer',
+          userRole: user?.role || 'INVENTORY_MANAGER',
+          userId: user?.id,
+          summary: `Updated inventory item ${itemToEdit.sku} (${itemToEdit.fabricType})`,
+        }
+      );
       if (inventorySubView.type === 'details' && inventorySubView.item.id === itemToEdit.id) {
         setInventorySubView({
           type: 'details',
-          item: { ...inventorySubView.item, ...itemData, lastUpdatedAt: new Date().toISOString() } as InventoryItem,
+          item: updatedItem,
         });
       }
       showToast(`Updated material SKU ${itemData.sku}`);
@@ -278,6 +436,18 @@ export function InventoryView({
         bomItemId: itemData.bomItemId,
       };
       setItems([newItem, ...items]);
+      trackEntityCreate(
+        'INVENTORY',
+        newItem.id,
+        newItem.sku,
+        newItem,
+        {
+          userName: user?.name || newItem.updatedBy || 'Warehouse Officer',
+          userRole: user?.role || 'INVENTORY_MANAGER',
+          userId: user?.id,
+          summary: `Added new raw material ${newItem.sku} (${newItem.fabricType}) - Qty: ${newItem.quantityMeters} ${newItem.unit}`,
+        }
+      );
       showToast(`Added raw material SKU ${newItem.sku}`);
     }
   };
@@ -286,6 +456,20 @@ export function InventoryView({
   const confirmDeleteItems = () => {
     if (!deleteModal) return;
     const idsToDelete = new Set(deleteModal.items.map((i) => i.id));
+    for (const item of deleteModal.items) {
+      trackEntityDelete(
+        'INVENTORY',
+        item.id,
+        item.sku,
+        item,
+        {
+          userName: user?.name || 'Warehouse Officer',
+          userRole: user?.role || 'INVENTORY_MANAGER',
+          userId: user?.id,
+          summary: `Deleted raw material ${item.sku} (${item.fabricType})`,
+        }
+      );
+    }
     setItems(items.filter((i) => !idsToDelete.has(i.id)));
     if (inventorySubView.type === 'details' && idsToDelete.has(inventorySubView.item.id)) {
       setInventorySubView({ type: 'none' });
@@ -685,12 +869,75 @@ export function InventoryView({
       ),
     },
     {
+      key: 'approvalStatus',
+      header: 'Approval Status',
+      sortable: true,
+      width: '140px',
+      render: (r) => {
+        const isApproved = r.approvalStatus === 'APPROVED';
+        const isRejected = r.approvalStatus === 'REJECTED';
+        return (
+          <div className="text-xs">
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                isApproved
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                  : isRejected
+                  ? 'bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800'
+                  : 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+              }`}
+            >
+              {isApproved ? (
+                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+              ) : isRejected ? (
+                <XCircle className="w-3 h-3 text-rose-600 shrink-0" />
+              ) : (
+                <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+              )}
+              {r.approvalStatus || 'PENDING'}
+            </span>
+            <div
+              className="text-[10px] text-slate-500 truncate mt-0.5 max-w-[130px]"
+              title={r.approvedBy ? `Approved by ${r.approvedBy} (${r.approvedByRole || 'Auth'}) on ${r.approvedAt || 'N/A'}` : 'Pending Authorization'}
+            >
+              {r.approvedBy ? (
+                <span className="font-semibold text-slate-700 dark:text-slate-300">By: {r.approvedBy.split(' ')[0]}</span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">Needs Approval</span>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
       key: 'actions',
       header: 'Actions',
-      width: '80px',
+      width: '105px',
       align: 'right',
       render: (r) => (
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-1.5">
+          {canApprove && (
+            <button
+              type="button"
+              onClick={() => openApprovalDialog('receive', r)}
+              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                r.approvalStatus === 'APPROVED'
+                  ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
+                  : r.approvalStatus === 'REJECTED'
+                  ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800'
+                  : 'text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-300 ring-2 ring-amber-400/30 dark:bg-amber-950/50 dark:text-amber-300'
+              }`}
+              title={
+                r.approvalStatus === 'APPROVED'
+                  ? `Approved by ${r.approvedBy || 'Admin'}. Click to re-review decision`
+                  : `Review & Authorize Inward GRN ${r.grnNumber}`
+              }
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {canExport && (
             <button
               type="button"
@@ -810,12 +1057,75 @@ export function InventoryView({
       ),
     },
     {
+      key: 'approvalStatus',
+      header: 'Approval Status',
+      sortable: true,
+      width: '140px',
+      render: (s) => {
+        const isApproved = s.approvalStatus === 'APPROVED';
+        const isRejected = s.approvalStatus === 'REJECTED';
+        return (
+          <div className="text-xs">
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                isApproved
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                  : isRejected
+                  ? 'bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800'
+                  : 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+              }`}
+            >
+              {isApproved ? (
+                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+              ) : isRejected ? (
+                <XCircle className="w-3 h-3 text-rose-600 shrink-0" />
+              ) : (
+                <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+              )}
+              {s.approvalStatus || 'PENDING'}
+            </span>
+            <div
+              className="text-[10px] text-slate-500 truncate mt-0.5 max-w-[130px]"
+              title={s.approvedBy ? `Approved by ${s.approvedBy} (${s.approvedByRole || 'Auth'}) on ${s.approvedAt || 'N/A'}` : 'Pending Authorization'}
+            >
+              {s.approvedBy ? (
+                <span className="font-semibold text-slate-700 dark:text-slate-300">By: {s.approvedBy.split(' ')[0]}</span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">Needs Approval</span>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
       key: 'actions',
       header: 'Actions',
-      width: '80px',
+      width: '105px',
       align: 'right',
       render: (s) => (
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-1.5">
+          {canApprove && (
+            <button
+              type="button"
+              onClick={() => openApprovalDialog('issue', s)}
+              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                s.approvalStatus === 'APPROVED'
+                  ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
+                  : s.approvalStatus === 'REJECTED'
+                  ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800'
+                  : 'text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-300 ring-2 ring-amber-400/30 dark:bg-amber-950/50 dark:text-amber-300'
+              }`}
+              title={
+                s.approvalStatus === 'APPROVED'
+                  ? `Approved by ${s.approvedBy || 'Admin'}. Click to re-review decision`
+                  : `Review & Authorize SIV ${s.sivNumber}`
+              }
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {canExport && (
             <button
               type="button"
@@ -1409,6 +1719,218 @@ export function InventoryView({
         }}
         target={singleExportTarget}
       />
+
+      {/* ========================================================================= */}
+      {/* MODAL: INVENTORY TRANSACTION APPROVAL & AUTHORIZATION DIALOG               */}
+      {/* ========================================================================= */}
+      {approvalModal?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden space-y-0 animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold tracking-tight">
+                    {approvalModal.type === 'receive'
+                      ? `Authorize GRN: ${(approvalModal.record as ReceiveRecord).grnNumber}`
+                      : `Authorize SIV: ${(approvalModal.record as IssueRecord).sivNumber}`}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    RBAC Authorized Multi-User Verification &amp; Store Approval
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setApprovalModal(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Approver Authorization & Identity Banner */}
+            <div className="px-6 py-3 bg-indigo-50/80 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>
+                  <strong>Authorizing Officer:</strong> {user?.name || 'Administrator'} ({user?.role || 'Super Admin'})
+                </span>
+              </div>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+                <Check className="w-3 h-3 text-emerald-600" />
+                RBAC Approved Role
+              </span>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+              {/* Creator check warning if the same user created it */}
+              {(() => {
+                const creator =
+                  approvalModal.type === 'receive'
+                    ? (approvalModal.record as ReceiveRecord).receivedBy
+                    : (approvalModal.record as IssueRecord).issuedBy;
+                const isSameUser =
+                  Boolean(user?.name) &&
+                  creator.toLowerCase().includes((user?.name || '').toLowerCase());
+
+                if (isSameUser && !user?.isSuperAdmin && user?.role !== 'Super Admin' && user?.role !== 'ADMIN') {
+                  return (
+                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 flex items-start gap-2.5 text-amber-800 dark:text-amber-200">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-[11px] leading-relaxed">
+                        <strong>Dual-Authorization Policy:</strong> You originally logged this transaction. Standard warehouse controls require approval by a separate supervisor or manager. Super Admins may bypass.
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Transaction Summary Card */}
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="font-bold text-slate-900 dark:text-white text-sm">
+                      {approvalModal.record.itemName}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                      SKU: {approvalModal.record.sku} &bull; PO: {approvalModal.record.poNumber || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`font-mono font-bold text-sm ${approvalModal.type === 'receive' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                      {approvalModal.type === 'receive'
+                        ? `+${(approvalModal.record as ReceiveRecord).receivedQty} ${(approvalModal.record as ReceiveRecord).unit}`
+                        : `-${(approvalModal.record as IssueRecord).issuedQty} ${(approvalModal.record as IssueRecord).unit}`}
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono">
+                      Date: {approvalModal.record.date}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-slate-200 dark:border-slate-700 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">
+                      {approvalModal.type === 'receive' ? 'Supplier / Mill:' : 'Destination Floor:'}
+                    </span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {approvalModal.type === 'receive'
+                        ? (approvalModal.record as ReceiveRecord).supplierName
+                        : (approvalModal.record as IssueRecord).departmentDetail}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Logged By (Creator):</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {approvalModal.type === 'receive'
+                        ? (approvalModal.record as ReceiveRecord).receivedBy
+                        : (approvalModal.record as IssueRecord).issuedBy}
+                    </span>
+                  </div>
+                </div>
+
+                {approvalModal.record.approvedBy && (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Current Decision:</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      {approvalModal.record.approvalStatus} by {approvalModal.record.approvedBy} ({approvalModal.record.approvedAt || 'N/A'})
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Decision Toggle */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
+                  Select Authorization Decision
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setApprovalDecision('APPROVED')}
+                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                      approvalDecision === 'APPROVED'
+                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 ring-2 ring-emerald-500/30 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Approve Transaction</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setApprovalDecision('REJECTED')}
+                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                      approvalDecision === 'REJECTED'
+                        ? 'border-rose-600 bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 ring-2 ring-rose-500/30 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <XCircle className="w-4 h-4 text-rose-600" />
+                    <span>Reject Transaction</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Remarks / Notes Textarea */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Approval Remarks / Authorization Notes
+                </label>
+                <textarea
+                  rows={3}
+                  value={approvalNotes}
+                  onChange={(e) => setApprovalNotes(e.target.value)}
+                  placeholder="Enter remarks for the approval record and printable voucher..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 flex items-center justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setApprovalModal(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleProcessApproval(
+                    approvalModal.type,
+                    approvalModal.record.id,
+                    approvalDecision,
+                    approvalNotes
+                  )
+                }
+                className={`px-5 py-2.5 rounded-xl font-semibold text-xs shadow-md transition-all cursor-pointer flex items-center gap-2 ${
+                  approvalDecision === 'APPROVED'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                    : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>
+                  Confirm {approvalDecision === 'APPROVED' ? 'Approval' : 'Rejection'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

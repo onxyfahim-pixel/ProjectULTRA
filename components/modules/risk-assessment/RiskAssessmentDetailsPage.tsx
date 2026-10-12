@@ -53,6 +53,7 @@ import {
 } from './riskAssessmentSections';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { RiskAssessmentSingleExportModal } from './RiskAssessmentSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface RiskAssessmentDetailsPageProps {
   record: RiskFmeaItem;
@@ -805,6 +806,18 @@ export function RiskAssessmentDetailsPage({
           </div>
         </div>
       )}
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Style Risk Assessment"
+        recordId={record.id}
+        recordCode={record.fmeaCode}
+        data={record}
+        createdBy={record.assessorName || record.responsibleLead || 'Quality Risk Engineer'}
+        createdAt={record.createdAt || record.assessmentDate || '2026-01-01'}
+        lastUpdatedBy={record.responsibleLead || record.assessorName || 'Quality Risk Engineer'}
+        lastUpdatedAt={record.updatedAt || record.assessmentDate || '2026-01-01'}
+      />
       </div>
 
       <RiskAssessmentSingleExportModal

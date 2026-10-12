@@ -32,6 +32,8 @@ export interface NewProductionOrderData {
   lineId: string;
   status: LineStatus;
   dueDate: string;
+  recordDate?: string;
+  createdAt?: string;
   operatorCount: number;
   supervisorName: string;
   remarks: string;
@@ -155,6 +157,8 @@ export function AddProductionOrderModal({
         rejectQuantity: orderToEdit.rejectQuantity ?? 15,
         status: orderToEdit.status,
         dueDate: orderToEdit.dueDate ? orderToEdit.dueDate.split('T')[0] : '',
+        recordDate: orderToEdit.recordDate || (orderToEdit.createdAt ? orderToEdit.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
+        createdAt: orderToEdit.createdAt || new Date().toISOString(),
         operatorCount: orderToEdit.operatorCount || 45,
         supervisorName: orderToEdit.supervisorName || '',
         remarks: orderToEdit.remarks || '',
@@ -173,6 +177,8 @@ export function AddProductionOrderModal({
         efficiencyPercent: 82,
         rejectQuantity: 15,
         operatorCount: 45,
+        recordDate: new Date().toISOString().split('T')[0],
+        createdAt: new Date().toISOString(),
         dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString().split('T')[0],
       });
     }
@@ -225,6 +231,8 @@ export function AddProductionOrderModal({
       lineId: matchedLine?.id || form.lineId || 'Line 01',
       status: (form.status as LineStatus) || 'RUNNING',
       dueDate: form.dueDate,
+      recordDate: form.recordDate || new Date().toISOString().split('T')[0],
+      createdAt: form.createdAt || new Date().toISOString(),
       operatorCount: Number(form.operatorCount) || 45,
       supervisorName: form.supervisorName?.trim() || 'Floor Supervisor',
       remarks: form.remarks?.trim() || '',

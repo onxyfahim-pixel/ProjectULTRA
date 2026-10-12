@@ -41,6 +41,7 @@ import { RootCauseCase, RcaStatus, RcaEvidenceImage } from '@/lib/types/modules'
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { DeleteRcaModal } from './DeleteRcaModal';
 import { RcaSingleExportModal } from './RcaSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface RcaDetailsPageProps {
   rcaCase: RootCauseCase;
@@ -793,6 +794,18 @@ export function RcaDetailsPage({
           </div>
         )}
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Root Cause Analysis"
+        recordId={rcaCase.id}
+        recordCode={rcaCase.caseCode || rcaCase.problemTitle}
+        data={rcaCase}
+        createdBy={rcaCase.investigationLead || 'QA Technical Lead'}
+        createdAt={rcaCase.createdDate || '2026-01-01'}
+        lastUpdatedBy={rcaCase.investigationLead || 'QA Technical Lead'}
+        lastUpdatedAt={rcaCase.actualClosureDate || rcaCase.targetClosureDate || rcaCase.createdDate || '2026-01-01'}
+      />
 
       {/* Lightbox Modal */}
       {selectedPhoto && (

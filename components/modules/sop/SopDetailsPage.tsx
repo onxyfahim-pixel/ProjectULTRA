@@ -40,6 +40,7 @@ import {
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { DeleteSopModal } from './DeleteSopModal';
 import { SopSingleExportModal } from './SopSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface SopDetailsPageProps {
   sop: SopItem;
@@ -739,6 +740,18 @@ export function SopDetailsPage({
           )}
         </div>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Standard Operating Procedures"
+        recordId={sop.id}
+        recordCode={sop.sopNumber}
+        data={sop}
+        createdBy={sop.preparedBy || sop.approval?.preparedBy || 'Senior QMS Officer'}
+        createdAt={sop.effectiveDate || '2026-01-01'}
+        lastUpdatedBy={sop.approvedBy || sop.approval?.approvedBy || sop.preparedBy || 'Senior QMS Officer'}
+        lastUpdatedAt={sop.reviewDate || sop.effectiveDate || '2026-01-01'}
+      />
 
       {/* ─── MODALS ─────────────────────────────────────────────────────────── */}
       <DeleteSopModal

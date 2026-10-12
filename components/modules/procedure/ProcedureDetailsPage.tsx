@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { ProcedureItem } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface ProcedureDetailsPageProps {
   procedure: ProcedureItem;
@@ -537,6 +538,18 @@ export function ProcedureDetailsPage({
           Note: This standard operating procedure is subject to periodic review to maintain its operational effectiveness.
         </p>
       </div>
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Standard Procedures"
+        recordId={procedure.id}
+        recordCode={procedure.procedureCode || procedure.title}
+        data={procedure}
+        createdBy={procedure.authorName || 'Procedure Controller'}
+        createdAt={procedure.effectiveDate || procedure.approvalDate || '2026-01-01'}
+        lastUpdatedBy={procedure.approvedByName || procedure.authorName || 'Procedure Controller'}
+        lastUpdatedAt={procedure.nextReviewDate || procedure.effectiveDate || '2026-01-01'}
+      />
       </div>
     </div>
   );

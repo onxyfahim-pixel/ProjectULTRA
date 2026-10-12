@@ -2,6 +2,8 @@ import { SubSupplier } from '@/lib/types/modules';
 import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
   getModuleExportConfig,
 } from '@/lib/pdf/pdf-header-store';
 
@@ -88,7 +90,10 @@ export function downloadSubSupplierCsv(
  */
 export function exportSubSupplierSummaryPdf(
   suppliers: SubSupplier[],
-  scopeLabel: string = 'All Sub-Suppliers & Mills'
+  scopeLabel: string = 'All Sub-Suppliers & Mills',
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
 ): void {
   try {
     const printWindow = window.open('', '_blank');
@@ -307,23 +312,21 @@ export function exportSubSupplierSummaryPdf(
           </tbody>
         </table>
 
-        <div class="sign-grid">
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Head of Supply Chain & Sourcing</div>
-            <div class="sign-sub">Vendor Onboarding & Qualification</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Senior Auditor - Social & Technical Compliance</div>
-            <div class="sign-sub">ISO 9001 / WRAP / HIGG Verification</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Managing Director / COO</div>
-            <div class="sign-sub">Approved Vendor List Sign-off</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Head of Supply Chain & Sourcing',
+            designation: 'Vendor Onboarding & Qualification',
+          },
+          slot2Override: {
+            title: 'Senior Auditor - Social & Technical Compliance',
+            designation: 'ISO 9001 / WRAP / HIGG Verification',
+          },
+          slot3Override: {
+            title: 'Managing Director / COO',
+            designation: 'Approved Vendor List Sign-off',
+          },
+        })}
 
         <script>
           window.onload = function() {
@@ -480,7 +483,12 @@ export function exportSubSupplierSummaryExcel(
 /**
  * Export official Supplier Qualification & Audit Profile (PDF)
  */
-export function exportSingleSupplierPdf(supplier: SubSupplier): void {
+export function exportSingleSupplierPdf(
+  supplier: SubSupplier,
+  options?: {
+    signatureMode?: PdfSignatureMode;
+  }
+): void {
   try {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -750,23 +758,21 @@ export function exportSingleSupplierPdf(supplier: SubSupplier): void {
             .join('')}
         </div>
 
-        <div class="sign-grid">
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Vendor Compliance Officer</div>
-            <div class="sign-sub">Technical Verification</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Head of Supply Chain</div>
-            <div class="sign-sub">Procurement Governance</div>
-          </div>
-          <div class="sign-box">
-            <div class="sign-line"></div>
-            <div class="sign-title">Quality Assurance Director</div>
-            <div class="sign-sub">Approved Vendor List Sign-off</div>
-          </div>
-        </div>
+        ${renderPdfFooterSignaturesHtml(pdfSettings, {
+          signatureMode: options?.signatureMode,
+          slot1Override: {
+            title: 'Vendor Compliance Officer',
+            designation: 'Technical Verification',
+          },
+          slot2Override: {
+            title: 'Head of Supply Chain',
+            designation: 'Procurement Governance',
+          },
+          slot3Override: {
+            title: 'Quality Assurance Director',
+            designation: 'Approved Vendor List Sign-off',
+          },
+        })}
 
         <script>
           window.onload = function() {

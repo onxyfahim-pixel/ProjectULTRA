@@ -69,7 +69,9 @@ export function AuditSingleExportModal({
   const [includeChecklist, setIncludeChecklist] = useState(true);
   const [includePhotos, setIncludePhotos] = useState(true);
   const [includeRemarks, setIncludeRemarks] = useState(true);
-  const [includeSignatures, setIncludeSignatures] = useState(true);
+  const [includeSignatures, setIncludeSignatures] = useState(
+    () => loadPdfHeaderSettings().signatureSettings?.enabled ?? true
+  );
 
   // Lightbox modal for full-size photo preview
   const [lightboxPhoto, setLightboxPhoto] = useState<GalleryPhotoItem | null>(null);
@@ -89,40 +91,6 @@ export function AuditSingleExportModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lightboxPhoto, isOpen, onClose]);
 
-  if (!isOpen || !audit) return null;
-
-  const pdfSettings = loadPdfHeaderSettings();
-  const scoreVal = audit.obtainedMarks ?? audit.scorePercentage ?? 0;
-  const hasCritical = (audit.criticalNCs ?? 0) > 0;
-  const isPassed =
-    !hasCritical &&
-    (audit.isPassed !== undefined ? audit.isPassed : scoreVal >= (audit.passMarks ?? 80));
-
-  const auditeeTitle =
-    audit.supplierName || audit.auditeeDepartment || 'Factory Operations';
-
-  const checklist: AuditChecklistItem[] = useMemo(() => {
-    if (audit.checklist && audit.checklist.length > 0) {
-      return audit.checklist;
-    }
-    const cat =
-      audit.auditCategory ||
-      (audit.auditType === 'INTERNAL' || audit.auditType === 'INTERNAL_QMS'
-        ? 'INTERNAL'
-        : audit.auditType === 'SUB_SUPPLIER'
-        ? 'SUB_SUPPLIER'
-        : 'EXTERNAL');
-    return cat === 'INTERNAL' ? ISO_9001_DEFAULT_CHECKLIST : [];
-  }, [audit]);
-
-  const auditWithChecklist: QualityAudit = useMemo(
-    () => ({
-      ...audit,
-      checklist,
-    }),
-    [audit, checklist]
-  );
-
   // Helper to extract photos from any checklist question item
   const getQuestionPhotos = (q: AuditChecklistItem): AuditPhotoEvidence[] => {
     if (q.evidencePhotos && q.evidencePhotos.length > 0) {
@@ -140,6 +108,26 @@ export function AuditSingleExportModal({
     }
     return [];
   };
+
+  const checklist: AuditChecklistItem[] = useMemo(() => {
+    if (!audit) return [];
+    if (audit.checklist && audit.checklist.length > 0) {
+      return audit.checklist;
+    }
+    const cat =
+      audit.auditCategory ||
+      (audit.auditType === 'INTERNAL' || audit.auditType === 'INTERNAL_QMS'
+        ? 'INTERNAL'
+        : audit.auditType === 'SUB_SUPPLIER'
+        ? 'SUB_SUPPLIER'
+        : 'EXTERNAL');
+    return cat === 'INTERNAL' ? ISO_9001_DEFAULT_CHECKLIST : [];
+  }, [audit]);
+
+  const auditWithChecklist: QualityAudit | null = useMemo(
+    () => (audit ? { ...audit, checklist } : null),
+    [audit, checklist]
+  );
 
   // Collect all photos across all questions for the gallery view
   const allAuditPhotos: GalleryPhotoItem[] = useMemo(() => {
@@ -211,15 +199,9 @@ export function AuditSingleExportModal({
     });
   }, [checklist, searchQuery, selectedClause, statusFilter]);
 
-  // Counts for quick KPI chips
-  const conformitiesCount = checklist.filter((q) => q.status === 'CONFORMITY').length;
-  const criticalCount = checklist.filter((q) => q.status === 'CRITICAL_NC').length;
-  const majorCount = checklist.filter((q) => q.status === 'MAJOR_NC').length;
-  const minorCount = checklist.filter((q) => q.status === 'MINOR_NC').length;
-  const questionsWithPhotosCount = checklist.filter((q) => getQuestionPhotos(q).length > 0).length;
-
   // Handle PDF Export
   const handleExportPdf = () => {
+    if (!auditWithChecklist) return;
     exportSingleAuditPdf(auditWithChecklist, {
       includeChecklist,
       includePhotos,
@@ -230,8 +212,29 @@ export function AuditSingleExportModal({
 
   // Handle Excel Export
   const handleExportExcel = () => {
+    if (!auditWithChecklist) return;
     exportSingleAuditExcel(auditWithChecklist);
   };
+
+  // Counts for quick KPI chips
+  const conformitiesCount = checklist.filter((q) => q.status === 'CONFORMITY').length;
+  const criticalCount = checklist.filter((q) => q.status === 'CRITICAL_NC').length;
+  const majorCount = checklist.filter((q) => q.status === 'MAJOR_NC').length;
+  const minorCount = checklist.filter((q) => q.status === 'MINOR_NC').length;
+  const questionsWithPhotosCount = checklist.filter((q) => getQuestionPhotos(q).length > 0).length;
+
+  // Unconditional hooks complete — now safe to perform early return
+  if (!isOpen || !audit) return null;
+
+  const pdfSettings = loadPdfHeaderSettings();
+  const scoreVal = audit.obtainedMarks ?? audit.scorePercentage ?? 0;
+  const hasCritical = (audit.criticalNCs ?? 0) > 0;
+  const isPassed =
+    !hasCritical &&
+    (audit.isPassed !== undefined ? audit.isPassed : scoreVal >= (audit.passMarks ?? 80));
+
+  const auditeeTitle =
+    audit.supplierName || audit.auditeeDepartment || 'Factory Operations';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">

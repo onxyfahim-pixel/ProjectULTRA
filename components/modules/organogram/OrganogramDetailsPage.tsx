@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { OrganogramNode } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface OrganogramDetailsPageProps {
   node: OrganogramNode;
@@ -427,6 +428,18 @@ export function OrganogramDetailsPage({
           </div>
         </div>
       )}
+
+      {/* Universal Audit Trail & Live View Dossier */}
+      <RecordAuditHistory
+        moduleName="Factory Organogram"
+        recordId={node.id}
+        recordCode={`${node.title} - ${node.name}`}
+        data={node}
+        createdBy={superior?.name || 'HR Organogram Admin'}
+        createdAt={node.createdAt || node.joinedDate || '2026-01-01'}
+        lastUpdatedBy="HR Operations"
+        lastUpdatedAt={node.updatedAt || new Date().toISOString()}
+      />
       </div>
     </div>
   );

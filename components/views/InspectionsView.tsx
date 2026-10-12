@@ -50,6 +50,11 @@ import { INITIAL_INSPECTIONS } from '@/lib/db/mock-data';
 import { MOCK_BUYER_ORDERS } from '@/lib/db/modules-mock-data';
 import { useErpAuth } from '@/hooks/use-erp-auth';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import {
+  trackEntityCreate,
+  trackEntityUpdate,
+  trackEntityDelete,
+} from '@/lib/services/audit-trail-service';
 import { calculateQuantityVariance } from '@/lib/aql';
 import { InspectionDetailsPage } from '../modules/inspection/InspectionDetailsPage';
 import { InspectionEntryPage } from '../modules/inspection/InspectionEntryPage';
@@ -573,10 +578,35 @@ export function InspectionsView({
 
     if (existingIndex >= 0) {
       updatedList = records.map((r) => (r.id === recordData.id ? recordData : r));
+      trackEntityUpdate(
+        'INSPECTION',
+        recordData.id,
+        recordData.inspectionCode,
+        records[existingIndex],
+        recordData,
+        {
+          userName: user?.name || recordData.inspectorName || 'QA Auditor',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Updated Inspection ${recordData.inspectionCode} (${recordData.stage}) - Status: ${recordData.status}`,
+        }
+      );
       showToast(`Updated inspection record ${recordData.inspectionCode}`);
       setSubView({ type: 'details', record: recordData });
     } else {
       updatedList = [recordData, ...records];
+      trackEntityCreate(
+        'INSPECTION',
+        recordData.id,
+        recordData.inspectionCode,
+        recordData,
+        {
+          userName: user?.name || recordData.inspectorName || 'QA Auditor',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Created Inspection ${recordData.inspectionCode} (${recordData.stage}) - Result: ${recordData.status}`,
+        }
+      );
       showToast(`Logged new ${recordData.inspectionType || ''} inspection ${recordData.inspectionCode}`);
       setSubView({ type: 'none' });
     }
@@ -645,6 +675,21 @@ export function InspectionsView({
       window.dispatchEvent(new CustomEvent('erp_inspections_updated'));
       window.dispatchEvent(new CustomEvent('erp_wip_records_updated'));
     } catch {}
+
+    for (const r of deleteModal.records) {
+      trackEntityDelete(
+        'INSPECTION',
+        r.id,
+        r.inspectionCode,
+        r,
+        {
+          userName: user?.name || 'QA Auditor',
+          userRole: user?.role || 'QA_MANAGER',
+          userId: user?.id,
+          summary: `Deleted Inspection Audit ${r.inspectionCode}`,
+        }
+      );
+    }
 
     const count = deleteModal.records.length;
     showToast(count === 1 ? `Deleted audit ${deleteModal.records[0].inspectionCode}` : `Deleted ${count} inspection audits`);

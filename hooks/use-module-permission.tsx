@@ -9,12 +9,14 @@ export interface ModulePermissionsResult {
   canEdit: boolean;
   canDelete: boolean;
   canExport: boolean;
+  canApprove: boolean;
+  canReview: boolean;
   isSuperAdmin: boolean;
 }
 
 /**
  * Reusable hook to evaluate active user permissions for a given ERP module.
- * Returns boolean flags: canView, canCreate, canEdit, canDelete, canExport, isSuperAdmin.
+ * Returns boolean flags: canView, canCreate, canEdit, canDelete, canExport, canApprove, canReview, isSuperAdmin.
  */
 export function useModulePermission(moduleKey: string): ModulePermissionsResult {
   const { can, user } = useErpAuth();
@@ -32,6 +34,8 @@ export function useModulePermission(moduleKey: string): ModulePermissionsResult 
     canEdit: can(moduleKey, 'edit'),
     canDelete: can(moduleKey, 'delete'),
     canExport: can(moduleKey, 'export'),
+    canApprove: can(moduleKey, 'approve'),
+    canReview: can(moduleKey, 'review') || can(moduleKey, 'approve'),
     isSuperAdmin,
   };
 }
@@ -60,5 +64,17 @@ export function CanDelete({ module, children }: { module: string; children: Reac
 export function CanExport({ module, children }: { module: string; children: React.ReactNode }) {
   const { canExport } = useModulePermission(module);
   if (!canExport) return null;
+  return <>{children}</>;
+}
+
+export function CanApprove({ module, children }: { module: string; children: React.ReactNode }) {
+  const { canApprove } = useModulePermission(module);
+  if (!canApprove) return null;
+  return <>{children}</>;
+}
+
+export function CanReview({ module, children }: { module: string; children: React.ReactNode }) {
+  const { canReview } = useModulePermission(module);
+  if (!canReview) return null;
   return <>{children}</>;
 }

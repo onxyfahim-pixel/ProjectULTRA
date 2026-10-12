@@ -25,6 +25,7 @@ import {
   TexpediaComment,
 } from '@/lib/types/modules';
 import { TEXPEDIA_CATEGORY_CONFIG } from './texpedia-data';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface PostDetailsModalProps {
   post: TexpediaPost | null;
@@ -416,6 +417,20 @@ export function PostDetailsModal({
                 </button>
               </div>
             </form>
+
+            {/* Universal Audit Trail & Live View Dossier */}
+            <div className="pt-4 border-t border-slate-100">
+              <RecordAuditHistory
+                moduleName="Texpedia Knowledge Base"
+                recordId={post.id}
+                recordCode={post.title}
+                data={post}
+                createdBy={post.author?.name || 'Garments Engineer'}
+                createdAt={post.createdAt || '2026-01-01'}
+                lastUpdatedBy={post.author?.name || 'Garments Engineer'}
+                lastUpdatedAt={post.updatedAt || post.createdAt || '2026-01-01'}
+              />
+            </div>
           </div>
         </div>
       </div>

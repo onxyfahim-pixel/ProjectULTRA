@@ -31,6 +31,7 @@ import {
 import { DefectDefinition } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { DefectSingleExportModal } from './DefectSingleExportModal';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface DefectDetailsPageProps {
   defect: DefectDefinition;
@@ -494,6 +495,20 @@ export function DefectDetailsPage({
           </p>
         </div>
       </div>
+
+      {/* Comprehensive Record Audit Trail & View Tracking System */}
+      <RecordAuditHistory
+        entity="DefectDefinition"
+        entityId={defect.id}
+        entityCode={defect.defectCode || defect.name}
+        moduleName="Defects Library"
+        createdAt="2026-06-01T08:00:00.000Z"
+        createdBy="Garments QA Engineering Board"
+        createdByRole="QA_DIRECTOR"
+        updatedAt={new Date().toISOString()}
+        updatedBy="Tania Ahmed"
+        updatedByRole="QA_MANAGER"
+      />
 
       {/* Individual Defect Export Modal */}
       <DefectSingleExportModal

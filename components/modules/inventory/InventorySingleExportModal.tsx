@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Printer,
@@ -15,7 +15,7 @@ import {
   Package,
 } from 'lucide-react';
 import { InventoryItem, ReceiveRecord, IssueRecord } from '@/lib/types/erp';
-import { loadPdfHeaderSettings } from '@/lib/pdf/pdf-header-store';
+import { loadPdfHeaderSettings, PdfSignatureMode } from '@/lib/pdf/pdf-header-store';
 import {
   exportSingleStockItemPdf,
   exportSingleStockItemExcel,
@@ -54,17 +54,25 @@ export function InventorySingleExportModal({
   onClose,
   target,
 }: InventorySingleExportModalProps) {
-  if (!isOpen || !target) return null;
-
   const pdfSettings = loadPdfHeaderSettings();
 
+  const [includeSignatures, setIncludeSignatures] = useState<boolean>(
+    pdfSettings.signatureSettings?.enabled ?? true
+  );
+  const [signatureMode, setSignatureMode] = useState<PdfSignatureMode>(
+    pdfSettings.signatureSettings?.mode || 'dual'
+  );
+
+  if (!isOpen || !target) return null;
+
   const handleExportPdf = () => {
+    const sigOpt = { signatureMode: includeSignatures ? signatureMode : 'none' };
     if (target.type === 'stock') {
-      exportSingleStockItemPdf(target.item, target.linkedGrns || [], target.linkedIssues || []);
+      exportSingleStockItemPdf(target.item, target.linkedGrns || [], target.linkedIssues || [], sigOpt);
     } else if (target.type === 'receive') {
-      exportSingleReceiveRecordPdf(target.record, target.matchedItem);
+      exportSingleReceiveRecordPdf(target.record, target.matchedItem, sigOpt);
     } else {
-      exportSingleIssueRecordPdf(target.record, target.matchedItem);
+      exportSingleIssueRecordPdf(target.record, target.matchedItem, sigOpt);
     }
     onClose();
   };
@@ -228,7 +236,7 @@ export function InventorySingleExportModal({
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-200/80 grid grid-cols-3 gap-2 text-[10px] text-slate-600">
+                <div className="pt-2 border-t border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-600">
                   <div>
                     <span className="text-slate-400 block">Location:</span>
                     <span className="font-mono font-semibold text-slate-800">
@@ -245,6 +253,12 @@ export function InventorySingleExportModal({
                     <span className="text-slate-400 block">Received By:</span>
                     <span className="font-semibold text-slate-800 truncate block">
                       {target.record.receivedBy}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Approved By:</span>
+                    <span className={`font-semibold truncate block ${target.record.approvalStatus === 'APPROVED' ? 'text-emerald-700' : target.record.approvalStatus === 'REJECTED' ? 'text-rose-700' : 'text-amber-700'}`}>
+                      {target.record.approvedBy ? `${target.record.approvedBy} (${target.record.approvalStatus || 'APPROVED'})` : 'Pending Approval'}
                     </span>
                   </div>
                 </div>
@@ -273,7 +287,7 @@ export function InventorySingleExportModal({
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-200/80 grid grid-cols-3 gap-2 text-[10px] text-slate-600">
+                <div className="pt-2 border-t border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-slate-600">
                   <div>
                     <span className="text-slate-400 block">Purpose:</span>
                     <span className="font-semibold text-slate-800 truncate block">
@@ -292,8 +306,53 @@ export function InventorySingleExportModal({
                       {target.record.issuedBy}
                     </span>
                   </div>
+                  <div>
+                    <span className="text-slate-400 block">Approved By:</span>
+                    <span className={`font-semibold truncate block ${target.record.approvalStatus === 'APPROVED' ? 'text-emerald-700' : target.record.approvalStatus === 'REJECTED' ? 'text-rose-700' : 'text-amber-700'}`}>
+                      {target.record.approvedBy ? `${target.record.approvedBy} (${target.record.approvalStatus || 'APPROVED'})` : 'Pending Approval'}
+                    </span>
+                  </div>
                 </div>
               </>
+            )}
+          </div>
+
+          {/* Signature Configuration Toggle */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={includeSignatures}
+                  onChange={(e) => setIncludeSignatures(e.target.checked)}
+                  className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                />
+                <span>Include Official Signatures at Bottom</span>
+              </label>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                  includeSignatures
+                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                    : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {includeSignatures ? 'Signatures ON' : 'Signatures OFF'}
+              </span>
+            </div>
+
+            {includeSignatures && (
+              <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/80 text-[11px]">
+                <span className="text-slate-500 font-medium">Signature Layout:</span>
+                <select
+                  value={signatureMode}
+                  onChange={(e) => setSignatureMode(e.target.value as any)}
+                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 cursor-pointer"
+                >
+                  <option value="dual">Dual (Store &amp; Factory Mgr)</option>
+                  <option value="triple">Triple (Issuer, Checked &amp; Authorized)</option>
+                  <option value="single">Single (Authorization Only)</option>
+                </select>
+              </div>
             )}
           </div>
 

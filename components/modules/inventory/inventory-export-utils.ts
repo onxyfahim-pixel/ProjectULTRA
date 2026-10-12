@@ -2,10 +2,12 @@ import { InventoryItem, ReceiveRecord, IssueRecord } from '@/lib/types/erp';
 import {
   loadPdfHeaderSettings,
   renderPdfHeaderHtml,
+  renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
   getModuleExportConfig,
 } from '@/lib/pdf/pdf-header-store';
 
-export type FooterSignatureMode = 'dual' | 'single' | 'none';
+export type FooterSignatureMode = PdfSignatureMode;
 
 export interface ExportPdfOptions {
   signatureMode?: FooterSignatureMode;
@@ -77,40 +79,35 @@ export function computeIssueKpis(records: IssueRecord[]) {
 // HELPER: SIGNATURE HTML (DEFAULT NONE)
 // -------------------------------------------------------------
 export function renderFooterSignaturesHtml(
-  mode: FooterSignatureMode = 'none',
+  mode?: FooterSignatureMode,
   leftRole = 'STORE IN-CHARGE',
   leftDept = 'Inventory Control & Warehouse Dept',
   rightRole = 'FACTORY MANAGER',
   rightDept = 'Operations & Quality Directorate'
 ): string {
-  if (!mode || mode === 'none') {
+  const pdfSettings = loadPdfHeaderSettings();
+  const effectiveMode: FooterSignatureMode =
+    mode !== undefined
+      ? mode
+      : pdfSettings.signatureSettings?.enabled
+      ? pdfSettings.signatureSettings?.mode || 'dual'
+      : 'none';
+
+  if (effectiveMode === 'none') {
     return '';
   }
-  if (mode === 'single') {
-    return `
-      <div style="display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid;">
-        <div style="width: 250px; text-align: center;">
-          <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-          <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${rightRole}</div>
-          <div style="font-size: 8px; color: #64748b;">${rightDept}</div>
-        </div>
-      </div>
-    `;
-  }
-  return `
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 48px; max-width: 650px; margin: 22px auto 0 auto; padding-top: 14px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid;">
-      <div style="text-align: center;">
-        <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-        <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${leftRole}</div>
-        <div style="font-size: 8px; color: #64748b;">${leftDept}</div>
-      </div>
-      <div style="text-align: center;">
-        <div style="border-bottom: 1.5px solid #475569; height: 32px; margin-bottom: 6px;"></div>
-        <div style="font-size: 9px; font-weight: 800; color: #1e293b; letter-spacing: 0.3px;">${rightRole}</div>
-        <div style="font-size: 8px; color: #64748b;">${rightDept}</div>
-      </div>
-    </div>
-  `;
+
+  return renderPdfFooterSignaturesHtml(pdfSettings, {
+    signatureMode: effectiveMode,
+    slot1Override: {
+      title: leftRole,
+      designation: leftDept,
+    },
+    slot3Override: {
+      title: rightRole,
+      designation: rightDept,
+    },
+  });
 }
 
 // =============================================================
@@ -279,7 +276,7 @@ export function exportStockSummaryPdf(
             </tbody>
           </table>
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'none')}
+          ${renderFooterSignaturesHtml(options?.signatureMode)}
         </body>
       </html>
     `;
@@ -634,7 +631,7 @@ export function exportSingleStockItemPdf(
             </tbody>
           </table>
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'none')}
+          ${renderFooterSignaturesHtml(options?.signatureMode)}
         </body>
       </html>
     `;
@@ -843,6 +840,20 @@ export function exportReceiveSummaryPdf(
             <td style="text-align: center; font-weight: 700;">${r.qualityGrade}</td>
             <td style="font-family: monospace; font-size: 8.5px;">${r.warehouseLocation}</td>
             <td style="font-size: 8.5px; color: #475569;">${r.receivedBy}</td>
+            <td style="text-align: center;">
+              <span style="display: inline-block; padding: 1.5px 6px; border-radius: 3px; font-size: 8px; font-weight: 700; ${
+                r.approvalStatus === 'APPROVED'
+                  ? 'background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;'
+                  : r.approvalStatus === 'REJECTED'
+                  ? 'background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;'
+                  : 'background: #fef3c7; color: #92400e; border: 1px solid #fde68a;'
+              }">
+                ${r.approvalStatus || 'PENDING'}
+              </span>
+            </td>
+            <td style="font-size: 8px;">
+              ${r.approvedBy ? `<div style="font-weight: 700; color: #0f172a;">${r.approvedBy}</div><div style="font-size: 7.5px; color: #64748b;">${r.approvedByRole || 'Auth'} ${r.approvedAt ? `• ${r.approvedAt.split(' ')[0]}` : ''}</div>` : '<span style="color: #94a3b8; font-style: italic;">Pending Auth</span>'}
+            </td>
           </tr>
         `;
       })
@@ -925,6 +936,8 @@ export function exportReceiveSummaryPdf(
                 <th style="width: 65px; text-align: center;">Grade</th>
                 <th style="width: 75px;">Bay Loc</th>
                 <th>Received By</th>
+                <th style="width: 70px; text-align: center;">Approval</th>
+                <th style="width: 110px;">Approved By</th>
               </tr>
             </thead>
             <tbody>
@@ -934,12 +947,12 @@ export function exportReceiveSummaryPdf(
                 <td colspan="6" style="text-align: right; padding: 6px;">TOTAL INWARD RAW MATERIALS DELIVERED:</td>
                 <td style="text-align: right; font-family: monospace; color: #166534;">+${kpis.totalReceivedQty.toLocaleString()}</td>
                 <td style="text-align: center; font-family: monospace;">${kpis.totalRollsReceived}</td>
-                <td colspan="4" style="font-size: 8.5px; color: #475569;">${kpis.passedCount} shipments approved under standard AQL testing</td>
+                <td colspan="6" style="font-size: 8.5px; color: #475569;">${kpis.passedCount} shipments approved under standard AQL testing</td>
               </tr>
             </tbody>
           </table>
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'none')}
+          ${renderFooterSignaturesHtml(options?.signatureMode)}
         </body>
       </html>
     `;
@@ -984,6 +997,10 @@ export function exportReceiveSummaryExcel(
           <td style="text-align: center; border: 1px solid #cbd5e1; padding: 5px;">${r.qualityGrade}</td>
           <td style="border: 1px solid #cbd5e1; padding: 5px;">${r.warehouseLocation}</td>
           <td style="border: 1px solid #cbd5e1; padding: 5px;">${r.receivedBy}</td>
+          <td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1; padding: 5px;">${r.approvalStatus || 'PENDING'}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px; font-weight: bold;">${r.approvedBy || '-'}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px;">${r.approvedByRole || '-'}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px;">${r.approvedAt || '-'}</td>
           <td style="border: 1px solid #cbd5e1; padding: 5px;">${r.notes || '-'}</td>
         </tr>
       `
@@ -1036,6 +1053,10 @@ export function exportReceiveSummaryExcel(
                 <th style="text-align: center;">Grade</th>
                 <th>Warehouse Bay</th>
                 <th>Received By</th>
+                <th style="text-align: center;">Approval Status</th>
+                <th>Approved By</th>
+                <th>Approver Role</th>
+                <th>Approval Date</th>
                 <th>Inspection Remarks</th>
               </tr>
             </thead>
@@ -1046,7 +1067,7 @@ export function exportReceiveSummaryExcel(
                 <td style="text-align: right; color: #166534;">+${kpis.totalReceivedQty}</td>
                 <td></td>
                 <td style="text-align: center;">${kpis.totalRollsReceived}</td>
-                <td colspan="5"></td>
+                <td colspan="9"></td>
               </tr>
             </tbody>
           </table>
@@ -1191,6 +1212,22 @@ export function exportSingleReceiveRecordPdf(
                 <div class="info-lbl">Received By Storeman</div>
                 <div class="info-val">${record.receivedBy}</div>
               </div>
+              <div>
+                <div class="info-lbl">Approval Status</div>
+                <div class="info-val" style="color: ${record.approvalStatus === 'APPROVED' ? '#166534' : record.approvalStatus === 'REJECTED' ? '#991b1b' : '#b45309'}; font-weight: 800;">
+                  ${record.approvalStatus || 'PENDING'}
+                </div>
+              </div>
+              <div>
+                <div class="info-lbl">Approved By (RBAC)</div>
+                <div class="info-val" style="color: #1e3a8a;">
+                  ${record.approvedBy ? `${record.approvedBy} (${record.approvedByRole || 'Authorized'})` : 'Pending Authorization'}
+                </div>
+              </div>
+              <div>
+                <div class="info-lbl">Approval Timestamp</div>
+                <div class="info-val" style="font-family: monospace;">${record.approvedAt || '-'}</div>
+              </div>
             </div>
           </div>
 
@@ -1222,6 +1259,23 @@ export function exportSingleReceiveRecordPdf(
             </div>
           </div>
 
+          <!-- Official Authorization & Approval Box -->
+          <div class="section-title">Official Approval &amp; Authorization Certificate</div>
+          <div style="border: 1.5px solid ${record.approvalStatus === 'APPROVED' ? '#86efac' : '#cbd5e1'}; border-radius: 6px; padding: 10px 14px; background: ${record.approvalStatus === 'APPROVED' ? '#f0fdf4' : '#f8fafc'}; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <div style="font-size: 11px; font-weight: 800; color: #0f172a;">
+                Transaction Status: <span style="text-transform: uppercase; color: ${record.approvalStatus === 'APPROVED' ? '#166534' : record.approvalStatus === 'REJECTED' ? '#991b1b' : '#b45309'};">${record.approvalStatus || 'PENDING'}</span>
+              </div>
+              <div style="font-size: 9px; font-weight: 700; color: #64748b;">
+                Authorized Timestamp: <span style="font-family: monospace; color: #0f172a;">${record.approvedAt || 'Awaiting sign-off'}</span>
+              </div>
+            </div>
+            <div style="font-size: 9.5px; color: #334155; line-height: 1.5;">
+              <strong>Authorized Approver:</strong> ${record.approvedBy ? `${record.approvedBy} &bull; <em>${record.approvedByRole || 'Authorized Role'}</em>` : 'Pending authorization by an authorized Inventory Approver in Settings &rarr; RBAC'}<br/>
+              <strong>Approver Remarks:</strong> ${record.approvalNotes || 'Transaction verified in accordance with factory inward quality standards.'}
+            </div>
+          </div>
+
           <!-- Inspection Remarks -->
           <div class="section-title">Quality Assurance &amp; Store Intake Notes</div>
           <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; font-size: 9.5px; background: white; margin-bottom: 14px;">
@@ -1229,11 +1283,11 @@ export function exportSingleReceiveRecordPdf(
           </div>
 
           ${renderFooterSignaturesHtml(
-            options?.signatureMode || 'none',
+            options?.signatureMode,
             'RECEIVED BY (STORE)',
-            'Raw Materials Receiving Section',
-            'QC AUDITOR PASS',
-            'Quality Control & Laboratory Dept'
+            record.receivedBy || 'Raw Materials Section',
+            'AUTHORIZED APPROVAL',
+            record.approvedBy ? `${record.approvedBy} (${record.approvedByRole || 'Approver'})` : 'Awaiting Approval'
           )}
         </body>
       </html>
@@ -1314,6 +1368,18 @@ export function exportSingleReceiveRecordExcel(
               <td>${record.receivedBy}</td>
             </tr>
             <tr>
+              <td style="font-weight: bold;">Approval Status</td>
+              <td style="font-weight: bold; color: ${record.approvalStatus === 'APPROVED' ? '#166534' : '#b45309'};">${record.approvalStatus || 'PENDING'}</td>
+              <td style="font-weight: bold;">Approved By</td>
+              <td style="font-weight: bold; color: #1e3a8a;">${record.approvedBy ? `${record.approvedBy} (${record.approvedByRole || 'Authorized'})` : 'Pending Authorization'}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: bold;">Approval Timestamp</td>
+              <td style="font-family: monospace;">${record.approvedAt || '-'}</td>
+              <td style="font-weight: bold;">Approval Remarks</td>
+              <td>${record.approvalNotes || '-'}</td>
+            </tr>
+            <tr>
               <td style="font-weight: bold;">Inspection Remarks</td>
               <td colspan="3">${record.notes || 'Inspection passed with 0 defects.'}</td>
             </tr>
@@ -1388,6 +1454,20 @@ export function exportIssueSummaryPdf(
             <td style="font-size: 8.5px; color: #334155;">${s.purpose || '-'}</td>
             <td style="font-size: 8.5px; color: #047857; font-weight: 600;">${s.receivedByFloor}</td>
             <td style="font-size: 8.5px; color: #64748b;">${s.issuedBy}</td>
+            <td style="text-align: center;">
+              <span style="display: inline-block; padding: 1.5px 6px; border-radius: 3px; font-size: 8px; font-weight: 700; ${
+                s.approvalStatus === 'APPROVED'
+                  ? 'background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;'
+                  : s.approvalStatus === 'REJECTED'
+                  ? 'background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;'
+                  : 'background: #fef3c7; color: #92400e; border: 1px solid #fde68a;'
+              }">
+                ${s.approvalStatus || 'PENDING'}
+              </span>
+            </td>
+            <td style="font-size: 8px;">
+              ${s.approvedBy ? `<div style="font-weight: 700; color: #0f172a;">${s.approvedBy}</div><div style="font-size: 7.5px; color: #64748b;">${s.approvedByRole || 'Auth'} ${s.approvedAt ? `• ${s.approvedAt.split(' ')[0]}` : ''}</div>` : '<span style="color: #94a3b8; font-style: italic;">Pending Auth</span>'}
+            </td>
           </tr>
         `;
       })
@@ -1469,6 +1549,8 @@ export function exportIssueSummaryPdf(
                 <th>Requisition Purpose</th>
                 <th>Floor Receiver</th>
                 <th>Store Issuer</th>
+                <th style="width: 70px; text-align: center;">Approval</th>
+                <th style="width: 110px;">Approved By</th>
               </tr>
             </thead>
             <tbody>
@@ -1478,12 +1560,12 @@ export function exportIssueSummaryPdf(
                 <td colspan="6" style="text-align: right; padding: 6px;">TOTAL RAW MATERIAL DISPATCH TO PRODUCTION:</td>
                 <td style="text-align: right; font-family: monospace; color: #92400e;">-${kpis.totalIssuedQty.toLocaleString()}</td>
                 <td style="text-align: center; font-family: monospace;">${kpis.totalRollsIssued}</td>
-                <td colspan="3" style="font-size: 8.5px; color: #475569;">${kpis.totalSIVs} Store Issue Vouchers Authenticated</td>
+                <td colspan="5" style="font-size: 8.5px; color: #475569;">${kpis.totalSIVs} Store Issue Vouchers Authenticated</td>
               </tr>
             </tbody>
           </table>
 
-          ${renderFooterSignaturesHtml(options?.signatureMode || 'none')}
+          ${renderFooterSignaturesHtml(options?.signatureMode)}
         </body>
       </html>
     `;
@@ -1527,6 +1609,10 @@ export function exportIssueSummaryExcel(
           <td style="border: 1px solid #cbd5e1; padding: 5px;">${s.purpose || '-'}</td>
           <td style="border: 1px solid #cbd5e1; padding: 5px;">${s.receivedByFloor}</td>
           <td style="border: 1px solid #cbd5e1; padding: 5px;">${s.issuedBy}</td>
+          <td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1; padding: 5px;">${s.approvalStatus || 'PENDING'}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px; font-weight: bold;">${s.approvedBy || '-'}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px;">${s.approvedByRole || '-'}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px;">${s.approvedAt || '-'}</td>
         </tr>
       `
       )
@@ -1577,6 +1663,10 @@ export function exportIssueSummaryExcel(
                 <th>Purpose</th>
                 <th>Received By Floor</th>
                 <th>Issued By Store</th>
+                <th style="text-align: center;">Approval Status</th>
+                <th>Approved By</th>
+                <th>Approver Role</th>
+                <th>Approval Date</th>
               </tr>
             </thead>
             <tbody>
@@ -1586,7 +1676,7 @@ export function exportIssueSummaryExcel(
                 <td style="text-align: right; color: #92400e;">-${kpis.totalIssuedQty}</td>
                 <td></td>
                 <td style="text-align: center;">${kpis.totalRollsIssued}</td>
-                <td colspan="3"></td>
+                <td colspan="7"></td>
               </tr>
             </tbody>
           </table>
@@ -1729,7 +1819,19 @@ export function exportSingleIssueRecordPdf(
               </div>
               <div>
                 <div class="info-lbl">Authorized Approver</div>
-                <div class="info-val">${record.approvedBy || 'Store Manager'}</div>
+                <div class="info-val" style="color: #1e3a8a;">
+                  ${record.approvedBy ? `${record.approvedBy} (${record.approvedByRole || 'Store Manager'})` : 'Pending Authorization'}
+                </div>
+              </div>
+              <div>
+                <div class="info-lbl">Approval Status</div>
+                <div class="info-val" style="color: ${record.approvalStatus === 'APPROVED' ? '#166534' : record.approvalStatus === 'REJECTED' ? '#991b1b' : '#b45309'}; font-weight: 800;">
+                  ${record.approvalStatus || 'PENDING'}
+                </div>
+              </div>
+              <div>
+                <div class="info-lbl">Authorized At</div>
+                <div class="info-val" style="font-family: monospace;">${record.approvedAt || 'Awaiting Sign-off'}</div>
               </div>
             </div>
           </div>
@@ -1762,6 +1864,23 @@ export function exportSingleIssueRecordPdf(
             </div>
           </div>
 
+          <!-- Official Store Issue Authorization & Approval Certificate -->
+          <div class="section-title">Store Issue Authorization &amp; Approval Certificate</div>
+          <div style="border: 1.5px solid ${record.approvalStatus === 'APPROVED' ? '#fcd34d' : '#cbd5e1'}; border-radius: 6px; padding: 10px 14px; background: ${record.approvalStatus === 'APPROVED' ? '#fffbeb' : '#f8fafc'}; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <div style="font-size: 11px; font-weight: 800; color: #0f172a;">
+                Issue Authorization: <span style="text-transform: uppercase; color: ${record.approvalStatus === 'APPROVED' ? '#166534' : record.approvalStatus === 'REJECTED' ? '#991b1b' : '#b45309'};">${record.approvalStatus || 'PENDING'}</span>
+              </div>
+              <div style="font-size: 9px; font-weight: 700; color: #64748b;">
+                Authorized Timestamp: <span style="font-family: monospace; color: #0f172a;">${record.approvedAt || 'Awaiting sign-off'}</span>
+              </div>
+            </div>
+            <div style="font-size: 9.5px; color: #334155; line-height: 1.5;">
+              <strong>Authorized Approver:</strong> ${record.approvedBy ? `${record.approvedBy} &bull; <em>${record.approvedByRole || 'Store Approver'}</em>` : 'Pending authorization by an authorized Inventory Approver in Settings &rarr; RBAC'}<br/>
+              <strong>Approver Remarks:</strong> ${record.approvalNotes || 'Material issue validated against production line requisition quota.'}
+            </div>
+          </div>
+
           <!-- Compliance Note -->
           <div class="section-title">Store Dispatch &amp; Floor Custody Notice</div>
           <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; font-size: 9.5px; background: white; margin-bottom: 14px;">
@@ -1769,11 +1888,11 @@ export function exportSingleIssueRecordPdf(
           </div>
 
           ${renderFooterSignaturesHtml(
-            options?.signatureMode || 'none',
+            options?.signatureMode,
             'ISSUED BY (STORE)',
-            'Central Warehouse Section',
-            'RECEIVED BY (FLOOR LINE)',
-            'Line Production Supervisor'
+            record.issuedBy || 'Central Warehouse',
+            'AUTHORIZED APPROVAL',
+            record.approvedBy ? `${record.approvedBy} (${record.approvedByRole || 'Approver'})` : 'Awaiting Approval'
           )}
         </body>
       </html>
@@ -1854,8 +1973,16 @@ export function exportSingleIssueRecordExcel(
               <td>${record.issuedBy}</td>
             </tr>
             <tr>
-              <td style="font-weight: bold;">Approver</td>
-              <td colspan="3">${record.approvedBy || 'Store Manager'}</td>
+              <td style="font-weight: bold;">Approval Status</td>
+              <td style="font-weight: bold; color: ${record.approvalStatus === 'APPROVED' ? '#166534' : '#b45309'};">${record.approvalStatus || 'PENDING'}</td>
+              <td style="font-weight: bold;">Authorized Approver</td>
+              <td style="font-weight: bold; color: #1e3a8a;">${record.approvedBy ? `${record.approvedBy} (${record.approvedByRole || 'Authorized'})` : 'Pending Authorization'}</td>
+            </tr>
+            <tr>
+              <td style="font-weight: bold;">Approval Date</td>
+              <td style="font-family: monospace;">${record.approvedAt || '-'}</td>
+              <td style="font-weight: bold;">Approval Remarks</td>
+              <td>${record.approvalNotes || '-'}</td>
             </tr>
           </table>
         </body>

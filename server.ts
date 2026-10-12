@@ -908,7 +908,73 @@ app.prepare().then(() => {
     }
   });
 
-  // 19. Database Reset / Factory Purge
+  // 19. Universal Audit Logs: GET / POST
+  server.get('/api/audit-logs', async (req: Request, res: Response) => {
+    try {
+      const entity = req.query.entity ? String(req.query.entity).toLowerCase() : null;
+      const entityId = req.query.entityId ? String(req.query.entityId) : null;
+      const search = req.query.search ? String(req.query.search).toLowerCase() : null;
+      const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 200;
+
+      let logs = mysqlManager.getConnectedStatus() ? await mysqlManager.loadAuditLogs() : [];
+      if (!logs || logs.length === 0) {
+        logs = erpStore.getAuditLogs();
+      }
+
+      if (entity) {
+        logs = logs.filter((l) => l.entity.toLowerCase() === entity);
+      }
+      if (entityId) {
+        logs = logs.filter((l) => l.entityId === entityId || (l.entityCode && l.entityCode === entityId));
+      }
+      if (search) {
+        logs = logs.filter(
+          (l) =>
+            l.action.toLowerCase().includes(search) ||
+            l.entity.toLowerCase().includes(search) ||
+            l.performedBy.toLowerCase().includes(search) ||
+            (l.details && l.details.toLowerCase().includes(search))
+        );
+      }
+
+      return res.json({
+        success: true,
+        logs: logs.slice(0, limit),
+        count: logs.length,
+        isMysqlConnected: mysqlManager.getConnectedStatus(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  server.post('/api/audit-logs', (req: Request, res: Response) => {
+    try {
+      const logData = req.body.log || req.body;
+      const saved = erpStore.addAuditLog({
+        action: logData.action || 'UPDATE',
+        entity: logData.entity || 'GeneralEntity',
+        entityId: logData.entityId || 'general',
+        entityCode: logData.entityCode || logData.entityId,
+        moduleName: logData.moduleName,
+        performedBy: logData.performedBy || 'System User',
+        userRole: logData.userRole || 'VIEWER',
+        details: logData.details || 'Operation registered.',
+        changes: logData.changes,
+        metadata: logData.metadata,
+      });
+
+      return res.json({
+        success: true,
+        log: saved,
+        isMysqlConnected: mysqlManager.getConnectedStatus(),
+      });
+    } catch (err: any) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  // 20. Database Reset / Factory Purge
   server.post('/api/database/reset', authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
       const mode = (req.body.mode || 'blank') as 'blank' | 'defaults';

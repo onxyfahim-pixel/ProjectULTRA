@@ -27,10 +27,12 @@ import {
   Package,
   Award,
   FileDown,
+  ClipboardCheck,
 } from 'lucide-react';
 import { ProductionOrder, LineStatus, TopDefectSummary } from '@/lib/types/erp';
 import { OutputLogEntry } from './LogOutputModal';
 import { useModulePermission } from '@/hooks/use-module-permission';
+import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
 
 interface ProductionRecordDetailsPageProps {
   order: ProductionOrder;
@@ -39,6 +41,7 @@ interface ProductionRecordDetailsPageProps {
   onEdit: (order: ProductionOrder) => void;
   onDelete: (order: ProductionOrder) => void;
   onExport?: (order: ProductionOrder) => void;
+  onReview?: (order: ProductionOrder) => void;
   onLogOutput?: () => void;
   showToast: (msg: string) => void;
 }
@@ -50,10 +53,11 @@ export function ProductionRecordDetailsPage({
   onEdit,
   onDelete,
   onExport,
+  onReview,
   onLogOutput,
   showToast,
 }: ProductionRecordDetailsPageProps) {
-  const { canCreate, canEdit, canDelete, canExport } = useModulePermission('production');
+  const { canCreate, canEdit, canDelete, canExport, canReview, canApprove } = useModulePermission('production');
   const target = order.targetQuantity || 1;
   const completed = order.completedQuantity || 0;
   const pct = Math.min(Math.round((completed / target) * 100), 100);
@@ -155,6 +159,26 @@ export function ProductionRecordDetailsPage({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Review Action Button - Visible to authorized/approved users in RBAC */}
+          {(canReview || canApprove) && onReview && (
+            <button
+              type="button"
+              onClick={() => onReview(order)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-colors shadow-2xs cursor-pointer ${
+                order.isReviewed || order.reviewStatus === 'REVIEWED'
+                  ? 'bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200'
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+              }`}
+              title={
+                order.isReviewed || order.reviewStatus === 'REVIEWED'
+                  ? `Reviewed by ${order.reviewedBy} (${order.reviewedByRole}) - Click to update`
+                  : 'Review & sign-off production record'
+              }
+            >
+              <ClipboardCheck className="w-3.5 h-3.5" />
+              <span>{order.isReviewed || order.reviewStatus === 'REVIEWED' ? 'Reviewed' : 'Review Record'}</span>
+            </button>
+          )}
           {canExport && onExport && (
             <button
               type="button"
@@ -851,6 +875,92 @@ export function ProductionRecordDetailsPage({
           </div>
         )}
       </div>
+
+        {/* OFFICIAL QUALITY & TECHNICAL REVIEW VERIFICATION CARD */}
+        {(order.isReviewed || order.reviewStatus === 'REVIEWED' || order.reviewedBy) ? (
+          <div className="bg-gradient-to-r from-purple-50/90 via-indigo-50/60 to-blue-50/50 rounded-2xl border border-purple-200/90 p-5 shadow-xs animate-in fade-in duration-200">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-purple-600/30">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700">
+                      Official Technical &amp; Quality Review
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300">
+                      Verified &amp; Reviewed
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900 mt-0.5">
+                    Reviewed By: <span className="text-purple-900 font-extrabold">{order.reviewedBy || 'Authorized Reviewer'}</span>
+                    <span className="text-slate-500 font-medium"> — {order.reviewedByRole || 'Quality In-Charge'}</span>
+                  </h4>
+                  {order.reviewNotes && (
+                    <p className="text-xs text-slate-700 mt-1.5 italic bg-white/80 px-3.5 py-2 rounded-xl border border-purple-100/80">
+                      &ldquo;{order.reviewNotes}&rdquo;
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-xs font-mono text-slate-600 md:text-right shrink-0">
+                <div>
+                  <div className="text-[10px] font-sans font-semibold uppercase text-slate-400">Review Timestamp</div>
+                  <div className="font-bold text-slate-800">{order.reviewedAt || 'Recorded'}</div>
+                </div>
+                {(canReview || canApprove) && onReview && (
+                  <button
+                    type="button"
+                    onClick={() => onReview(order)}
+                    className="px-3 py-1.5 text-xs font-semibold text-purple-700 bg-white hover:bg-purple-50 border border-purple-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+                  >
+                    Update Review
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-amber-50/70 rounded-2xl border border-amber-200/90 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-amber-900">Pending Technical &amp; Quality Review</h4>
+                <p className="text-[11px] text-amber-700">
+                  This production and quality record has not yet been reviewed. Authorized users can review and sign off below.
+                </p>
+              </div>
+            </div>
+            {(canReview || canApprove) && onReview && (
+              <button
+                type="button"
+                onClick={() => onReview(order)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors shadow-2xs cursor-pointer shrink-0"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5" />
+                <span>Review Record</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Comprehensive Record Audit Trail & View Tracking System */}
+        <RecordAuditHistory
+          entity="ProductionOrder"
+          entityId={order.id}
+          entityCode={order.orderNumber}
+          moduleName="Production & Quality"
+          createdAt={(order as any).createdAt || (order as any).recordDate || '2026-10-06T08:00:00.000Z'}
+          createdBy={(order as any).createdBy || order.supervisorName || 'Floor Supervisor'}
+          createdByRole="PRODUCTION_SUPERVISOR"
+          updatedAt={(order as any).updatedAt || (order as any).recordDate}
+          updatedBy={(order as any).updatedBy || order.qualityInspector}
+          updatedByRole="QC_AUDITOR"
+        />
       </div>
     </div>
   );
