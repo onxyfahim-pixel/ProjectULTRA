@@ -1686,6 +1686,8 @@ export interface TrainingMatrixItem {
   examCode?: string;
   attendees?: TrainingAttendee[];
   latestEvaluationId?: string;
+  imageUrl?: string;
+  evidenceImages?: string[];
   notes?: string;
   createdAt?: string;
   updatedAt?: string;

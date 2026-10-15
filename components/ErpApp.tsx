@@ -143,7 +143,36 @@ function ErpAppContent() {
         const raw = localStorage.getItem('erp_inspections_v1');
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            let hasNew = false;
+            INITIAL_INSPECTIONS.forEach((initInsp) => {
+              const existingIdx = parsed.findIndex((p: any) => p.id === initInsp.id);
+              if (existingIdx === -1) {
+                parsed.push(initInsp);
+                hasNew = true;
+              } else {
+                const existing = parsed[existingIdx];
+                if (existing.excessQuantity === undefined || existing.shortQuantity === undefined) {
+                  const lot = Number(existing.lotQuantity) || 0;
+                  const ord = Number(existing.orderQuantity) || 0;
+                  const diff = lot - ord;
+                  parsed[existingIdx] = {
+                    ...existing,
+                    excessQuantity: diff > 0 ? diff : 0,
+                    shortQuantity: diff < 0 ? Math.abs(diff) : 0,
+                    quantityVariance: diff,
+                  };
+                  hasNew = true;
+                }
+              }
+            });
+            if (hasNew) {
+              try {
+                localStorage.setItem('erp_inspections_v1', JSON.stringify(parsed));
+              } catch {}
+            }
+            return parsed;
+          }
         }
       } catch {}
     }
@@ -462,10 +491,26 @@ function ErpAppContent() {
       }
     } else if (event.type === 'SYSTEM_RESET') {
       if (event.mode === 'blank') {
+        try {
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('erp_') || key.startsWith('buyer_orders') || key.startsWith('production_'))) {
+              if (key !== 'erp_token' && key !== 'erp_user_profile') {
+                keysToRemove.push(key);
+              }
+            }
+          }
+          keysToRemove.forEach((k) => localStorage.removeItem(k));
+        } catch {}
+
         setProductionOrders([]);
         setOrders([]);
         setInventory([]);
         setInspections([]);
+        window.dispatchEvent(new CustomEvent('erp_system_reset_blank'));
+        window.dispatchEvent(new CustomEvent('erp_buyer_orders_updated'));
+        window.dispatchEvent(new CustomEvent('erp_production_records_updated'));
       } else {
         window.location.reload();
       }

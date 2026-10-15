@@ -16,10 +16,25 @@ function getUserFromRequest(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = getUserFromRequest(req);
+    const isSuperAdmin = user?.isSuperAdmin === true || user?.role === 'Super Admin' || user?.role === 'ADMIN';
+
+    if (!isSuperAdmin) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Access Denied: Only a Super Administrator has permission to factory reset all ERP data records to zero.',
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const mode = (body.mode || 'blank') as 'blank' | 'defaults';
 
     const result = await erpStore.resetDatabase(mode, user);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.message }, { status: 403 });
+    }
 
     return NextResponse.json({
       success: result.success,

@@ -110,7 +110,7 @@ export function exportInspectionSummaryPdf(
           <tr style="border-bottom: 1px solid #f1f5f9; ${idx % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
             <td style="font-family: monospace; font-size: 8.5px; font-weight: 700; color: #0284c7;">
               ${r.inspectionCode}
-              <div style="font-size: 8px; color: #64748b; font-weight: 400;">${new Date(r.createdAt).toLocaleDateString()}</div>
+              <div style="font-size: 8px; color: #64748b; font-weight: 400;">${r.inspectionDate || (r.createdAt ? r.createdAt.split('T')[0] : '')}</div>
             </td>
             <td style="font-size: 9px;">
               <div style="font-weight: 700; color: #1e293b; font-family: monospace;">${poDisplay}</div>
@@ -324,7 +324,7 @@ export function exportInspectionSummaryExcel(
         return `
           <tr>
             <td>${r.inspectionCode}</td>
-            <td>${new Date(r.createdAt).toISOString().split('T')[0]}</td>
+            <td>${r.inspectionDate || (r.createdAt ? r.createdAt.split('T')[0] : '')}</td>
             <td>${poDisplay}</td>
             <td>${r.buyer || ''}</td>
             <td>${r.styleNumber || ''}</td>
@@ -723,8 +723,8 @@ export function exportSingleInspectionPdf(
                 <div class="info-val" style="color: #0284c7; font-family: monospace;">${record.inspectionCode}</div>
               </div>
               <div>
-                <div class="info-lbl">Audit Date</div>
-                <div class="info-val font-mono">${dateStr}</div>
+                <div class="info-lbl">Inspection Date</div>
+                <div class="info-val font-mono">${record.inspectionDate || (record.createdAt ? record.createdAt.split('T')[0] : dateStr)}</div>
               </div>
               <div>
                 <div class="info-lbl">Inspection Stage</div>
@@ -1014,7 +1014,7 @@ export function exportSingleInspectionPdf(
 
 export function exportSingleInspectionExcel(record: InspectionRecord): void {
   try {
-    const dateStr = new Date(record.createdAt).toISOString().split('T')[0];
+    const dateStr = record.inspectionDate || (record.createdAt ? record.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]);
     const poDisplay = record.poNumbers && record.poNumbers.length > 0 ? record.poNumbers.join(', ') : record.orderNumber || '';
 
     const defectRows = (record.defects || [])

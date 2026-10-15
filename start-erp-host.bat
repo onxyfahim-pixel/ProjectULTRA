@@ -29,6 +29,22 @@ if %errorlevel% neq 0 (
     echo [OK] Windows Firewall rule verified for Port 3000.
 )
 
+:: Verify and auto-start MySQL Server if not running on port 3306
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-NetConnection -ComputerName 127.0.0.1 -Port 3306 -InformationLevel Quiet -WarningAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [*] Checking MySQL Server on localhost:3306...
+    if exist "C:\xampp\mysql\bin\mysqld.exe" (
+        echo [*] Starting local XAMPP MySQL Server in background...
+        start "" /b "C:\xampp\mysql\bin\mysqld.exe" --defaults-file="C:\xampp\mysql\bin\my.ini" --standalone
+        timeout /t 2 >nul
+    ) else (
+        net start MySQL80 >nul 2>&1
+        if %errorlevel% neq 0 (
+            net start mysql >nul 2>&1
+        )
+    )
+)
+
 echo.
 echo =========================================================================
 echo   HOST PC CONNECTION ADDRESSES:

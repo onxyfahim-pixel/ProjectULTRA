@@ -26,6 +26,7 @@ import {
   MapPin,
   HelpCircle,
   FileDown,
+  Printer,
 } from 'lucide-react';
 import { DataTable, ColumnDef } from '@/components/ui/DataTable';
 import { StatCard } from '@/components/ui/StatCard';
@@ -54,6 +55,7 @@ import { AnnualMasterCalendarView } from '../modules/training/AnnualMasterCalend
 import { DeleteTrainingModal } from '../modules/training/DeleteTrainingModal';
 import { TrainingExportModal } from '../modules/training/TrainingExportModal';
 import { TrainingSingleExportModal } from '../modules/training/TrainingSingleExportModal';
+import { TrainingCalendarExportModal } from '../modules/training/TrainingCalendarExportModal';
 
 type TrainingSubView =
   | { type: 'none' }
@@ -115,6 +117,7 @@ export function TrainingView() {
   const [selectedCoursesForExport, setSelectedCoursesForExport] = useState<TrainingMatrixItem[]>([]);
   const [isSingleExportModalOpen, setIsSingleExportModalOpen] = useState(false);
   const [courseForSingleExport, setCourseForSingleExport] = useState<TrainingMatrixItem | null>(null);
+  const [isCalendarExportModalOpen, setIsCalendarExportModalOpen] = useState(false);
 
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -678,18 +681,32 @@ export function TrainingView() {
           ]}
           actions={
             canExport ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCoursesForExport(courses);
-                  setIsGlobalExportModalOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
-                title="Export Training Matrix (PDF / Excel / CSV)"
-              >
-                <FileDown className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Export Matrix</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {viewMode === 'calendar' ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsCalendarExportModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                    title="Export Annual Training Calendar, 12M Matrix & Markings (PDF / Excel / CSV)"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Export Calendar</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCoursesForExport(courses);
+                      setIsGlobalExportModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
+                    title="Export Training Matrix (PDF / Excel / CSV)"
+                  >
+                    <FileDown className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Export Matrix</span>
+                  </button>
+                )}
+              </div>
             ) : undefined
           }
         />
@@ -1121,6 +1138,13 @@ export function TrainingView() {
           setCourseForSingleExport(null);
         }}
         course={courseForSingleExport}
+      />
+
+      {/* Annual Training Calendar & Matrix Export Modal */}
+      <TrainingCalendarExportModal
+        isOpen={isCalendarExportModalOpen}
+        onClose={() => setIsCalendarExportModalOpen(false)}
+        scheduleItems={annualSchedule}
       />
     </div>
   );

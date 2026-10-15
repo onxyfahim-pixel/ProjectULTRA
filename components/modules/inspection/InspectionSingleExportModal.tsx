@@ -121,8 +121,12 @@ export function InspectionSingleExportModal({
                 <div className="text-[11px] text-slate-500">
                   Buyer: <strong className="text-slate-800">{record.buyer}</strong> • Style: {record.styleNumber}
                 </div>
-                <div className="text-[11px] text-slate-600 font-medium mt-0.5">
-                  Stage: {record.stage?.replace(/_/g, ' ') || 'Final FRI'}
+                <div className="text-[11px] text-slate-600 font-medium mt-0.5 flex items-center gap-2 flex-wrap">
+                  <span>Stage: {record.stage?.replace(/_/g, ' ') || 'Final FRI'}</span>
+                  <span>•</span>
+                  <span className="font-semibold text-blue-700">
+                    Date: {record.inspectionDate || (record.createdAt ? record.createdAt.split('T')[0] : 'N/A')}
+                  </span>
                 </div>
               </div>
               <div className="text-right">

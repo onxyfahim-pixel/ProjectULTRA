@@ -28,6 +28,7 @@ import {
 } from '@/lib/types/erp';
 import { BuyerOrder } from '@/lib/types/modules';
 import { MOCK_BUYER_ORDERS } from '@/lib/db/modules-mock-data';
+import { INITIAL_PRODUCTION_ORDERS } from '@/lib/db/mock-data';
 import { useLiveSync } from '@/hooks/use-live-sync';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import {
@@ -360,24 +361,24 @@ export function DashboardView({
   const normalizedProductionOrders = useMemo(() => {
     const todayStr = formatDateISO(currentTime);
     return liveProductionOrders.map((po) => {
-      if (po.id === 'po-206') {
-        const isStale = !po.recordDate || po.recordDate === '2026-09-21' || po.recordDate === '';
-        return {
-          ...po,
-          recordDate: isStale ? todayStr : po.recordDate,
-          sewingLine: po.sewingLine || 'Finishing Line 01 (Steam Tunnel Pressing)',
-          lineId: po.lineId || 'FIN-01',
-          section: po.section || 'Finishing & Packing Section 01',
-        };
-      }
-      if (po.id === 'po-201') {
-        const isStale = !po.recordDate || po.recordDate === '2026-09-21' || po.recordDate === '';
-        return {
-          ...po,
-          recordDate: isStale ? todayStr : po.recordDate,
-        };
-      }
-      return po;
+      const seed = INITIAL_PRODUCTION_ORDERS.find((s) => s.id === po.id);
+      const rawDate = po.recordDate && po.recordDate.trim() !== '' ? po.recordDate : seed?.recordDate;
+      const recordDate = rawDate ? rawDate.split('T')[0] : (po.createdAt ? po.createdAt.split('T')[0] : todayStr);
+
+      return {
+        ...po,
+        orderNumber: seed?.orderNumber || po.orderNumber,
+        buyer: seed?.buyer || po.buyer,
+        styleName: seed?.styleName || po.styleName,
+        styleNumber: seed?.styleNumber || po.styleNumber,
+        unit: seed?.unit || po.unit,
+        section: seed?.section || po.section || 'Sewing Floor',
+        sewingLine: seed?.sewingLine || po.sewingLine || 'Sewing Line 01 (Knit Tops)',
+        lineId: seed?.lineId || po.lineId || 'Line 01',
+        recordDate,
+        hourlyReports: po.hourlyReports && po.hourlyReports.length > 0 ? po.hourlyReports : (seed?.hourlyReports || []),
+        top3Defects: po.top3Defects && po.top3Defects.length > 0 ? po.top3Defects : (seed?.top3Defects || []),
+      };
     });
   }, [liveProductionOrders, currentTime]);
 
@@ -387,17 +388,53 @@ export function DashboardView({
     return normalizedProductionOrders.filter((po) => isProductionOrderInDateRange(po, startDate, endDate));
   }, [normalizedProductionOrders, activeDateBounds]);
 
-  const dateFilteredOrders = useMemo(() => {
-    const { startDate, endDate } = activeDateBounds;
-    if (!startDate && !endDate) return liveOrders;
-    return liveOrders.filter((o) => isOrderInDateRange(o, startDate, endDate));
-  }, [liveOrders, activeDateBounds]);
-
   const dateFilteredInspections = useMemo(() => {
     const { startDate, endDate } = activeDateBounds;
     if (!startDate && !endDate) return liveInspections;
     return liveInspections.filter((rec) => isInspectionInDateRange(rec, startDate, endDate));
   }, [liveInspections, activeDateBounds]);
+
+  const dateFilteredOrders = useMemo(() => {
+    const { startDate, endDate } = activeDateBounds;
+    if (!startDate && !endDate) return liveOrders;
+
+    // Active floor orders in this date range
+    const activeProdOrderNumbers = new Set(
+      dateFilteredProductionOrders.map((po) => (po.orderNumber || '').trim().toLowerCase())
+    );
+    // Active quality audit orders in this date range
+    const activeInspOrderNumbers = new Set(
+      dateFilteredInspections.map((insp) => (insp.orderNumber || '').trim().toLowerCase())
+    );
+
+    return liveOrders.filter((o) => {
+      const oNum = (o.orderNumber || '').trim().toLowerCase();
+      // 1. Direct active floor production in this period (Sync from Production)
+      if (activeProdOrderNumbers.has(oNum)) return true;
+      // 2. Direct quality audit in this period (Sync from Quality)
+      if (activeInspOrderNumbers.has(oNum)) return true;
+      // 3. Created/placed in this period
+      const created = (o as any).createdAt ? (o as any).createdAt.split('T')[0] : '';
+      if (created && (!startDate || created >= startDate) && (!endDate || created <= endDate)) return true;
+      // 4. Ship/delivery due date in this period
+      const ship = o.shipDate ? o.shipDate.split('T')[0] : '';
+      if (ship && (!startDate || ship >= startDate) && (!endDate || ship <= endDate)) return true;
+
+      // 5. For multi-day date ranges (e.g. week, month, year) with no specific floor record, check overlap
+      const isMultiDayRange = startDate && endDate && startDate !== endDate;
+      if (isMultiDayRange) {
+        const cut = o.cuttingStartDate ? o.cuttingStartDate.split('T')[0] : '';
+        const windowStart = cut || created;
+        const windowEnd = ship;
+        if (windowStart && windowEnd) {
+          const overlaps = (!endDate || windowStart <= endDate) && (!startDate || windowEnd >= startDate);
+          if (overlaps) return true;
+        }
+      }
+
+      return false;
+    });
+  }, [liveOrders, dateFilteredProductionOrders, dateFilteredInspections, activeDateBounds]);
 
   // ==========================================
   // METRIC 1: Total Order Quantity (Sync from Order Module with Real Date Filter)
@@ -427,11 +464,11 @@ export function DashboardView({
   const sewingMetrics = useMemo(() => {
     const sewingLines = dateFilteredProductionOrders.filter((po) => isSewingSectionRecord(po));
 
-    const totalSewingPcs = sewingLines.reduce((sum, po) => {
+    let totalSewingPcs = sewingLines.reduce((sum, po) => {
       return sum + calculateRecordCheckedQty(po);
     }, 0);
 
-    const totalTargetPcs = sewingLines.reduce((sum, po) => sum + (Number(po.targetQuantity) || 0), 0);
+    let totalTargetPcs = sewingLines.reduce((sum, po) => sum + (Number(po.targetQuantity) || 0), 0);
 
     let dhuSum = 0;
     let dhuCount = 0;
@@ -449,6 +486,43 @@ export function DashboardView({
       totalDefects += Number(po.totalDefects) || 0;
     });
 
+    // Also check Quality module sewing inspections in this date range
+    const sewingInspections = dateFilteredInspections.filter((rec) => {
+      const stage = (rec.stage || '').toUpperCase();
+      return stage === 'SEWING_IN_LINE' || stage === 'END_LINE_QC';
+    });
+
+    const qualitySewingPcs = sewingInspections.reduce((sum, rec) => {
+      return sum + (Number(rec.lotQuantity) || Number(rec.sampleSize) || 0);
+    }, 0);
+
+    const qualitySewingDefects = sewingInspections.reduce((sum, rec) => {
+      return sum + (Number(rec.defectCount) || (Number(rec.majorDefects || 0) + Number(rec.minorDefects || 0)));
+    }, 0);
+
+    // If floor production sewing lines are 0 for this filter, sync from Quality module or WIP
+    if (sewingLines.length === 0) {
+      if (qualitySewingPcs > 0) {
+        totalSewingPcs = qualitySewingPcs;
+        totalTargetPcs = Math.round(qualitySewingPcs * 1.08);
+        totalDefects = qualitySewingDefects;
+        totalRejects = Math.round(qualitySewingDefects * 0.15);
+      } else {
+        const wipSewingPcs = dateFilteredOrders.reduce((sum, o) => {
+          const wipQty = Number(o.wipRecord?.sewingComplete) || 0;
+          if (wipQty > 0) return sum + wipQty;
+          const stageQty =
+            Number(o.productionTracking?.stages?.find((s) => ((s.stage as string) === 'SEWING'))?.actualPcs) || 0;
+          return sum + stageQty;
+        }, 0);
+        if (wipSewingPcs > 0) {
+          totalSewingPcs = wipSewingPcs;
+          totalTargetPcs = Math.round(orderMetrics.totalQty * 0.85);
+          totalRejects = Math.round(totalSewingPcs * 0.005);
+        }
+      }
+    }
+
     const avgDHU =
       totalSewingPcs > 0 && totalDefects > 0
         ? ((totalDefects / totalSewingPcs) * 100).toFixed(2)
@@ -465,9 +539,9 @@ export function DashboardView({
       dhuPercent: avgDHU,
       rejectPcs: totalRejects,
       rejectRatePct,
-      linesCount: sewingLines.length,
+      linesCount: sewingLines.length || sewingInspections.length,
     };
-  }, [dateFilteredProductionOrders]);
+  }, [dateFilteredProductionOrders, dateFilteredInspections, dateFilteredOrders, orderMetrics.totalQty]);
 
   // ==========================================
   // METRIC 3: Total Finishing Quantity with DHU & Reject (Sync from Finishing Section in Production & Quality)
@@ -485,19 +559,39 @@ export function DashboardView({
     let targetPcs = prodFinishingTarget;
     let rejectPcs = prodFinishingRejects;
 
-    // 2. If no direct finishing floor run exists in this date range, fallback to WIP only if WIP exists for active filtered orders
+    // 2. Also check Quality module finishing & final inspections in this date range
+    const finishingInspections = dateFilteredInspections.filter((rec) => {
+      const stage = (rec.stage || '').toLowerCase();
+      return stage.includes('finish') || stage.includes('pack') || stage.includes('final');
+    });
+
+    const qualityFinishingPcs = finishingInspections.reduce((sum, rec) => {
+      return sum + (Number(rec.lotQuantity) || Number(rec.sampleSize) || 0);
+    }, 0);
+
+    const qualityDefects = finishingInspections.reduce((sum, rec) => {
+      return sum + (Number(rec.defectCount) || Number(rec.majorDefects || 0) + Number(rec.minorDefects || 0));
+    }, 0);
+
+    // If floor production finishing lines don't exist for this filter, sync from Quality module or WIP
     if (finishingLines.length === 0) {
-      const wipFinishingPcs = dateFilteredOrders.reduce((sum, o) => {
-        const wipQty = Number(o.wipRecord?.finishingQuantity) || 0;
-        if (wipQty > 0) return sum + wipQty;
-        const stageQty =
-          Number(o.productionTracking?.stages?.find((s) => ((s.stage as string) === 'FINISHING' || s.stage === 'PACKING'))?.actualPcs) || 0;
-        return sum + stageQty;
-      }, 0);
-      if (wipFinishingPcs > 0) {
-        totalFinishingPcs = wipFinishingPcs;
-        targetPcs = Math.round(sewingMetrics.totalTargetPcs * 0.95);
-        rejectPcs = Math.round(totalFinishingPcs * 0.0035);
+      if (qualityFinishingPcs > 0) {
+        totalFinishingPcs = qualityFinishingPcs;
+        targetPcs = Math.round(totalFinishingPcs * 1.05);
+        rejectPcs = Math.round(qualityDefects * 0.2);
+      } else {
+        const wipFinishingPcs = dateFilteredOrders.reduce((sum, o) => {
+          const wipQty = Number(o.wipRecord?.finishingQuantity) || 0;
+          if (wipQty > 0) return sum + wipQty;
+          const stageQty =
+            Number(o.productionTracking?.stages?.find((s) => ((s.stage as string) === 'FINISHING' || s.stage === 'PACKING'))?.actualPcs) || 0;
+          return sum + stageQty;
+        }, 0);
+        if (wipFinishingPcs > 0) {
+          totalFinishingPcs = wipFinishingPcs;
+          targetPcs = Math.round(sewingMetrics.totalTargetPcs * 0.95);
+          rejectPcs = Math.round(totalFinishingPcs * 0.0035);
+        }
       }
     }
 
@@ -511,6 +605,8 @@ export function DashboardView({
         const avg = finishingLines.reduce((s, p) => s + (p.dhuRate || p.defectRate || 0.85), 0) / finishingLines.length;
         finishingDHU = avg.toFixed(2);
       }
+    } else if (qualityFinishingPcs > 0 && qualityDefects > 0) {
+      finishingDHU = ((qualityDefects / qualityFinishingPcs) * 100).toFixed(2);
     } else if (totalFinishingPcs > 0) {
       finishingDHU = (Number(sewingMetrics.dhuPercent) * 0.45).toFixed(2);
     }
@@ -528,10 +624,10 @@ export function DashboardView({
       dhuPercent: finishingDHU,
       rejectPcs,
       rejectRatePct,
-      linesCount: finishingLines.length,
+      linesCount: finishingLines.length || finishingInspections.length,
       packedCartonReady: wipPackedPcs > 0 ? wipPackedPcs : Math.round(totalFinishingPcs * 0.9),
     };
-  }, [dateFilteredProductionOrders, dateFilteredOrders, sewingMetrics]);
+  }, [dateFilteredProductionOrders, dateFilteredInspections, dateFilteredOrders, sewingMetrics]);
 
   // ==========================================
   // METRIC 4: Total Final Inspection Quantity with Pass, Recheck, Fail (Sync from Inspection Module)
@@ -613,8 +709,22 @@ export function DashboardView({
           });
         }
       });
+      (po.top3Defects || []).forEach((d: any) => {
+        const name = d.defectType || 'Defect';
+        const count = Number(d.count) || 1;
+        const existing = defectCounts.get(name);
+        if (existing) {
+          existing.count += count;
+        } else {
+          defectCounts.set(name, {
+            count,
+            severity: 'MAJOR',
+            source: po.sewingLine || po.section || 'Floor Line',
+          });
+        }
+      });
       (po.hourlyReports || []).forEach((h: any) => {
-        (h.defects || []).forEach((d: any) => {
+        (h.defectBreakdown || h.defects || []).forEach((d: any) => {
           const name = d.defectType || d.name || 'Hourly Defect';
           const count = Number(d.count) || 1;
           const existing = defectCounts.get(name);
@@ -624,7 +734,7 @@ export function DashboardView({
             defectCounts.set(name, {
               count,
               severity: d.severity || 'MAJOR',
-              source: po.section || po.sewingLine || 'Sewing Line',
+              source: po.sewingLine || po.section || 'Sewing Line',
             });
           }
         });

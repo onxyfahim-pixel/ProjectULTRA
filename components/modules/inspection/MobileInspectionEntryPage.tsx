@@ -383,6 +383,10 @@ export function MobileInspectionEntryPage({
   const [lotNumber, setLotNumber] = useState<string>(initialRecord?.lotNumber || 'LOT-2026-088');
   const [factoryUnit, setFactoryUnit] = useState<string>(initialRecord?.factoryUnit || 'Unit 01 (Dhaka Complex)');
   const [orderQuantity, setOrderQuantity] = useState<number>(initialRecord?.orderQuantity || 10000);
+  const [inspectionDate, setInspectionDate] = useState<string>(
+    initialRecord?.inspectionDate ||
+      (initialRecord?.createdAt ? initialRecord.createdAt.split('T')[0] : new Date().toISOString().split('T')[0])
+  );
 
   // STEP 2 STATE: Inspection Quantity Entry (Offered Quantity & Variance)
   const [lotQuantity, setLotQuantity] = useState<number>(
@@ -642,6 +646,7 @@ export function MobileInspectionEntryPage({
       buyer: buyerName,
       factoryUnit,
       unit: factoryUnit,
+      inspectionDate: inspectionDate || (initialRecord?.createdAt ? initialRecord.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
       createdAt: initialRecord?.createdAt || new Date().toISOString(),
       remarks: quantityVarianceNotes || `Inspected on-site with mobile walkthrough: ${aqlVerdict.verdict}`,
       isMobileEntry: true,
@@ -856,6 +861,20 @@ export function MobileInspectionEntryPage({
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Inspection Date Picker */}
+            <div className="p-2.5 bg-blue-50/50 rounded-xl border border-blue-200 flex items-center justify-between text-xs">
+              <label className="font-bold text-slate-800 flex items-center gap-1.5 shrink-0">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span>Inspection Date:</span>
+              </label>
+              <input
+                type="date"
+                value={inspectionDate}
+                onChange={(e) => setInspectionDate(e.target.value)}
+                className="px-2.5 py-1 text-xs font-semibold bg-white border border-blue-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
             </div>
 
             {/* Selected Order Summary Card */}

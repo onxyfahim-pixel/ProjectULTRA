@@ -451,6 +451,7 @@ export function exportSingleTrainingPdf(
   course: TrainingMatrixItem,
   options?: {
     signatureMode?: PdfSignatureMode;
+    includeImages?: boolean;
   }
 ): void {
   const printWindow = window.open('', '_blank');
@@ -737,6 +738,73 @@ export function exportSingleTrainingPdf(
         `
         }
 
+        ${
+          options?.includeImages !== false &&
+          (course.imageUrl || (course.evidenceImages && course.evidenceImages.length > 0))
+            ? `
+          <div class="section-title">4. Official Training Photographic Evidence & Session Media</div>
+          <div style="page-break-inside: avoid; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; background: #f8fafc; margin-bottom: 14px;">
+            ${
+              course.imageUrl
+                ? `
+              <div style="text-align: center; margin-bottom: ${
+                course.evidenceImages && course.evidenceImages.length > 0 ? '12px' : '0'
+              };">
+                <img
+                  src="${course.imageUrl}"
+                  alt="Training Session Photo"
+                  style="max-width: 100%; max-height: 240px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
+                />
+                <div style="font-size: 10.5px; font-weight: 700; color: #1e293b; margin-top: 6px;">
+                  Primary Training Session Demonstration Record: ${course.title}
+                </div>
+                <div style="font-size: 9px; color: #64748b; font-family: monospace; margin-top: 2px;">
+                  Lead Instructor: ${course.trainerName} • Venue: ${
+                    course.venue || 'Training Facility'
+                  } • Session Date: ${course.nextScheduledDate || 'Certified'}
+                </div>
+              </div>
+            `
+                : ''
+            }
+            ${
+              course.evidenceImages && course.evidenceImages.length > 0
+                ? `
+              <div style="border-top: ${
+                course.imageUrl ? '1px dashed #cbd5e1; padding-top: 10px;' : 'none;'
+              }">
+                <div style="font-size: 10px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+                  Classroom Practical Activity & Demonstration Evidence (${
+                    course.evidenceImages.length
+                  } Photo${course.evidenceImages.length > 1 ? 's' : ''}):
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start;">
+                  ${course.evidenceImages
+                    .map(
+                      (imgUrl, idx) => `
+                    <div style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #ffffff; padding: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                      <img
+                        src="${imgUrl}"
+                        alt="Evidence ${idx + 1}"
+                        style="height: 100px; max-width: 160px; object-fit: cover; display: block; border-radius: 4px;"
+                      />
+                      <div style="font-size: 8.5px; font-family: monospace; font-weight: 600; color: #64748b; text-align: center; padding-top: 3px;">
+                        Practical Evidence #${idx + 1}
+                      </div>
+                    </div>
+                  `
+                    )
+                    .join('')}
+                </div>
+              </div>
+            `
+                : ''
+            }
+          </div>
+        `
+            : ''
+        }
+
         ${renderPdfFooterSignaturesHtml(pdfSettings, {
           signatureMode: options?.signatureMode,
           slot1Override: {
@@ -826,6 +894,7 @@ export function exportSingleTrainingExcel(course: TrainingMatrixItem): void {
           <tr><td><strong>Duration:</strong></td><td>${course.durationHours || 4} Hours</td><td><strong>Next Date:</strong></td><td>${course.nextScheduledDate || ''}</td></tr>
           <tr><td><strong>Trained Count:</strong></td><td>${course.trainedCount || 0}</td><td><strong>Pass Rate %:</strong></td><td>${course.passRatePercent || 0}%</td></tr>
           <tr><td><strong>ISO Standard Clause:</strong></td><td>${course.isoClause || 'ISO 9001:2015 Clause 7.2'}</td><td><strong>Status:</strong></td><td>${course.status}</td></tr>
+          <tr><td><strong>Photographic Media Attached:</strong></td><td colspan="3">${course.imageUrl ? 'Primary session banner/photo attached' : 'No primary photo'} (${course.evidenceImages?.length || 0} practical evidence photos attached)</td></tr>
           <tr><td><strong>Notes / Remarks:</strong></td><td colspan="3">${course.notes || ''}</td></tr>
         </table>
       </body>

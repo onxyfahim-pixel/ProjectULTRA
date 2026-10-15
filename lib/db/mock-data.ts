@@ -673,6 +673,15 @@ export const INITIAL_ISSUE_REGISTRY: IssueRecord[] = [
   },
 ];
 
+const getDaysAgoDate = (days: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 export const INITIAL_INSPECTIONS: InspectionRecord[] = [
   {
     id: 'insp-001',
@@ -726,6 +735,7 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
     shift: 'General Shift',
     remarks: 'Pre-shipment FRI audit completed. Carton drop test (10 drops) passed without internal packaging breach. 100% metal detection passed (Fe 1.0mm, Non-Fe 1.2mm, SS 1.5mm).',
     correctiveAction: 'Slight slub irregularity noted on 4 garments, within acceptable buyer tolerance.',
+    inspectionDate: getDaysAgoDate(0),
     createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
     defects: [
       { id: 'd-1', defectType: 'Minor Slub Weft Irregularity', severity: 'MINOR', count: 4, location: 'Front Left Thigh' },
@@ -774,6 +784,7 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
     inspectorName: 'Rafiqul Islam',
     buyer: 'H&M Global',
     remarks: 'Fabric spreading lay tension and notch depths audited across front, back, and sleeve panels. SPI calibration verified at 12 stitches/inch.',
+    inspectionDate: getDaysAgoDate(0),
     createdAt: new Date(Date.now() - 1000 * 60 * 115).toISOString(),
     defects: [
       { id: 'd-3', defectType: 'Notch Depth Variation (+1mm)', severity: 'MINOR', count: 2, location: 'Pattern Front Chest' }
@@ -817,6 +828,7 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
     buyer: 'Nike Apparel',
     remarks: 'Line 04 sewing audit. Skip stitches identified on 4-thread overlock machine #14. Operator advised to replace needle #11 and re-tune looper tension.',
     correctiveAction: 'Mechanic reset needle gauge. Supervisor to re-check next 50 pcs in-line.',
+    inspectionDate: getDaysAgoDate(1),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
     defects: [
       { id: 'd-4', defectType: 'Skip Stitch Overlock', severity: 'MAJOR', count: 2, location: 'Side Seam Line 02' },
@@ -862,6 +874,7 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
     shift: 'General Shift',
     remarks: 'Pre-final inspection conducted at 70% packed. Lot REJECTED due to severe weft shade variations across 3 rolls and 1 critical oil smear near placket button #2.',
     correctiveAction: '100% finishing line screening mandatory. Re-inspection required once rejected cartons are replaced and re-packed.',
+    inspectionDate: getDaysAgoDate(2),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 70).toISOString(),
     defects: [
       { id: 'd-6', defectType: 'Critical Oil Smear Near Placket', severity: 'CRITICAL', count: 1, location: 'Front Center Placket' },
@@ -908,6 +921,7 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
     factoryUnit: 'Unit 01 (Dhaka Complex)',
     shift: 'Morning Shift A',
     remarks: 'Pre-final inspection passed with minor label alignment notes. Assortment ratio confirmed: S:2, M:4, L:4, XL:2 per carton. Polybag ventilation holes verified.',
+    inspectionDate: getDaysAgoDate(12),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 12).toISOString(),
     defects: [
       { id: 'd-8', defectType: 'Slightly Off-Center Heat Seal Label', severity: 'MINOR', count: 2, location: 'Inner Back Neck' }
@@ -951,6 +965,7 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
     factoryUnit: 'Unit 01 (Dhaka Complex)',
     shift: 'General Shift',
     remarks: 'Final Random Inspection PASSED. Ready for factory gate pass & container stuffing. Full carton seal integrity and pallet wrapping checked.',
+    inspectionDate: getDaysAgoDate(18),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 18).toISOString(),
     defects: [
       { id: 'd-9', defectType: 'Polybag Barcode Misaligned', severity: 'MINOR', count: 1, location: 'Carton #14 Inner Polybag' }
@@ -1000,6 +1015,7 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
     factoryUnit: 'Unit 02 (Gazipur Facility)',
     shift: 'General Shift',
     remarks: 'Final Random Inspection completed and cleared. Label placement, barcoding, and hangtags verified.',
+    inspectionDate: getDaysAgoDate(45),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 45).toISOString(),
     defects: [
       { id: 'd-10', defectType: 'Loose Thread Ends', severity: 'MINOR', count: 3, location: 'Hemline' },
@@ -1049,6 +1065,7 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
     factoryUnit: 'Unit 01 (Dhaka Complex)',
     shift: 'General Shift',
     remarks: 'Pre-final inspection with conditional pass. Requires carton re-screening for rivet placement on line 2.',
+    inspectionDate: getDaysAgoDate(68),
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 68).toISOString(),
     defects: [
       { id: 'd-12', defectType: 'Misaligned Coin Pocket Rivet', severity: 'MAJOR', count: 12, location: 'Front Right Coin Pocket' },
@@ -1063,15 +1080,6 @@ export const INITIAL_INSPECTIONS: InspectionRecord[] = [
     ]
   }
 ];
-
-const getDaysAgoDate = (days: number): string => {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
 
 export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = [
   {

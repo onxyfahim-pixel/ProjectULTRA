@@ -5,6 +5,7 @@ import {
   ProductionOrder,
   AuditLog,
   QualityGrade,
+  AttachmentRecord,
 } from '../types/erp';
 import { BuyerOrder } from '../types/modules';
 
@@ -22,10 +23,12 @@ function getMysqlConfig(): PoolOptions {
         password: decodeURIComponent(url.password || ''),
         database: url.pathname ? url.pathname.replace(/^\//, '') : 'garments_erp',
         waitForConnections: true,
-        connectionLimit: 20,
+        connectionLimit: 15,
+        maxIdle: 5,
+        idleTimeout: 30000,
         queueLimit: 0,
         enableKeepAlive: true,
-        keepAliveInitialDelay: 10000,
+        keepAliveInitialDelay: 0,
         connectTimeout: 8000,
       };
     } catch (err) {
@@ -40,10 +43,12 @@ function getMysqlConfig(): PoolOptions {
     password: process.env.MYSQL_PASSWORD || '',
     database: process.env.MYSQL_DATABASE || 'garments_erp',
     waitForConnections: true,
-    connectionLimit: 20,
+    connectionLimit: 15,
+    maxIdle: 5,
+    idleTimeout: 30000,
     queueLimit: 0,
     enableKeepAlive: true,
-    keepAliveInitialDelay: 10000,
+    keepAliveInitialDelay: 0,
     connectTimeout: 8000,
   };
 }
@@ -64,6 +69,7 @@ export class MySqlDatabaseManager {
   private lastPingMs: number | null = null;
   private lastCheckedAt: string | null = null;
   private serverVersion: string = '';
+  private reconnectTimer: NodeJS.Timeout | null = null;
 
   public getConfig(): PoolOptions {
     if (!this.currentConfig) {
@@ -76,8 +82,83 @@ export class MySqlDatabaseManager {
     if (!this.pool) {
       this.currentConfig = this.getConfig();
       this.pool = mysql.createPool(this.currentConfig);
+      // Attach safe error listener on pool to prevent unhandled ECONNRESET/disconnect crashes
+      (this.pool as any).on?.('error', (err: any) => {
+        if (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.fatal) {
+          console.warn(`[MySQL Pool] Pooled socket closed by peer (${err.code || err.message}). Refreshing pool...`);
+          this.isConnected = false;
+          this.scheduleAutoReconnect();
+        }
+      });
     }
     return this.pool;
+  }
+
+  public async recreatePool(): Promise<Pool> {
+    if (this.pool) {
+      try {
+        await this.pool.end();
+      } catch (_) {}
+      this.pool = null;
+    }
+    return this.getPool();
+  }
+
+  public scheduleAutoReconnect(): void {
+    if (this.reconnectTimer) return;
+    this.reconnectTimer = setInterval(async () => {
+      try {
+        const alive = await this.checkConnection();
+        if (alive) {
+          console.log('[MySQL Host] Reconnected to MySQL host successfully! Relational sync resumed.');
+          this.isConnected = true;
+          if (this.reconnectTimer) {
+            clearInterval(this.reconnectTimer);
+            this.reconnectTimer = null;
+          }
+          await this.initializeSchema();
+        }
+      } catch (_) {}
+    }, 12000);
+    if (this.reconnectTimer.unref) {
+      this.reconnectTimer.unref();
+    }
+  }
+
+  public async query<T = any>(sql: string, params?: any[], retryCount = 0): Promise<[T, any]> {
+    try {
+      const pool = this.getPool();
+      return (await pool.query(sql, params)) as [T, any];
+    } catch (err: any) {
+      const isConnError =
+        err.code === 'ECONNRESET' ||
+        err.code === 'PROTOCOL_CONNECTION_LOST' ||
+        err.code === 'ETIMEDOUT' ||
+        err.code === 'EPIPE' ||
+        err.code === 'ECONNREFUSED' ||
+        err.code === 'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR' ||
+        err.fatal === true;
+
+      if (isConnError) {
+        if (retryCount < 1) {
+          // Severed or stale socket: discard pool, test connection, and retry once
+          await this.recreatePool();
+          const alive = await this.checkConnection();
+          if (alive) {
+            return this.query<T>(sql, params, retryCount + 1);
+          }
+        }
+
+        if (this.isConnected) {
+          this.isConnected = false;
+          this.lastPingMs = null;
+          console.warn('[MySQL Host] Connection lost or MySQL host unreachable. Dual-sync operating via local memory and disk cache.');
+          this.scheduleAutoReconnect();
+        }
+      }
+
+      throw err;
+    }
   }
 
   public async updateConfig(newConfig: Partial<PoolOptions>): Promise<boolean> {
@@ -95,10 +176,12 @@ export class MySqlDatabaseManager {
       ...base,
       ...newConfig,
       waitForConnections: true,
-      connectionLimit: 20,
+      connectionLimit: 15,
+      maxIdle: 5,
+      idleTimeout: 30000,
       queueLimit: 0,
       enableKeepAlive: true,
-      keepAliveInitialDelay: 10000,
+      keepAliveInitialDelay: 0,
       connectTimeout: 8000,
     };
 
@@ -152,14 +235,17 @@ export class MySqlDatabaseManager {
     try {
       const pool = this.getPool();
       const connection = await pool.getConnection();
-      await connection.ping();
+      try {
+        await connection.ping();
 
-      const [verRows]: [any[], any] = await connection.query('SELECT VERSION() as version');
-      if (verRows && verRows[0]?.version) {
-        this.serverVersion = verRows[0].version;
+        const [verRows]: [any[], any] = await connection.query('SELECT VERSION() as version');
+        if (verRows && verRows[0]?.version) {
+          this.serverVersion = verRows[0].version;
+        }
+      } finally {
+        connection.release();
       }
 
-      connection.release();
       this.isConnected = true;
       this.lastPingMs = Date.now() - startTime;
       this.lastCheckedAt = new Date().toISOString();
@@ -243,7 +329,7 @@ export class MySqlDatabaseManager {
           cutting_start_date VARCHAR(50),
           status VARCHAR(50) NOT NULL DEFAULT 'PLANNED',
           quality_standard VARCHAR(100) DEFAULT 'AQL 2.5',
-          product_image TEXT,
+          product_image LONGTEXT,
           merchandiser_name VARCHAR(191),
           merchandiser_email VARCHAR(191),
           merchandiser_phone VARCHAR(191),
@@ -255,6 +341,7 @@ export class MySqlDatabaseManager {
           bom_items JSON,
           logistics JSON,
           color_size_breakdown JSON,
+          attachments LONGTEXT,
           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX idx_bo_order (order_number),
@@ -265,10 +352,14 @@ export class MySqlDatabaseManager {
       `);
 
       try {
+        await pool.query('ALTER TABLE buyer_orders MODIFY product_image LONGTEXT');
+      } catch (_) {}
+      try {
+        await pool.query('ALTER TABLE buyer_orders ADD COLUMN attachments LONGTEXT');
+      } catch (_) {}
+      try {
         await pool.query('ALTER TABLE buyer_orders ADD COLUMN color_size_breakdown JSON');
-      } catch (_) {
-        // Column may already exist
-      }
+      } catch (_) {}
 
       // 3. Production Records Table (Floor daily & hourly outputs)
       await pool.query(`
@@ -454,9 +545,41 @@ export class MySqlDatabaseManager {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
 
+      // 11. Centralized Attachments & Media (Images, PDFs, Tech Packs, Test Certificates)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS attachments (
+          id VARCHAR(191) NOT NULL PRIMARY KEY,
+          entity_type VARCHAR(100) NOT NULL,
+          entity_id VARCHAR(191) NOT NULL,
+          module_key VARCHAR(100) DEFAULT '',
+          file_name VARCHAR(255) NOT NULL,
+          file_type VARCHAR(100) DEFAULT '',
+          file_size BIGINT DEFAULT 0,
+          mime_type VARCHAR(100) DEFAULT '',
+          category VARCHAR(100) DEFAULT '',
+          file_data LONGTEXT NOT NULL,
+          uploaded_by VARCHAR(191) DEFAULT 'Current User',
+          notes TEXT,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_att_entity (entity_type, entity_id),
+          INDEX idx_att_module (module_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      try {
+        await pool.query('ALTER TABLE users MODIFY avatar_url LONGTEXT');
+      } catch (_) {}
+      try {
+        await pool.query('ALTER TABLE inspection_records ADD COLUMN attachments LONGTEXT');
+      } catch (_) {}
+      try {
+        await pool.query('ALTER TABLE production_records ADD COLUMN unit VARCHAR(191) AFTER section');
+      } catch (_) {}
+
       this.isConnected = true;
       this.hasInitializedSchema = true;
-      console.log(`[MySQL Host] Connected successfully to MySQL database "${dbName}". All relational tables verified.`);
+      console.log(`[MySQL Host] Connected successfully to MySQL database "${dbName}". All relational tables and attachments store verified.`);
       return true;
     } catch (err: any) {
       this.isConnected = false;
@@ -472,6 +595,7 @@ export class MySqlDatabaseManager {
       const pool = this.getPool();
       const tables = [
         'buyer_orders',
+        'attachments',
         'production_records',
         'inspection_records',
         'inventory_items',
@@ -545,6 +669,7 @@ export class MySqlDatabaseManager {
         bomItems: typeof r.bom_items === 'string' ? JSON.parse(r.bom_items) : r.bom_items,
         logistics: typeof r.logistics === 'string' ? JSON.parse(r.logistics) : r.logistics,
         colorSizeBreakdown: typeof r.color_size_breakdown === 'string' ? JSON.parse(r.color_size_breakdown) : (r.color_size_breakdown || undefined),
+        attachments: typeof r.attachments === 'string' ? JSON.parse(r.attachments) : (r.attachments || []),
       }));
     } catch (err) {
       console.error('[MySQL Host] Error loading buyer orders:', err);
@@ -562,8 +687,8 @@ export class MySqlDatabaseManager {
           season, order_quantity, fob_price, currency, ship_date, cutting_start_date,
           status, quality_standard, product_image, merchandiser_name, merchandiser_email,
           merchandiser_phone, smv, production_target, daily_target, production_tracking,
-          wip_record, bom_items, logistics, color_size_breakdown, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          wip_record, bom_items, logistics, color_size_breakdown, attachments, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         ON DUPLICATE KEY UPDATE
           buyer_name = VALUES(buyer_name),
           brand = VALUES(brand),
@@ -589,6 +714,7 @@ export class MySqlDatabaseManager {
           bom_items = VALUES(bom_items),
           logistics = VALUES(logistics),
           color_size_breakdown = VALUES(color_size_breakdown),
+          attachments = VALUES(attachments),
           updated_at = NOW();
       `;
 
@@ -619,7 +745,50 @@ export class MySqlDatabaseManager {
         JSON.stringify(order.bomItems || []),
         JSON.stringify(order.logistics || {}),
         JSON.stringify(order.colorSizeBreakdown || []),
+        JSON.stringify(order.attachments || []),
       ]);
+
+      // Centrally persist each attachment into the MySQL attachments table
+      if (Array.isArray(order.attachments) && order.attachments.length > 0) {
+        for (const att of order.attachments) {
+          if (att && att.id && att.fileName) {
+            await this.upsertAttachment({
+              id: att.id,
+              entityType: 'BUYER_ORDER',
+              entityId: order.id,
+              moduleKey: 'buyer_order',
+              fileName: att.fileName,
+              fileType: att.fileType || 'document',
+              fileSize: att.fileSize || 0,
+              mimeType: att.fileType || '',
+              category: att.category || 'ORDER_ATTACHMENT',
+              fileData: att.fileData || '',
+              uploadedBy: att.uploadedBy || 'Merchandising / QC',
+              notes: att.notes || `Attachment for PO ${order.orderNumber}`,
+              createdAt: att.uploadedAt || new Date().toISOString(),
+            }).catch(() => {});
+          }
+        }
+      }
+
+      // If product photo is an uploaded base64 data URL, persist centrally as attachment too
+      if (order.productImage && order.productImage.startsWith('data:')) {
+        await this.upsertAttachment({
+          id: `img-${order.id}`,
+          entityType: 'BUYER_ORDER_IMAGE',
+          entityId: order.id,
+          moduleKey: 'buyer_order',
+          fileName: `${order.orderNumber}_Product_Photo.jpg`,
+          fileType: 'image/jpeg',
+          fileSize: Math.round(order.productImage.length * 0.75),
+          mimeType: 'image/jpeg',
+          category: 'PRODUCT_IMAGE',
+          fileData: order.productImage,
+          uploadedBy: order.merchandiserName || 'Merchandising',
+          notes: `Official product style photo for ${order.orderNumber} (${order.styleNumber})`,
+          createdAt: new Date().toISOString(),
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('[MySQL Host] Error upserting buyer order:', err);
       throw err;
@@ -651,7 +820,8 @@ export class MySqlDatabaseManager {
         buyer: r.buyer,
         sewingLine: r.sewing_line,
         lineId: r.line_id || undefined,
-        section: r.section || 'SEWING',
+        section: r.section || 'Sewing Floor',
+        unit: r.unit || 'Unit 01 (Dhaka Complex)',
         recordDate: r.record_date || '',
         targetQuantity: Number(r.target_quantity) || 0,
         completedQuantity: Number(r.completed_quantity) || 0,
@@ -678,16 +848,18 @@ export class MySqlDatabaseManager {
       const pool = this.getPool();
       const sql = `
         INSERT INTO production_records (
-          id, order_number, style_name, buyer, sewing_line, line_id, section, record_date,
+          id, order_number, style_name, buyer, sewing_line, line_id, section, unit, record_date,
           target_quantity, completed_quantity, total_defects, defect_rate, dhu_rate, rft_rate,
           hourly_reports, quality_inspector, status, remarks, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         ON DUPLICATE KEY UPDATE
+          order_number = VALUES(order_number),
           style_name = VALUES(style_name),
           buyer = VALUES(buyer),
           sewing_line = VALUES(sewing_line),
           line_id = VALUES(line_id),
           section = VALUES(section),
+          unit = VALUES(unit),
           record_date = VALUES(record_date),
           target_quantity = VALUES(target_quantity),
           completed_quantity = VALUES(completed_quantity),
@@ -709,7 +881,8 @@ export class MySqlDatabaseManager {
         record.buyer,
         record.sewingLine,
         record.lineId || null,
-        record.section || 'SEWING',
+        record.section || 'Sewing Floor',
+        record.unit || 'Unit 01 (Dhaka Complex)',
         record.recordDate || null,
         record.targetQuantity || 0,
         record.completedQuantity || 0,
@@ -968,8 +1141,7 @@ export class MySqlDatabaseManager {
   public async loadAuditLogs(): Promise<AuditLog[]> {
     if (!this.isConnected) return [];
     try {
-      const pool = this.getPool();
-      const [rows]: [any[], any] = await pool.query(
+      const [rows]: [any[], any] = await this.query(
         'SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 200'
       );
       return rows.map((r) => ({
@@ -982,8 +1154,10 @@ export class MySqlDatabaseManager {
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
         details: r.details,
       }));
-    } catch (err) {
-      console.error('[MySQL Host] Error loading audit logs from MySQL:', err);
+    } catch (err: any) {
+      if (err.code !== 'ECONNRESET') {
+        console.warn('[MySQL Host] Notice loading audit logs from MySQL:', err.message || err);
+      }
       return [];
     }
   }
@@ -991,9 +1165,8 @@ export class MySqlDatabaseManager {
   public async insertAuditLog(log: AuditLog): Promise<void> {
     if (!this.isConnected) return;
     try {
-      const pool = this.getPool();
-      await pool.query(
-        `INSERT INTO audit_logs (id, action, entity, entity_id, performed_by, user_role, timestamp, details)
+      await this.query(
+        `INSERT IGNORE INTO audit_logs (id, action, entity, entity_id, performed_by, user_role, timestamp, details)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           log.id,
@@ -1006,8 +1179,12 @@ export class MySqlDatabaseManager {
           log.details || null,
         ]
       );
-    } catch (err) {
-      console.error('[MySQL Host] Failed inserting audit log to MySQL:', err);
+    } catch (err: any) {
+      if (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.fatal) {
+        // Connection drop is handled by this.query self-recovery and offline fallback
+      } else if (err.code !== 'ER_DUP_ENTRY') {
+        console.warn('[MySQL Host] Audit log insert warning:', err.message || err);
+      }
     }
   }
 
@@ -1091,8 +1268,8 @@ export class MySqlDatabaseManager {
       // 2. Seed Production Records
       if (seedData.productionRecords && seedData.productionRecords.length > 0) {
         const [prRows]: [any[], any] = await pool.query('SELECT COUNT(*) as count FROM production_records');
-        if (prRows[0]?.count === 0) {
-          console.log(`[MySQL Host] Seeding ${seedData.productionRecords.length} production floor records into MySQL...`);
+        if ((prRows[0]?.count || 0) < seedData.productionRecords.length) {
+          console.log(`[MySQL Host] Seeding/Updating ${seedData.productionRecords.length} production floor records into MySQL...`);
           for (const pr of seedData.productionRecords) {
             await this.upsertProductionRecord(pr);
           }
@@ -1110,8 +1287,8 @@ export class MySqlDatabaseManager {
 
       // 4. Seed Inspections
       const [inspRows]: [any[], any] = await pool.query('SELECT COUNT(*) as count FROM inspection_records');
-      if (inspRows[0]?.count === 0 && seedData.inspections.length > 0) {
-        console.log(`[MySQL Host] Seeding ${seedData.inspections.length} inspections into MySQL...`);
+      if ((inspRows[0]?.count || 0) < seedData.inspections.length && seedData.inspections.length > 0) {
+        console.log(`[MySQL Host] Seeding/Updating ${seedData.inspections.length} inspections into MySQL...`);
         for (const insp of seedData.inspections) {
           await this.insertInspection(insp);
         }
@@ -1161,6 +1338,148 @@ export class MySqlDatabaseManager {
     }
   }
 
+  // --- Attachments & Media CRUD (Images, PDFs, Documents) ---
+  public async loadAttachments(filter?: {
+    entityType?: string;
+    entityId?: string;
+    moduleKey?: string;
+    includeData?: boolean;
+  }): Promise<AttachmentRecord[]> {
+    if (!this.isConnected) return [];
+    try {
+      const pool = this.getPool();
+      const whereClauses: string[] = [];
+      const params: any[] = [];
+
+      if (filter?.entityType) {
+        whereClauses.push('entity_type = ?');
+        params.push(filter.entityType);
+      }
+      if (filter?.entityId) {
+        whereClauses.push('entity_id = ?');
+        params.push(filter.entityId);
+      }
+      if (filter?.moduleKey) {
+        whereClauses.push('module_key = ?');
+        params.push(filter.moduleKey);
+      }
+
+      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+      const selectCols = filter?.includeData !== false
+        ? '*'
+        : 'id, entity_type, entity_id, module_key, file_name, file_type, file_size, mime_type, category, uploaded_by, notes, created_at, updated_at';
+
+      const [rows]: [any[], any] = await pool.query(
+        `SELECT ${selectCols} FROM attachments ${whereSql} ORDER BY created_at DESC`,
+        params
+      );
+
+      return rows.map((r) => ({
+        id: r.id,
+        entityType: r.entity_type,
+        entityId: r.entity_id,
+        moduleKey: r.module_key || undefined,
+        fileName: r.file_name,
+        fileType: r.file_type || undefined,
+        fileSize: Number(r.file_size) || 0,
+        mimeType: r.mime_type || undefined,
+        category: r.category || undefined,
+        fileData: r.file_data || '',
+        uploadedBy: r.uploaded_by || 'Current User',
+        notes: r.notes || undefined,
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+        updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+      }));
+    } catch (err) {
+      console.error('[MySQL Host] Error loading attachments:', err);
+      return [];
+    }
+  }
+
+  public async getAttachment(id: string): Promise<AttachmentRecord | null> {
+    if (!this.isConnected) return null;
+    try {
+      const pool = this.getPool();
+      const [rows]: [any[], any] = await pool.query('SELECT * FROM attachments WHERE id = ? LIMIT 1', [id]);
+      if (rows.length === 0) return null;
+      const r = rows[0];
+      return {
+        id: r.id,
+        entityType: r.entity_type,
+        entityId: r.entity_id,
+        moduleKey: r.module_key || undefined,
+        fileName: r.file_name,
+        fileType: r.file_type || undefined,
+        fileSize: Number(r.file_size) || 0,
+        mimeType: r.mime_type || undefined,
+        category: r.category || undefined,
+        fileData: r.file_data || '',
+        uploadedBy: r.uploaded_by || 'Current User',
+        notes: r.notes || undefined,
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+        updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+      };
+    } catch (err) {
+      console.error('[MySQL Host] Error getting attachment:', err);
+      return null;
+    }
+  }
+
+  public async upsertAttachment(att: AttachmentRecord): Promise<void> {
+    if (!this.isConnected) return;
+    try {
+      const pool = this.getPool();
+      const sql = `
+        INSERT INTO attachments (
+          id, entity_type, entity_id, module_key, file_name, file_type, file_size,
+          mime_type, category, file_data, uploaded_by, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+          entity_type = VALUES(entity_type),
+          entity_id = VALUES(entity_id),
+          module_key = VALUES(module_key),
+          file_name = VALUES(file_name),
+          file_type = VALUES(file_type),
+          file_size = VALUES(file_size),
+          mime_type = VALUES(mime_type),
+          category = VALUES(category),
+          file_data = VALUES(file_data),
+          uploaded_by = VALUES(uploaded_by),
+          notes = VALUES(notes),
+          updated_at = NOW();
+      `;
+
+      await pool.query(sql, [
+        att.id,
+        att.entityType || 'GENERAL',
+        att.entityId || 'general',
+        att.moduleKey || '',
+        att.fileName,
+        att.fileType || '',
+        att.fileSize || (att.fileData ? Math.round(att.fileData.length * 0.75) : 0),
+        att.mimeType || att.fileType || '',
+        att.category || '',
+        att.fileData,
+        att.uploadedBy || 'Current User',
+        att.notes || null,
+      ]);
+    } catch (err) {
+      console.error('[MySQL Host] Error upserting attachment to MySQL:', err);
+    }
+  }
+
+  public async deleteAttachment(id: string): Promise<boolean> {
+    if (!this.isConnected) return false;
+    try {
+      const pool = this.getPool();
+      await pool.query('DELETE FROM attachments WHERE id = ?', [id]);
+      return true;
+    } catch (err) {
+      console.error('[MySQL Host] Error deleting attachment:', err);
+      return false;
+    }
+  }
+
   public async resetDatabase(mode: 'blank' | 'defaults'): Promise<boolean> {
     if (!this.isConnected) return false;
     try {
@@ -1173,7 +1492,10 @@ export class MySqlDatabaseManager {
       await pool.query('TRUNCATE TABLE module_store');
       await pool.query('TRUNCATE TABLE planning_records');
       await pool.query('TRUNCATE TABLE production_orders');
-      console.log(`[MySQL Host] Successfully truncated all ERP relational tables (Mode: ${mode}).`);
+      try {
+        await pool.query('TRUNCATE TABLE attachments');
+      } catch (_) {}
+      console.log(`[MySQL Host] Successfully truncated all ERP relational tables and attachments store (Mode: ${mode}).`);
       return true;
     } catch (err) {
       console.error('[MySQL Host] Error resetting database:', err);

@@ -6,6 +6,7 @@ import {
   QualityGrade,
   RealTimeEvent,
   UserSession,
+  AttachmentRecord,
 } from '../types/erp';
 import { BuyerOrder } from '../types/modules';
 import { CentralStorageManager, CentralErpData } from './central-storage';
@@ -21,6 +22,7 @@ class ErpDataStore {
   private inspections: InspectionRecord[] = [];
   private productionOrders: ProductionOrder[] = [];
   private auditLogs: AuditLog[] = [];
+  private attachments: AttachmentRecord[] = [];
   private modulesData: Record<string, any> = {};
   private listeners: Set<(event: RealTimeEvent) => void> = new Set();
   private mysqlConnected: boolean = false;
@@ -36,54 +38,82 @@ class ErpDataStore {
   public loadFromDisk(): void {
     const central: CentralErpData = CentralStorageManager.loadCentralData();
     this.inventory = central.inventory || [];
-    this.inspections = central.inspections || [];
-    this.productionOrders = central.productionOrders || [];
+    const existingInspIds = new Set((central.inspections || []).map((i) => i.id));
+    const mergedInspections = [
+      ...(central.inspections || []),
+      ...INITIAL_INSPECTIONS.filter((init) => !existingInspIds.has(init.id)),
+    ].map((r) => {
+      if (r.excessQuantity !== undefined && r.shortQuantity !== undefined) return r;
+      const lot = Number(r.lotQuantity) || 0;
+      const ord = Number(r.orderQuantity) || 0;
+      const diff = lot - ord;
+      return {
+        ...r,
+        excessQuantity: diff > 0 ? diff : 0,
+        shortQuantity: diff < 0 ? Math.abs(diff) : 0,
+        quantityVariance: diff,
+      };
+    });
+    this.inspections = mergedInspections;
+    const existingPoIds = new Set((central.productionOrders || []).map((p) => p.id));
+    this.productionOrders = [
+      ...(central.productionOrders || []),
+      ...INITIAL_PRODUCTION_ORDERS.filter((init) => !existingPoIds.has(init.id)),
+    ];
     this.auditLogs = central.auditLogs || [];
+    this.attachments = central.attachments || [];
     this.modulesData = central.modulesData || {};
 
     // Buyer orders from modulesData (respect user deletions even if empty [])
     if (this.modulesData.buyer_orders && Array.isArray(this.modulesData.buyer_orders)) {
       this.buyerOrders = this.modulesData.buyer_orders;
-    } else if (this.modulesData.buyer_orders === undefined) {
+    } else if (this.modulesData.buyer_orders === undefined && !this.modulesData._is_zero_state) {
       this.buyerOrders = [...MOCK_BUYER_ORDERS];
     }
 
     // Production floor records (respect user deletions even if empty [])
-    if (this.modulesData.production_records && Array.isArray(this.modulesData.production_records)) {
+    if (this.modulesData.production_records && Array.isArray(this.modulesData.production_records) && this.modulesData.production_records.length > 0) {
       this.productionRecords = this.modulesData.production_records;
-    } else if (this.modulesData.production_records === undefined && this.productionOrders && this.productionOrders.length > 0) {
+    } else {
       this.productionRecords = this.productionOrders;
+    }
+
+    // Merge any missing initial production records
+    const existingIds = new Set(this.productionRecords.map((p) => p.id));
+    for (const initPo of INITIAL_PRODUCTION_ORDERS) {
+      if (!existingIds.has(initPo.id)) {
+        this.productionRecords.push(initPo);
+        existingIds.add(initPo.id);
+      }
     }
 
     const todayISO = new Date().toISOString().split('T')[0];
     this.productionRecords = this.productionRecords.map((rec) => {
-      if (rec.id === 'po-206' && (!rec.recordDate || rec.recordDate === '2026-09-21' || rec.recordDate === '')) {
-        return {
-          ...rec,
-          recordDate: todayISO,
-          sewingLine: 'Finishing Line 01 (Steam Tunnel Pressing)',
-          lineId: 'FIN-01',
-          section: 'Finishing & Packing Section 01',
-        };
-      }
-      if (rec.id === 'po-201' && (!rec.recordDate || rec.recordDate === '2026-09-21' || rec.recordDate === '')) {
-        return {
-          ...rec,
-          recordDate: todayISO,
-        };
-      }
-      if (!rec.recordDate) {
-        return {
-          ...rec,
-          recordDate: rec.createdAt ? rec.createdAt.split('T')[0] : todayISO,
-        };
-      }
-      return rec;
+      const seed = INITIAL_PRODUCTION_ORDERS.find((s) => s.id === rec.id);
+      return {
+        ...rec,
+        orderNumber: seed?.orderNumber || rec.orderNumber,
+        buyer: seed?.buyer || rec.buyer,
+        styleName: seed?.styleName || rec.styleName,
+        styleNumber: seed?.styleNumber || rec.styleNumber,
+        unit: seed?.unit || rec.unit || 'Unit 01 (Dhaka Complex)',
+        section: seed?.section || rec.section || 'Sewing Floor',
+        sewingLine: seed?.sewingLine || rec.sewingLine || 'Sewing Line 01 (Knit Tops)',
+        lineId: seed?.lineId || rec.lineId || 'Line 01',
+        recordDate: seed?.recordDate || (rec.recordDate && rec.recordDate !== '' ? rec.recordDate.split('T')[0] : todayISO),
+        hourlyReports: rec.hourlyReports && rec.hourlyReports.length > 0 ? rec.hourlyReports : (seed?.hourlyReports || []),
+        top3Defects: rec.top3Defects && rec.top3Defects.length > 0 ? rec.top3Defects : (seed?.top3Defects || []),
+      };
     });
 
     console.log(
-      `[ERP Host Central] Loaded ${this.buyerOrders.length} buyer orders, ${this.inventory.length} inventory items, ${this.inspections.length} inspections from disk cache.`
+      `[ERP Host Central] Loaded ${this.buyerOrders.length} buyer orders, ${this.inventory.length} inventory items, ${this.inspections.length} inspections, ${this.productionRecords.length} production records from central store.`
     );
+    this.persistToDisk();
+  }
+
+  public isZeroState(): boolean {
+    return Boolean(this.modulesData._is_zero_state);
   }
 
   public async initMysqlSync(): Promise<void> {
@@ -95,19 +125,21 @@ class ErpDataStore {
       this.mysqlConnected = connected;
 
       if (connected) {
-        // Seed MySQL if it's a fresh database
-        await mysqlManager.seedIfEmpty({
-          buyerOrders: this.buyerOrders,
-          productionRecords: this.productionRecords,
-          inventory: this.inventory,
-          inspections: this.inspections,
-          productionOrders: this.productionOrders,
-          auditLogs: this.auditLogs,
-          modulesData: this.modulesData,
-        });
+        // Only seed MySQL if it is NOT marked as a zero state fresh start
+        if (!this.modulesData._is_zero_state) {
+          await mysqlManager.seedIfEmpty({
+            buyerOrders: this.buyerOrders,
+            productionRecords: this.productionRecords,
+            inventory: this.inventory,
+            inspections: this.inspections,
+            productionOrders: this.productionOrders,
+            auditLogs: this.auditLogs,
+            modulesData: this.modulesData,
+          });
+        }
 
         // Load latest state from MySQL relational tables
-        const [mysqlOrders, mysqlRecords, mysqlInv, mysqlInsp, mysqlPo, mysqlAudit, mysqlModules] =
+        const [mysqlOrders, mysqlRecords, mysqlInv, mysqlInsp, mysqlPo, mysqlAudit, mysqlModules, mysqlAttachments] =
           await Promise.all([
             mysqlManager.loadBuyerOrders(),
             mysqlManager.loadProductionRecords(),
@@ -116,20 +148,26 @@ class ErpDataStore {
             mysqlManager.loadProductionOrders(),
             mysqlManager.loadAuditLogs(),
             mysqlManager.loadAllModulesData(),
+            mysqlManager.loadAttachments(),
           ]);
 
-        if (mysqlOrders.length > 0) {
+        if (mysqlModules && mysqlModules.system_zero_state?.isZeroState) {
+          this.modulesData._is_zero_state = true;
+        }
+
+        if (mysqlOrders.length > 0 || this.isZeroState()) {
           this.buyerOrders = mysqlOrders;
           this.modulesData.buyer_orders = mysqlOrders;
         }
-        if (mysqlRecords.length > 0) {
+        if (mysqlRecords.length > 0 || this.isZeroState()) {
           this.productionRecords = mysqlRecords;
           this.modulesData.production_records = mysqlRecords;
         }
-        if (mysqlInv.length > 0) this.inventory = mysqlInv;
-        if (mysqlInsp.length > 0) this.inspections = mysqlInsp;
-        if (mysqlPo.length > 0) this.productionOrders = mysqlPo;
-        if (mysqlAudit.length > 0) this.auditLogs = mysqlAudit;
+        if (mysqlInv.length > 0 || this.isZeroState()) this.inventory = mysqlInv;
+        if (mysqlInsp.length > 0 || this.isZeroState()) this.inspections = mysqlInsp;
+        if (mysqlPo.length > 0 || this.isZeroState()) this.productionOrders = mysqlPo;
+        if (mysqlAudit.length > 0 || this.isZeroState()) this.auditLogs = mysqlAudit;
+        if (mysqlAttachments.length > 0 || this.isZeroState()) this.attachments = mysqlAttachments;
         if (Object.keys(mysqlModules).length > 0) {
           this.modulesData = { ...this.modulesData, ...mysqlModules };
         }
@@ -159,6 +197,7 @@ class ErpDataStore {
       productionOrders: this.productionOrders,
       auditLogs: this.auditLogs,
       modulesData: this.modulesData,
+      attachments: this.attachments,
     });
   }
 
@@ -525,8 +564,25 @@ class ErpDataStore {
     user: UserSession
   ): InspectionRecord {
     const code = `QMS-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const lot = Number(data.lotQuantity) || 0;
+    const ord = Number(data.orderQuantity) || 0;
+    const diff = lot - ord;
     const newRecord: InspectionRecord = {
       ...data,
+      lotQuantity: lot,
+      orderQuantity: ord,
+      excessQuantity:
+        data.excessQuantity !== undefined && data.excessQuantity !== null && Number(data.excessQuantity) > 0
+          ? Number(data.excessQuantity)
+          : (diff > 0 ? diff : 0),
+      shortQuantity:
+        data.shortQuantity !== undefined && data.shortQuantity !== null && Number(data.shortQuantity) > 0
+          ? Number(data.shortQuantity)
+          : (diff < 0 ? Math.abs(diff) : 0),
+      quantityVariance:
+        data.quantityVariance !== undefined && data.quantityVariance !== null
+          ? Number(data.quantityVariance)
+          : diff,
       id: `insp-${Date.now().toString().slice(-4)}`,
       inspectionCode: code,
       inspectorId: user.id,
@@ -640,11 +696,20 @@ class ErpDataStore {
     if (this.modulesData && this.modulesData[moduleKey] !== undefined) {
       return this.modulesData[moduleKey] as T;
     }
+    // If the system has been reset to zero fresh start, return empty array/fallback rather than mock sample data
+    if (this.isZeroState()) {
+      return (Array.isArray(fallback) ? [] : fallback) as T;
+    }
     return fallback;
   }
 
   public saveModuleData<T>(moduleKey: string, data: T, user?: UserSession): T {
     this.modulesData[moduleKey] = data;
+
+    // Clearing zero state flag when real records are imported or saved
+    if (this.modulesData._is_zero_state && moduleKey !== 'system_zero_state') {
+      delete this.modulesData._is_zero_state;
+    }
 
     if (moduleKey === 'buyer_orders' && Array.isArray(data)) {
       this.buyerOrders = data as BuyerOrder[];
@@ -681,6 +746,106 @@ class ErpDataStore {
     return data;
   }
 
+  // --- Attachments & Media (Images, PDFs, Tech Packs, Documents) ---
+  public getAttachments(filter?: {
+    entityType?: string;
+    entityId?: string;
+    moduleKey?: string;
+  }): AttachmentRecord[] {
+    let result = [...this.attachments];
+    if (filter?.entityType) {
+      result = result.filter((a) => a.entityType.toLowerCase() === filter.entityType!.toLowerCase());
+    }
+    if (filter?.entityId) {
+      result = result.filter((a) => a.entityId === filter.entityId);
+    }
+    if (filter?.moduleKey) {
+      result = result.filter((a) => (a.moduleKey || '').toLowerCase() === filter.moduleKey!.toLowerCase());
+    }
+    return result;
+  }
+
+  public getAttachment(id: string): AttachmentRecord | undefined {
+    return this.attachments.find((a) => a.id === id);
+  }
+
+  public upsertAttachment(att: AttachmentRecord, user?: UserSession): AttachmentRecord {
+    const cleanAtt: AttachmentRecord = {
+      ...att,
+      id: att.id || `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      createdAt: att.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      uploadedBy: user?.name || att.uploadedBy || 'Current User',
+    };
+
+    const index = this.attachments.findIndex((a) => a.id === cleanAtt.id);
+    if (index >= 0) {
+      this.attachments[index] = cleanAtt;
+    } else {
+      this.attachments.unshift(cleanAtt);
+    }
+
+    this.persistToDisk();
+
+    // Async commit to MySQL attachments table
+    mysqlManager.upsertAttachment(cleanAtt).catch((err) => {
+      console.error('[MySQL Error] Failed upserting attachment to MySQL:', err);
+    });
+
+    if (user) {
+      this.addAuditLog({
+        action: index >= 0 ? 'UPDATE_ATTACHMENT' : 'UPLOAD_ATTACHMENT',
+        entity: 'Attachment',
+        entityId: cleanAtt.id,
+        performedBy: user.name,
+        userRole: user.role,
+        details: `Stored attachment "${cleanAtt.fileName}" (${cleanAtt.category || 'General'}) for ${cleanAtt.entityType} ${cleanAtt.entityId}`,
+      });
+    }
+
+    this.broadcast({
+      type: 'ATTACHMENT_UPSERTED',
+      attachment: cleanAtt,
+      user: user?.name || 'Central System',
+      timestamp: new Date().toISOString(),
+    });
+
+    return cleanAtt;
+  }
+
+  public deleteAttachment(id: string, user?: UserSession): boolean {
+    const index = this.attachments.findIndex((a) => a.id === id);
+    if (index === -1) return false;
+
+    const removed = this.attachments[index];
+    this.attachments.splice(index, 1);
+    this.persistToDisk();
+
+    mysqlManager.deleteAttachment(id).catch((err) => {
+      console.error('[MySQL Error] Failed deleting attachment from MySQL:', err);
+    });
+
+    if (user) {
+      this.addAuditLog({
+        action: 'DELETE_ATTACHMENT',
+        entity: 'Attachment',
+        entityId: id,
+        performedBy: user.name,
+        userRole: user.role,
+        details: `Deleted attachment "${removed.fileName}"`,
+      });
+    }
+
+    this.broadcast({
+      type: 'ATTACHMENT_DELETED',
+      id,
+      user: user?.name || 'Central System',
+      timestamp: new Date().toISOString(),
+    });
+
+    return true;
+  }
+
   // --- Audit Logs ---
   public getAuditLogs(): AuditLog[] {
     return [...this.auditLogs];
@@ -700,7 +865,9 @@ class ErpDataStore {
 
     // Async commit to MySQL audit_logs
     mysqlManager.insertAuditLog(newLog).catch((err) => {
-      console.error('[MySQL Error] Failed inserting audit log to MySQL:', err);
+      if (err?.code !== 'ECONNRESET' && err?.code !== 'PROTOCOL_CONNECTION_LOST') {
+        console.warn('[MySQL Warning] Audit log sync deferred:', err?.message || err);
+      }
     });
 
     return newLog;
@@ -734,6 +901,8 @@ class ErpDataStore {
       inspectionCount: this.inspections.length,
       itemCount: this.inventory.length,
       buyerOrdersCount: this.buyerOrders.length,
+      attachmentsCount: this.attachments.length,
+      isZeroState: this.isZeroState(),
       databaseEngine: this.isMysqlActive() ? 'MySQL Server 8.0+ (Host PC Database)' : 'Local JSON Store (Offline Fallback)',
       isMysqlConnected: this.isMysqlActive(),
       storageFile: this.getStorageFilePath(),
@@ -745,42 +914,63 @@ class ErpDataStore {
     mode: 'blank' | 'defaults',
     user?: UserSession
   ): Promise<{ success: boolean; message: string }> {
+    // STRICT SECURITY: Only Super Admin can reset the database to Zero fresh start!
+    const isSuperAdmin = user?.isSuperAdmin === true || user?.role === 'Super Admin' || user?.role === 'ADMIN';
+    if (!isSuperAdmin) {
+      return {
+        success: false,
+        message: 'Access Denied: Only a Super Administrator has permission to reset the ERP database to zero fresh start.',
+      };
+    }
+
     if (mode === 'blank') {
       this.inventory = [];
       this.inspections = [];
       this.productionOrders = [];
       this.productionRecords = [];
       this.buyerOrders = [];
-      this.modulesData = {};
+      this.attachments = [];
+      this.modulesData = {
+        _is_zero_state: true,
+        _zero_reset_at: new Date().toISOString(),
+        _zero_reset_by: user?.name || 'Super Administrator',
+      };
       this.persistToDisk();
 
       if (this.isMysqlActive()) {
         await mysqlManager.resetDatabase('blank');
+        await mysqlManager.saveModuleData('system_zero_state', {
+          isZeroState: true,
+          resetAt: new Date().toISOString(),
+          resetBy: user?.name || 'Super Administrator',
+        });
       }
 
       this.addAuditLog({
-        action: 'SYSTEM_RESET_BLANK',
+        action: 'SUPER_ADMIN_RESET_ZERO',
         entity: 'SystemStore',
         entityId: 'global',
-        performedBy: user?.name || 'Administrator',
-        userRole: user?.role || 'ADMIN',
-        details: 'ERP purged to clean slate. All records wiped for fresh live operation.',
+        performedBy: user?.name || 'Super Administrator',
+        userRole: user?.role || 'Super Admin',
+        details: 'ERP purged to 0 records clean slate by Super Administrator. All modules, records, and attachments wiped for fresh live factory start.',
       });
 
       this.broadcast({
         type: 'SYSTEM_RESET',
         mode: 'blank',
-        user: user?.name || 'Admin',
+        user: user?.name || 'Super Admin',
         timestamp: new Date().toISOString(),
       });
 
-      return { success: true, message: 'ERP completely cleared to a clean slate (0 records).' };
+      return { success: true, message: 'ERP completely cleared to 0 records fresh start! Ready for authentic live factory operations.' };
     } else {
       this.buyerOrders = [...MOCK_BUYER_ORDERS];
       this.inventory = [...INITIAL_INVENTORY];
       this.inspections = [...INITIAL_INSPECTIONS];
       this.productionOrders = [...INITIAL_PRODUCTION_ORDERS];
       this.productionRecords = [...INITIAL_PRODUCTION_ORDERS];
+      this.attachments = [];
+      delete this.modulesData._is_zero_state;
       this.persistToDisk();
 
       if (this.isMysqlActive()) {
@@ -802,13 +992,13 @@ class ErpDataStore {
         entityId: 'global',
         performedBy: user?.name || 'Administrator',
         userRole: user?.role || 'ADMIN',
-        details: 'ERP restored to factory sample baseline.',
+        details: 'ERP restored to factory sample baseline defaults.',
       });
 
       this.broadcast({
         type: 'SYSTEM_RESET',
         mode: 'defaults',
-        user: user?.name || 'Admin',
+        user: user?.name || 'Super Admin',
         timestamp: new Date().toISOString(),
       });
 

@@ -50,6 +50,7 @@ import { ProductionManagementView } from '@/components/modules/production/Produc
 import { ProductionExportModal } from '@/components/modules/production/ProductionExportModal';
 import { ProductionSingleExportModal } from '@/components/modules/production/ProductionSingleExportModal';
 import { ProductionReviewModal } from '@/components/modules/production/ProductionReviewModal';
+import { ProductionQualityCharts } from '@/components/modules/production/ProductionQualityCharts';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { useErpAuth } from '@/hooks/use-erp-auth';
 import {
@@ -57,7 +58,13 @@ import {
   trackEntityUpdate,
   trackEntityDelete,
 } from '@/lib/services/audit-trail-service';
-import { getProductionLines, INITIAL_PRODUCTION_UNITS } from '@/lib/db/production-management-store';
+import {
+  getProductionLines,
+  getProductionUnits,
+  getProductionSections,
+  INITIAL_PRODUCTION_UNITS,
+} from '@/lib/db/production-management-store';
+import { ProductionUnit, ProductionSection, ProductionLine } from '@/lib/types/production-management';
 import {
   getProductionRecords,
   saveProductionRecords,
@@ -221,15 +228,25 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
     }
   }, [orders]);
 
-  // Production Management Lines Count (Reactive to store updates)
+  // Production Management Data (Reactive to management store updates)
+  const [managedUnits, setManagedUnits] = useState<ProductionUnit[]>([]);
+  const [managedSections, setManagedSections] = useState<ProductionSection[]>([]);
+  const [managedLines, setManagedLines] = useState<ProductionLine[]>([]);
   const [managementLinesCount, setManagementLinesCount] = useState<number>(8);
+
   React.useEffect(() => {
-    setManagementLinesCount(getProductionLines().length);
-    const handleUpdate = () => {
-      setManagementLinesCount(getProductionLines().length);
+    const refreshManagementData = () => {
+      const units = getProductionUnits();
+      const sections = getProductionSections();
+      const lines = getProductionLines();
+      setManagedUnits(units);
+      setManagedSections(sections);
+      setManagedLines(lines);
+      setManagementLinesCount(lines.length);
     };
-    window.addEventListener('erp_production_management_updated', handleUpdate);
-    return () => window.removeEventListener('erp_production_management_updated', handleUpdate);
+    refreshManagementData();
+    window.addEventListener('erp_production_management_updated', refreshManagementData);
+    return () => window.removeEventListener('erp_production_management_updated', refreshManagementData);
   }, []);
 
   const updateOrders = (updated: ProductionOrder[]) => {
@@ -476,42 +493,39 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
   // Unique lists for Unit, Floor Section, Line, Buyer, Status filters
   const uniqueUnits = useMemo(() => {
     const set = new Set<string>();
-    INITIAL_PRODUCTION_UNITS.forEach((u) => {
+    managedUnits.forEach((u) => {
       if (u.name) set.add(u.name.split('(')[0].trim());
       if (u.unitCode) set.add(u.unitCode);
     });
     orders.forEach((o) => {
-      if (o.unit) set.add(o.unit);
+      if (o.unit) set.add(o.unit.split('(')[0].trim());
     });
     return Array.from(set).filter(Boolean);
-  }, [orders]);
+  }, [orders, managedUnits]);
 
   const uniqueSections = useMemo(() => {
     const set = new Set<string>();
-    set.add('Cutting Floor');
-    set.add('Sewing Floor');
-    set.add('Finishing Floor');
-    set.add('Packing Floor');
-    set.add('Washing');
-    set.add('QA / Quality');
+    managedSections.forEach((s) => {
+      if (s.name) set.add(s.name);
+    });
     orders.forEach((o) => {
       if (o.section) set.add(o.section);
     });
     return Array.from(set).filter(Boolean);
-  }, [orders]);
+  }, [orders, managedSections]);
 
   const uniqueLines = useMemo(() => {
     const set = new Set<string>();
-    orders.forEach((o) => {
-      if (o.lineId) set.add(o.lineId);
-      if (o.sewingLine) set.add(o.sewingLine);
-    });
-    getProductionLines().forEach((l) => {
+    managedLines.forEach((l) => {
       if (l.name) set.add(l.name.split('(')[0].trim());
       if (l.lineCode) set.add(l.lineCode);
     });
+    orders.forEach((o) => {
+      if (o.lineId) set.add(o.lineId);
+      if (o.sewingLine) set.add(o.sewingLine.split('(')[0].trim());
+    });
     return Array.from(set).filter(Boolean);
-  }, [orders]);
+  }, [orders, managedLines]);
 
   const uniqueBuyers = useMemo(() => {
     return Array.from(new Set(orders.map((o) => o.buyer))).filter(Boolean);
@@ -839,28 +853,47 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
       },
     },
     {
-      key: 'unit_section',
-      header: 'Unit & Section',
+      key: 'unit_section_line',
+      header: 'Unit, Section & Line',
       sortable: true,
-      accessor: (row) => `${row.unit || ''} ${row.section || row.sewingLine || ''}`,
+      accessor: (row) => `${row.unit || ''} ${row.section || ''} ${row.sewingLine || ''} ${row.lineId || ''}`,
       cell: (row) => (
-        <div>
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
               <Building2 className="w-3 h-3 text-slate-500 shrink-0" />
-              <span>{row.unit || 'Unit 01'}</span>
+              <span>{row.unit ? row.unit.split('(')[0].trim() : 'Unit 01'}</span>
+            </span>
+            {row.section && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <Layers className="w-3 h-3 text-indigo-500 shrink-0" />
+                <span>{row.section}</span>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {row.lineId && (
+              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-blue-100 text-blue-800 border border-blue-200 shrink-0">
+                {row.lineId}
+              </span>
+            )}
+            <span className="text-xs font-semibold text-slate-800 line-clamp-1" title={row.sewingLine || row.section}>
+              {row.sewingLine || row.section || 'Production Line'}
             </span>
           </div>
-          <div className="text-xs font-semibold text-slate-800 line-clamp-1">
-            {row.section || row.sewingLine || 'Sewing Line 01'}
-          </div>
-          {row.qualityInspector && (
-            <div
-              className="flex items-center gap-1 text-[10px] text-emerald-700 font-medium mt-1 truncate max-w-[170px]"
-              title={`Quality Inspector: ${row.qualityInspector}`}
-            >
-              <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
-              <span>{row.qualityInspector.split('(')[0].trim()}</span>
+          {(row.supervisorName || row.qualityInspector) && (
+            <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 font-medium">
+              {row.supervisorName && (
+                <span className="truncate max-w-[130px]" title={`Line Chief / Supervisor: ${row.supervisorName}`}>
+                  Chief: {row.supervisorName.split('(')[0].trim()}
+                </span>
+              )}
+              {row.qualityInspector && (
+                <span className="inline-flex items-center gap-0.5 text-emerald-700 truncate max-w-[140px]" title={`QC Inspector: ${row.qualityInspector}`}>
+                  <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                  {row.qualityInspector.split('(')[0].trim()}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -1807,489 +1840,203 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                 </div>
               </div>
 
-              {/* Comprehensive Section & Record Performance Table inside Summary */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
-                      <Layers className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                        Section Performance & Quality Breakdown
-                      </h3>
-                      <p className="text-[11px] text-slate-500">
-                        Live floor overview across Unit, Section, Inspector, Buyer, Style, Target, Production, Defects, DHU, RFT, Efficiency & Rejects
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('list')}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
-                  >
-                    <span>View in Records Sheet ({orders.length})</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50/50">
-                        <th className="py-2.5 px-3">Date & Inspector</th>
-                        <th className="py-2.5 px-3">Unit & Section</th>
-                        <th className="py-2.5 px-3">Buyer</th>
-                        <th className="py-2.5 px-3">Style</th>
-                        <th className="py-2.5 px-3 text-right">Target</th>
-                        <th className="py-2.5 px-3 text-right">Total Production</th>
-                        <th className="py-2.5 px-3 text-right">Total Defects</th>
-                        <th className="py-2.5 px-3 text-right">DHU %</th>
-                        <th className="py-2.5 px-3 text-right">RFT %</th>
-                        <th className="py-2.5 px-3 text-right">Efficiency</th>
-                        <th className="py-2.5 px-3 text-right">Reject</th>
-                        <th className="py-2.5 px-3 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {summaryOrders.length === 0 ? (
-                        <tr>
-                          <td colSpan={12} className="py-10 text-center text-slate-400">
-                            <Calendar className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                            <p className="font-semibold text-xs text-slate-700">No production records found for the selected date range.</p>
-                            <p className="text-[11px] text-slate-400 mt-1">Try switching to &quot;All Dates&quot; or selecting another date preset.</p>
-                            <button
-                              type="button"
-                              onClick={() => handleSelectDatePreset('ALL')}
-                              className="mt-3 px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
-                            >
-                              Show All Dates
-                            </button>
-                          </td>
-                        </tr>
-                      ) : (
-                        summaryOrders.map((o) => {
-                          const target = o.targetQuantity || 1;
-                          const comp = o.completedQuantity || 0;
-                          const def =
-                            o.totalDefects ??
-                            Math.round(comp * ((o.dhuRate || o.defectRate || 1.2) / 100));
-                          const dhu = Number((o.dhuRate ?? o.defectRate ?? 1.2).toFixed(2));
-                          const rft = Number((o.rftRate ?? 98.2).toFixed(1));
-                          const eff = Number((o.efficiencyPercent ?? 82).toFixed(1));
-                          const rej = o.rejectQuantity ?? Math.max(Math.round(comp * 0.002), 5);
-                          const dateStr = o.recordDate || (o.createdAt ? o.createdAt.split('T')[0] : '2026-09-21');
-
-                          return (
-                            <tr
-                              key={o.id}
-                              onClick={() => setSubView({ type: 'details', order: o })}
-                              className="hover:bg-blue-50/40 transition-colors cursor-pointer"
-                            >
-                              <td className="py-2.5 px-3">
-                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-100">
-                                  <Calendar className="w-3 h-3 text-blue-600" />
-                                  <span>{dateStr}</span>
-                                </div>
-                                {o.qualityInspector && (
-                                  <div
-                                    className="flex items-center gap-1 text-[10px] text-emerald-700 font-medium mt-1 truncate max-w-[140px]"
-                                    title={`Quality Inspector: ${o.qualityInspector}`}
-                                  >
-                                    <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
-                                    <span>{o.qualityInspector.split('(')[0].trim()}</span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-2.5 px-3">
-                                <span className="font-bold text-slate-900 block">
-                                  {o.unit || 'Unit 01'}
-                                </span>
-                                <span className="text-[10px] text-slate-500">
-                                  {o.section || o.sewingLine}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 font-semibold text-slate-800">{o.buyer}</td>
-                              <td className="py-2.5 px-3">
-                                <span className="font-mono font-bold text-blue-700 text-[11px] block">
-                                  {o.styleNumber || 'STY-001'}
-                                </span>
-                                <span className="text-[11px] text-slate-600 truncate max-w-[140px] block">
-                                  {o.styleName}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-700">
-                                {target.toLocaleString()}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-blue-700">
-                                {comp.toLocaleString()}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-700">
-                                {def.toLocaleString()}
-                              </td>
-                              <td className="py-2.5 px-3 text-right">
-                                <span
-                                  className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border ${
-                                    dhu <= 2.0
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                      : 'bg-rose-50 text-rose-700 border-rose-200'
-                                  }`}
-                                >
-                                  {dhu}%
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
-                                {rft}%
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-800">
-                                {eff}%
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-600">
-                                {rej.toLocaleString()}
-                              </td>
-                              <td className="py-2.5 px-3 text-center">
-                                <StatusChip status={o.status} />
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Quality Standards, Top Defects & Floor Efficiency (Linked from real records in date filter) */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* CARD 1: Quality Benchmarks */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                        Quality Benchmarks ({summaryOrders.length} Records)
-                      </h3>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-400">ISO 9001 / AQL 1.5</span>
-                  </div>
-
-                  <div className="space-y-2.5 text-xs">
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                      <div>
-                        <div className="font-semibold text-slate-800">Defects per Hundred Units (DHU)</div>
-                        <div className="text-[10px] text-slate-400">Factory Threshold: ≤ 2.0%</div>
-                      </div>
-                      <span className={`font-mono font-bold text-sm ${parseFloat(avgDHU) <= 2.0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                        {avgDHU}% {parseFloat(avgDHU) <= 2.0 ? '✓ Pass' : '⚠ Exceeds'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                      <div>
-                        <div className="font-semibold text-slate-800">Right First Time (RFT) Rate</div>
-                        <div className="text-[10px] text-slate-400">Buyer Standard: ≥ 95.0%</div>
-                      </div>
-                      <span className="font-mono font-bold text-sm text-emerald-700">
-                        {avgRFT}% {parseFloat(avgRFT) >= 95 ? '✓ Above Target' : '⚠ Action Required'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                      <div>
-                        <div className="font-semibold text-slate-800">Unrecoverable Reject & Scrap Rate</div>
-                        <div className="text-[10px] text-slate-400">Allowed scrap allowance: ≤ 0.5%</div>
-                      </div>
-                      <span className="font-mono font-bold text-sm text-slate-700">
-                        {totalRejectRate}% ({totalRejects} pcs)
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CARD 2: Top Defects in Selected Date Range */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <Award className="w-4 h-4 text-amber-500" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                        Top Defects in Date Range
-                      </h3>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-400">Pareto Priority</span>
-                  </div>
-
-                  {topDefectsInDateRange.length === 0 ? (
-                    <div className="p-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl space-y-1">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto" />
-                      <p className="font-semibold text-slate-700">Zero Defects Recorded</p>
-                      <p className="text-[11px] text-slate-400">All inspected pieces passed first-time audit.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {topDefectsInDateRange.map((td, idx) => {
-                        const rankBadge =
-                          idx === 0
-                            ? 'bg-amber-100 text-amber-900 border-amber-300'
-                            : idx === 1
-                            ? 'bg-slate-200 text-slate-800 border-slate-300'
-                            : idx === 2
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : 'bg-slate-50 text-slate-700 border-slate-200';
-
-                        return (
-                          <div key={td.defectType} className="space-y-1">
-                            <div className="flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${rankBadge}`}>
-                                  #{idx + 1}
-                                </span>
-                                <span className="font-semibold text-slate-800 truncate max-w-[140px]">
-                                  {td.defectType}
-                                </span>
-                              </div>
-                              <div className="font-mono text-xs">
-                                <span className="font-bold text-slate-900">{td.count} pcs</span>
-                                <span className="text-slate-400 text-[11px] ml-1.5">({td.percentage}%)</span>
-                              </div>
-                            </div>
-                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  idx === 0
-                                    ? 'bg-rose-500'
-                                    : idx === 1
-                                    ? 'bg-amber-500'
-                                    : 'bg-blue-500'
-                                }`}
-                                style={{ width: `${Math.min(td.percentage, 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* CARD 3: Live Floor Section Efficiency */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <Gauge className="w-4 h-4 text-indigo-600" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                        Section Efficiency in Date Range
-                      </h3>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-400">Floor Pace</span>
-                  </div>
-
-                  <div className="space-y-3">
-                    {summaryOrders.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl space-y-1">
-                        <Gauge className="w-6 h-6 text-slate-300 mx-auto" />
-                        <p className="font-semibold text-slate-700">No Line Data</p>
-                        <p className="text-[11px] text-slate-400">No active lines in this date range.</p>
-                      </div>
-                    ) : (
-                      summaryOrders.slice(0, 5).map((o) => {
-                        const eff = o.efficiencyPercent ?? 82;
-                        return (
-                          <div key={o.id} className="space-y-1">
-                            <div className="flex justify-between text-xs">
-                              <span className="font-bold text-slate-800 truncate max-w-[160px]">
-                                {o.section || o.sewingLine}
-                              </span>
-                              <span className="font-mono font-bold text-xs text-slate-900">{eff}%</span>
-                            </div>
-                            <EfficiencyBar value={eff} />
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* Interactive Statistical Charts: Defect Pareto (80/20), Efficiency vs Target & Floor Quality Matrix */}
+              <ProductionQualityCharts
+                orders={orders}
+                summaryOrders={summaryOrders}
+                sectionBreakdown={sectionBreakdown}
+                avgEfficiency={avgEfficiency}
+                avgDHU={avgDHU}
+                avgRFT={avgRFT}
+                totalTarget={totalTarget}
+                totalCompleted={totalCompleted}
+                totalDefects={totalDefects}
+                totalRejects={totalRejects}
+                totalRejectRate={totalRejectRate}
+                onViewRecords={() => setViewMode('list')}
+                onSelectSectionFilter={(sec) => setSectionFilter(sec)}
+              />
             </div>
           )}
 
           {/* TAB 2: PRODUCTION & QUALITY RECORDS (WITH UNIFIED SEARCH, FILTER DROPDOWNS & TABLE BUTTONS) */}
           {viewMode === 'list' && (
             <div className="space-y-4 animate-in fade-in duration-200">
-              {/* DATE RANGE FILTER TOOLBAR */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white rounded-2xl border border-slate-200 shadow-xs">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 mr-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                    Record Date Filter:
-                  </span>
-                  {[
-                    { id: 'ALL', label: 'All Dates' },
-                    { id: 'TODAY', label: 'Today' },
-                    { id: 'YESTERDAY', label: 'Yesterday' },
-                    { id: 'LAST_7_DAYS', label: 'Last 7 Days' },
-                    { id: 'THIS_MONTH', label: 'This Month' },
-                  ].map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleSelectDatePreset(p.id)}
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                        dateRangePreset === p.id
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <span className="font-semibold text-slate-600">From:</span>
-                    <input
-                      type="date"
-                      value={startDateFilter}
-                      onChange={(e) => {
-                        setStartDateFilter(e.target.value);
-                        setDateRangePreset('CUSTOM');
-                      }}
-                      className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <span className="font-semibold text-slate-600">To:</span>
-                    <input
-                      type="date"
-                      value={endDateFilter}
-                      onChange={(e) => {
-                        setEndDateFilter(e.target.value);
-                        setDateRangePreset('CUSTOM');
-                      }}
-                      className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  {(startDateFilter || endDateFilter || dateRangePreset !== 'ALL') && (
-                    <button
-                      type="button"
-                      onClick={() => handleSelectDatePreset('ALL')}
-                      className="px-2 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Clear Filter
-                    </button>
-                  )}
-                  <span className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">
-                    {filteredOrders.length} record{filteredOrders.length === 1 ? '' : 's'}
-                  </span>
-                </div>
-              </div>
-
-              {/* UNIT, FLOOR SECTION & LINE FILTER TOOLBAR (RECORDS LIST) */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white rounded-2xl border border-slate-200 shadow-xs">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 mr-1">
-                    <Filter className="w-3.5 h-3.5 text-indigo-600" />
-                    Record Filters:
-                  </span>
-
-                  {/* Unit Filter */}
-                  <div className="flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                    <select
-                      value={unitFilter}
-                      onChange={(e) => setUnitFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                    >
-                      <option value="ALL">All Units ({uniqueUnits.length})</option>
-                      {uniqueUnits.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Floor Section Filter */}
-                  <div className="flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                    <select
-                      value={sectionFilter}
-                      onChange={(e) => setSectionFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                    >
-                      <option value="ALL">All Floor Sections ({uniqueSections.length})</option>
-                      {uniqueSections.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Line Filter */}
-                  <div className="flex items-center gap-1.5">
-                    <Factory className="w-3.5 h-3.5 text-blue-500" />
-                    <select
-                      value={lineFilter}
-                      onChange={(e) => setLineFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                    >
-                      <option value="ALL">All Lines ({uniqueLines.length})</option>
-                      {uniqueLines.map((l) => (
-                        <option key={l} value={l}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Buyer Filter */}
-                  <select
-                    value={buyerFilter}
-                    onChange={(e) => setBuyerFilter(e.target.value)}
-                    className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  >
-                    <option value="ALL">All Buyers ({uniqueBuyers.length})</option>
-                    {uniqueBuyers.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
+              {/* UNIFIED FILTER & DATE RANGE TOOLBAR */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3.5 space-y-3">
+                {/* Row 1: Date Range Presets & Custom Pickers */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 mr-1">
+                      <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                      Date Range:
+                    </span>
+                    {[
+                      { id: 'ALL', label: 'All Dates' },
+                      { id: 'TODAY', label: 'Today' },
+                      { id: 'YESTERDAY', label: 'Yesterday' },
+                      { id: 'LAST_7_DAYS', label: 'Last 7 Days' },
+                      { id: 'THIS_MONTH', label: 'This Month' },
+                    ].map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleSelectDatePreset(p.id)}
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                          dateRangePreset === p.id
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
                     ))}
-                  </select>
+                  </div>
 
-                  {/* Status Filter */}
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  >
-                    <option value="ALL">All Statuses</option>
-                    <option value="RUNNING">Running</option>
-                    <option value="COMPLETED">Completed</option>
-                    <option value="PAUSED">Paused</option>
-                  </select>
-
-                  {(unitFilter !== 'ALL' || sectionFilter !== 'ALL' || lineFilter !== 'ALL' || buyerFilter !== 'ALL' || statusFilter !== 'ALL') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUnitFilter('ALL');
-                        setSectionFilter('ALL');
-                        setLineFilter('ALL');
-                        setBuyerFilter('ALL');
-                        setStatusFilter('ALL');
-                      }}
-                      className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Reset Filters
-                    </button>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <span className="font-semibold text-slate-600">From:</span>
+                      <input
+                        type="date"
+                        value={startDateFilter}
+                        onChange={(e) => {
+                          setStartDateFilter(e.target.value);
+                          setDateRangePreset('CUSTOM');
+                        }}
+                        className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <span className="font-semibold text-slate-600">To:</span>
+                      <input
+                        type="date"
+                        value={endDateFilter}
+                        onChange={(e) => {
+                          setEndDateFilter(e.target.value);
+                          setDateRangePreset('CUSTOM');
+                        }}
+                        className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    {(startDateFilter || endDateFilter || dateRangePreset !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => handleSelectDatePreset('ALL')}
+                        className="px-2 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Reset Date
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
-                    {filteredOrders.length} matching record{filteredOrders.length === 1 ? '' : 's'}
-                  </span>
+                {/* Row 2: Management & Entity Filters (Unit, Section, Line, Buyer, Status) */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 mr-1">
+                      <Filter className="w-3.5 h-3.5 text-indigo-600" />
+                      Filters:
+                    </span>
+
+                    {/* Unit Filter */}
+                    <div className="flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                      <select
+                        value={unitFilter}
+                        onChange={(e) => setUnitFilter(e.target.value)}
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[170px]"
+                      >
+                        <option value="ALL">All Units ({uniqueUnits.length})</option>
+                        {uniqueUnits.map((u) => (
+                          <option key={u} value={u}>
+                            {u}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Section Filter */}
+                    <div className="flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                      <select
+                        value={sectionFilter}
+                        onChange={(e) => setSectionFilter(e.target.value)}
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer max-w-[170px]"
+                      >
+                        <option value="ALL">All Sections ({uniqueSections.length})</option>
+                        {uniqueSections.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Line Filter */}
+                    <div className="flex items-center gap-1">
+                      <Factory className="w-3.5 h-3.5 text-blue-500" />
+                      <select
+                        value={lineFilter}
+                        onChange={(e) => setLineFilter(e.target.value)}
+                        className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[160px]"
+                      >
+                        <option value="ALL">All Lines ({uniqueLines.length})</option>
+                        {uniqueLines.map((l) => (
+                          <option key={l} value={l}>
+                            {l}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Buyer Filter */}
+                    <select
+                      value={buyerFilter}
+                      onChange={(e) => setBuyerFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[150px]"
+                    >
+                      <option value="ALL">All Buyers ({uniqueBuyers.length})</option>
+                      {uniqueBuyers.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Status Filter */}
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="ALL">All Statuses</option>
+                      <option value="RUNNING">Running</option>
+                      <option value="COMPLETED">Completed</option>
+                      <option value="PAUSED">Paused</option>
+                    </select>
+
+                    {(unitFilter !== 'ALL' || sectionFilter !== 'ALL' || lineFilter !== 'ALL' || buyerFilter !== 'ALL' || statusFilter !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUnitFilter('ALL');
+                          setSectionFilter('ALL');
+                          setLineFilter('ALL');
+                          setBuyerFilter('ALL');
+                          setStatusFilter('ALL');
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Reset Filters
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
+                      {filteredOrders.length} record{filteredOrders.length === 1 ? '' : 's'} matching
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -2312,77 +2059,6 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                   'lineId',
                   'status',
                 ]}
-                secondaryAction={
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Unit filter */}
-                    <select
-                      value={unitFilter}
-                      onChange={(e) => setUnitFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors max-w-[150px]"
-                    >
-                      <option value="ALL">All Units</option>
-                      {uniqueUnits.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Floor Section filter */}
-                    <select
-                      value={sectionFilter}
-                      onChange={(e) => setSectionFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors max-w-[170px]"
-                    >
-                      <option value="ALL">All Sections</option>
-                      {uniqueSections.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Line filter */}
-                    <select
-                      value={lineFilter}
-                      onChange={(e) => setLineFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors max-w-[150px]"
-                    >
-                      <option value="ALL">All Lines</option>
-                      {uniqueLines.map((l) => (
-                        <option key={l} value={l}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Buyer filter */}
-                    <select
-                      value={buyerFilter}
-                      onChange={(e) => setBuyerFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors max-w-[150px]"
-                    >
-                      <option value="ALL">All Buyers</option>
-                      {uniqueBuyers.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Status filter */}
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors"
-                    >
-                      <option value="ALL">All Statuses</option>
-                      <option value="RUNNING">Running</option>
-                      <option value="COMPLETED">Completed</option>
-                      <option value="PAUSED">Paused</option>
-                    </select>
-                  </div>
-                }
                 primaryAction={
                   canCreate ? (
                     <div className="flex items-center gap-2">

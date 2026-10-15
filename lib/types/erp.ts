@@ -1,8 +1,8 @@
-export type Role = 
-  | 'ADMIN' 
-  | 'QA_MANAGER' 
-  | 'WAREHOUSE_INSPECTOR' 
-  | 'PRODUCTION_HEAD' 
+export type Role =
+  | 'ADMIN'
+  | 'QA_MANAGER'
+  | 'WAREHOUSE_INSPECTOR'
+  | 'PRODUCTION_HEAD'
   | 'OPERATOR'
   | 'Super Admin'
   | 'QC Manager'
@@ -14,11 +14,11 @@ export type QualityGrade = 'GRADE_A' | 'GRADE_B' | 'REJECTED' | 'ON_HOLD';
 
 export type StockStatus = 'IN_STOCK' | 'INSPECTING' | 'ALLOCATED' | 'DISPATCHED';
 
-export type InspectionStage = 
-  | 'FABRIC_INWARD' 
-  | 'CUTTING_INSPECTION' 
-  | 'SEWING_IN_LINE' 
-  | 'END_LINE_QC' 
+export type InspectionStage =
+  | 'FABRIC_INWARD'
+  | 'CUTTING_INSPECTION'
+  | 'SEWING_IN_LINE'
+  | 'END_LINE_QC'
   | 'FINISHING_PACKING';
 
 export type InspectionStatus = 'PASSED' | 'REJECTED' | 'CONDITIONAL_PASS';
@@ -54,13 +54,13 @@ export interface AppUser extends UserSession {
 }
 
 
-export type MaterialCategory = 
-  | 'FABRIC' 
-  | 'SEWING_THREAD' 
-  | 'TRIMS_BUTTONS' 
-  | 'ZIPPERS' 
-  | 'INTERLINING_ELASTIC' 
-  | 'LABELS_PACKAGING' 
+export type MaterialCategory =
+  | 'FABRIC'
+  | 'SEWING_THREAD'
+  | 'TRIMS_BUTTONS'
+  | 'ZIPPERS'
+  | 'INTERLINING_ELASTIC'
+  | 'LABELS_PACKAGING'
   | 'CHEMICALS_DYES';
 
 export interface InventoryItem {
@@ -330,6 +330,7 @@ export interface InspectionRecord {
   remarks?: string;
   correctiveAction?: string;
   inspectorSignature?: string;
+  inspectionDate?: string; // Specific date when the physical inspection was performed (YYYY-MM-DD)
   createdAt: string;
   defects?: DefectItem[];
   measurements?: MeasurementAuditItem[];
@@ -571,7 +572,24 @@ export const ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
   },
 };
 
-export type RealTimeEvent = 
+export interface AttachmentRecord {
+  id: string;
+  entityType: string;
+  entityId: string;
+  moduleKey?: string;
+  fileName: string;
+  fileType?: string;
+  fileSize?: number;
+  mimeType?: string;
+  category?: string;
+  fileData: string;
+  uploadedBy?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type RealTimeEvent =
   | { type: 'STOCK_UPDATED'; item: InventoryItem; user: string; timestamp: string }
   | { type: 'BATCH_GRADE_CHANGED'; ids: string[]; grade: QualityGrade; user: string; timestamp: string }
   | { type: 'INSPECTION_RECORDED'; record: InspectionRecord; user: string; timestamp: string }
@@ -581,5 +599,8 @@ export type RealTimeEvent =
   | { type: 'BUYER_ORDER_UPSERTED'; order: any; user: string; timestamp: string }
   | { type: 'BUYER_ORDER_DELETED'; id: string; orderNumber?: string; user: string; timestamp: string }
   | { type: 'MODULE_DATA_UPDATED'; moduleKey: string; data: any; user?: string; timestamp: string }
+  | { type: 'ATTACHMENT_UPSERTED'; attachment: AttachmentRecord; user?: string; timestamp: string }
+  | { type: 'ATTACHMENT_DELETED'; id: string; user?: string; timestamp: string }
   | { type: 'SYSTEM_RESET'; mode: 'blank' | 'defaults'; user: string; timestamp: string }
   | { type: 'WAREHOUSE_ACTIVITY'; message: string; user: string; timestamp: string; location: string };
+

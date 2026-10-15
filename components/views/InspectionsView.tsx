@@ -124,25 +124,66 @@ export function InspectionsView({
 }: InspectionsViewProps) {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [records, setRecords] = useState<InspectionRecord[]>(() => {
-    if (propRecords && propRecords.length > 0) return propRecords;
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem('erp_inspections_v1');
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            let hasNew = false;
+            INITIAL_INSPECTIONS.forEach((initInsp) => {
+              const existingIdx = parsed.findIndex((p: any) => p.id === initInsp.id);
+              if (existingIdx === -1) {
+                parsed.push(initInsp);
+                hasNew = true;
+              } else {
+                const existing = parsed[existingIdx];
+                if (existing.excessQuantity === undefined || existing.shortQuantity === undefined) {
+                  const lot = Number(existing.lotQuantity) || 0;
+                  const ord = Number(existing.orderQuantity) || 0;
+                  const diff = lot - ord;
+                  parsed[existingIdx] = {
+                    ...existing,
+                    excessQuantity: diff > 0 ? diff : 0,
+                    shortQuantity: diff < 0 ? Math.abs(diff) : 0,
+                    quantityVariance: diff,
+                  };
+                  hasNew = true;
+                }
+              }
+            });
+            if (hasNew) {
+              try {
+                localStorage.setItem('erp_inspections_v1', JSON.stringify(parsed));
+              } catch {}
+            }
+            return parsed;
+          }
         }
       } catch {}
     }
+    if (propRecords && propRecords.length > 0) return propRecords;
     return INITIAL_INSPECTIONS;
   });
   const { user, permissions } = useErpAuth();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('inspections');
 
-  // Sync prop records
+  // Sync prop records with quantity reconciliation
   useEffect(() => {
     if (propRecords && propRecords.length > 0) {
-      setRecords(propRecords);
+      const reconciled = propRecords.map((r) => {
+        if (r.excessQuantity !== undefined && r.shortQuantity !== undefined) return r;
+        const lot = Number(r.lotQuantity) || 0;
+        const ord = Number(r.orderQuantity) || 0;
+        const diff = lot - ord;
+        return {
+          ...r,
+          excessQuantity: diff > 0 ? diff : 0,
+          shortQuantity: diff < 0 ? Math.abs(diff) : 0,
+          quantityVariance: diff,
+        };
+      });
+      setRecords(reconciled);
     }
   }, [propRecords]);
 
@@ -183,8 +224,49 @@ export function InspectionsView({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [buyerFilter, setBuyerFilter] = useState<string>('ALL');
 
-  // Summary Inspection Stage / Type Filter (Default: FINAL)
-  const [summaryTypeFilter, setSummaryTypeFilter] = useState<SummaryTypeFilter>('FINAL');
+  // Date Range Filter States for Inspection List
+  type DateRangePreset = 'ALL' | 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'THIS_MONTH' | 'CUSTOM';
+  const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>('ALL');
+  const [startDateFilter, setStartDateFilter] = useState<string>('');
+  const [endDateFilter, setEndDateFilter] = useState<string>('');
+
+  const handleSelectDatePreset = (preset: DateRangePreset) => {
+    setDateRangePreset(preset);
+    const now = new Date();
+    const formatDate = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    if (preset === 'ALL') {
+      setStartDateFilter('');
+      setEndDateFilter('');
+    } else if (preset === 'TODAY') {
+      const todayStr = formatDate(now);
+      setStartDateFilter(todayStr);
+      setEndDateFilter(todayStr);
+    } else if (preset === 'YESTERDAY') {
+      const yest = new Date(now);
+      yest.setDate(now.getDate() - 1);
+      const yestStr = formatDate(yest);
+      setStartDateFilter(yestStr);
+      setEndDateFilter(yestStr);
+    } else if (preset === 'LAST_7_DAYS') {
+      const past = new Date(now);
+      past.setDate(now.getDate() - 6);
+      setStartDateFilter(formatDate(past));
+      setEndDateFilter(formatDate(now));
+    } else if (preset === 'THIS_MONTH') {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      setStartDateFilter(formatDate(monthStart));
+      setEndDateFilter(formatDate(now));
+    }
+  };
+
+  // Summary Inspection Stage / Type Filter (Default: ALL stages live)
+  const [summaryTypeFilter, setSummaryTypeFilter] = useState<SummaryTypeFilter>('ALL');
 
   // Synced Buyer Orders State (Live synced from Buyer Orders module)
   const [syncedOrders, setSyncedOrders] = useState<BuyerOrder[]>(
@@ -201,7 +283,7 @@ export function InspectionsView({
   useEffect(() => {
     const syncFromStorage = () => {
       try {
-        const stored = localStorage.getItem('erp_buyer_orders');
+        const stored = localStorage.getItem('erp_buyer_orders_v1') || localStorage.getItem('erp_buyer_orders');
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -223,7 +305,19 @@ export function InspectionsView({
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setRecords(parsed);
+            const reconciled = parsed.map((r: any) => {
+              if (r.excessQuantity !== undefined && r.shortQuantity !== undefined) return r;
+              const lot = Number(r.lotQuantity) || 0;
+              const ord = Number(r.orderQuantity) || 0;
+              const diff = lot - ord;
+              return {
+                ...r,
+                excessQuantity: diff > 0 ? diff : 0,
+                shortQuantity: diff < 0 ? Math.abs(diff) : 0,
+                quantityVariance: diff,
+              };
+            });
+            setRecords(reconciled);
           }
         }
       } catch (err) {
@@ -232,9 +326,13 @@ export function InspectionsView({
     };
     window.addEventListener('erp_inspection_records_updated', syncInspectionsFromStorage);
     window.addEventListener('erp_inspections_updated', syncInspectionsFromStorage);
+    window.addEventListener('erp_buyer_orders_updated', syncInspectionsFromStorage);
+    window.addEventListener('erp_production_orders_updated', syncInspectionsFromStorage);
     return () => {
       window.removeEventListener('erp_inspection_records_updated', syncInspectionsFromStorage);
       window.removeEventListener('erp_inspections_updated', syncInspectionsFromStorage);
+      window.removeEventListener('erp_buyer_orders_updated', syncInspectionsFromStorage);
+      window.removeEventListener('erp_production_orders_updated', syncInspectionsFromStorage);
     };
   }, []);
 
@@ -247,6 +345,11 @@ export function InspectionsView({
   const [summaryDateRange, setSummaryDateRange] = useState<SummaryDateRange>('all');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+
+  // Reconciliation Breakdown filter & search state
+  const [reconciliationFilter, setReconciliationFilter] = useState<'ALL' | 'BALANCED' | 'EXCESS' | 'SHORT'>('ALL');
+  const [reconciliationSearch, setReconciliationSearch] = useState('');
+  const [showReconciliationTable, setShowReconciliationTable] = useState(true);
 
   // Date and Stage filtered summary records (Default: Final Inspection)
   const filteredSummaryRecords = useMemo(() => {
@@ -479,10 +582,49 @@ export function InspectionsView({
   // Summary Aggregates
   const summaryAgg = useMemo(() => {
     const recs = filteredSummaryRecords;
-    const totalInspectedQty = recs.reduce((s, r) => s + (r.lotQuantity || 0), 0);
-    const totalOrderQty = recs.reduce((s, r) => s + (r.orderQuantity || 0), 0);
-    const totalExcessQty = recs.reduce((s, r) => s + (r.excessQuantity || 0), 0);
-    const totalShortQty = recs.reduce((s, r) => s + (r.shortQuantity || 0), 0);
+    let totalInspectedQty = 0;
+    let totalOrderQty = 0;
+    let totalExcessQty = 0;
+    let totalShortQty = 0;
+    let balancedCount = 0;
+    let excessCount = 0;
+    let shortCount = 0;
+
+    recs.forEach((r) => {
+      const lot = Number(r.lotQuantity) || 0;
+      let ord = Number(r.orderQuantity) || 0;
+      if (!ord && r.orderNumber) {
+        const matchedOrd = syncedOrders.find(
+          (o) => o.orderNumber === r.orderNumber || (r.poNumbers && r.poNumbers.includes(o.orderNumber))
+        );
+        if (matchedOrd) {
+          ord = Number(matchedOrd.orderQuantity) || 0;
+        }
+      }
+      totalInspectedQty += lot;
+      totalOrderQty += ord;
+      const diff = lot - ord;
+
+      const excess =
+        r.excessQuantity !== undefined && r.excessQuantity !== null && Number(r.excessQuantity) > 0
+          ? Number(r.excessQuantity)
+          : (diff > 0 ? diff : 0);
+      const short =
+        r.shortQuantity !== undefined && r.shortQuantity !== null && Number(r.shortQuantity) > 0
+          ? Number(r.shortQuantity)
+          : (diff < 0 ? Math.abs(diff) : 0);
+
+      totalExcessQty += excess;
+      totalShortQty += short;
+
+      if (excess > 0) excessCount++;
+      else if (short > 0) shortCount++;
+      else balancedCount++;
+    });
+
+    const netVariance = totalInspectedQty - totalOrderQty;
+    const fulfillmentRate = totalOrderQty > 0 ? ((totalInspectedQty / totalOrderQty) * 100).toFixed(1) : '100.0';
+
     const passCount = recs.filter((r) => r.status === 'PASSED').length;
     const failCount = recs.filter((r) => r.status === 'REJECTED').length;
     const recheckCount = recs.filter((r) => r.status === 'CONDITIONAL_PASS').length;
@@ -541,15 +683,49 @@ export function InspectionsView({
     });
     const buyerPerformance = Array.from(buyerMap.values()).sort((a, b) => b.totalQty - a.totalQty);
 
-    // Per-record bar chart data (order vs inspected)
-    const barChartData = recs.slice(0, 8).map((r) => ({
-      label: r.buyer?.split(' ')[0] || r.inspectionCode,
-      orderQty: r.orderQuantity || 0,
-      inspectedQty: r.lotQuantity || 0,
-    }));
+    // Per-record reconciliation data for charts & live reconciliation table
+    const barChartData = recs.map((r) => {
+      let orderQty = Number(r.orderQuantity) || 0;
+      if (!orderQty && r.orderNumber) {
+        const matchedOrd = syncedOrders.find(
+          (o) => o.orderNumber === r.orderNumber || (r.poNumbers && r.poNumbers.includes(o.orderNumber))
+        );
+        if (matchedOrd) {
+          orderQty = Number(matchedOrd.orderQuantity) || 0;
+        }
+      }
+      const inspectedQty = Number(r.lotQuantity) || 0;
+      const diff = inspectedQty - orderQty;
+      const rawPo = r.orderNumber ? r.orderNumber.split(',')[0].trim().replace(/^PO-/, '') : r.inspectionCode.slice(-4);
+      const buyerShort = (r.buyer || 'QA').split(' ')[0].replace(/[^a-zA-Z]/g, '');
+      const stage = r.inspectionType || (r.stage === 'FINISHING_PACKING' ? 'FINAL' : 'INLINE');
+      const variancePct = orderQty > 0 ? Number(((diff / orderQty) * 100).toFixed(1)) : 0;
+
+      return {
+        id: r.id,
+        inspectionCode: r.inspectionCode,
+        buyer: r.buyer || 'Unknown',
+        poNumber: r.orderNumber || 'N/A',
+        style: r.styleNumber || 'N/A',
+        styleDescription: r.styleDescription || '',
+        stage,
+        status: r.status,
+        label: `${buyerShort} (${rawPo})`,
+        shortLabel: rawPo,
+        orderQty,
+        inspectedQty,
+        diff,
+        variancePct,
+        isExcess: diff > 0,
+        isShort: diff < 0,
+        isBalanced: diff === 0,
+        record: r,
+      };
+    });
 
     return {
       totalInspectedQty, totalOrderQty, totalExcessQty, totalShortQty,
+      netVariance, fulfillmentRate, balancedCount, excessCount, shortCount,
       passCount, failCount, recheckCount, passRate, failRate, recheckRate,
       totalSampled, totalDefects, criticalDefects, majorDefects, minorDefects,
       inlineCount, preFinalCount, finalCount,
@@ -557,7 +733,7 @@ export function InspectionsView({
       buyerPerformance, barChartData,
       recordCount: recs.length,
     };
-  }, [filteredSummaryRecords]);
+  }, [filteredSummaryRecords, syncedOrders]);
 
   // KPIs (used by list tab and stages tab)
   const passedCount = records.filter((r) => r.status === 'PASSED').length;
@@ -573,41 +749,62 @@ export function InspectionsView({
 
   // Handlers for Save, Edit, Duplicate, Delete
   const handleSaveInspection = async (recordData: InspectionRecord) => {
-    const existingIndex = records.findIndex((r) => r.id === recordData.id);
+    const lot = Number(recordData.lotQuantity) || 0;
+    const ord = Number(recordData.orderQuantity) || 0;
+    const diff = lot - ord;
+    const reconciledData: InspectionRecord = {
+      ...recordData,
+      orderQuantity: ord,
+      lotQuantity: lot,
+      excessQuantity:
+        recordData.excessQuantity !== undefined && recordData.excessQuantity !== null && Number(recordData.excessQuantity) > 0
+          ? Number(recordData.excessQuantity)
+          : (diff > 0 ? diff : 0),
+      shortQuantity:
+        recordData.shortQuantity !== undefined && recordData.shortQuantity !== null && Number(recordData.shortQuantity) > 0
+          ? Number(recordData.shortQuantity)
+          : (diff < 0 ? Math.abs(diff) : 0),
+      quantityVariance:
+        recordData.quantityVariance !== undefined && recordData.quantityVariance !== null
+          ? Number(recordData.quantityVariance)
+          : diff,
+    };
+
+    const existingIndex = records.findIndex((r) => r.id === reconciledData.id);
     let updatedList: InspectionRecord[];
 
     if (existingIndex >= 0) {
-      updatedList = records.map((r) => (r.id === recordData.id ? recordData : r));
+      updatedList = records.map((r) => (r.id === reconciledData.id ? reconciledData : r));
       trackEntityUpdate(
         'INSPECTION',
-        recordData.id,
-        recordData.inspectionCode,
+        reconciledData.id,
+        reconciledData.inspectionCode,
         records[existingIndex],
-        recordData,
+        reconciledData,
         {
-          userName: user?.name || recordData.inspectorName || 'QA Auditor',
+          userName: user?.name || reconciledData.inspectorName || 'QA Auditor',
           userRole: user?.role || 'QA_MANAGER',
           userId: user?.id,
-          summary: `Updated Inspection ${recordData.inspectionCode} (${recordData.stage}) - Status: ${recordData.status}`,
+          summary: `Updated Inspection ${reconciledData.inspectionCode} (${reconciledData.stage}) - Status: ${reconciledData.status}`,
         }
       );
-      showToast(`Updated inspection record ${recordData.inspectionCode}`);
-      setSubView({ type: 'details', record: recordData });
+      showToast(`Updated inspection record ${reconciledData.inspectionCode}`);
+      setSubView({ type: 'details', record: reconciledData });
     } else {
-      updatedList = [recordData, ...records];
+      updatedList = [reconciledData, ...records];
       trackEntityCreate(
         'INSPECTION',
-        recordData.id,
-        recordData.inspectionCode,
-        recordData,
+        reconciledData.id,
+        reconciledData.inspectionCode,
+        reconciledData,
         {
-          userName: user?.name || recordData.inspectorName || 'QA Auditor',
+          userName: user?.name || reconciledData.inspectorName || 'QA Auditor',
           userRole: user?.role || 'QA_MANAGER',
           userId: user?.id,
-          summary: `Created Inspection ${recordData.inspectionCode} (${recordData.stage}) - Result: ${recordData.status}`,
+          summary: `Created Inspection ${reconciledData.inspectionCode} (${reconciledData.stage}) - Result: ${reconciledData.status}`,
         }
       );
-      showToast(`Logged new ${recordData.inspectionType || ''} inspection ${recordData.inspectionCode}`);
+      showToast(`Logged new ${reconciledData.inspectionType || ''} inspection ${reconciledData.inspectionCode}`);
       setSubView({ type: 'none' });
     }
 
@@ -710,13 +907,18 @@ export function InspectionsView({
     setDeleteModal(null);
   };
 
-  // Filtered Records
+  // Filtered Records (including Date Range)
   const filteredRecords = records.filter((r) => {
     const recType = r.inspectionType || 'INLINE';
     const matchesType = typeFilter === 'ALL' || recType === typeFilter;
     const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
     const matchesBuyer = buyerFilter === 'ALL' || r.buyer === buyerFilter;
-    return matchesType && matchesStatus && matchesBuyer;
+
+    const recDate = r.inspectionDate || (r.createdAt ? r.createdAt.split('T')[0] : '');
+    const matchesStartDate = !startDateFilter || (recDate && recDate >= startDateFilter);
+    const matchesEndDate = !endDateFilter || (recDate && recDate <= endDateFilter);
+
+    return matchesType && matchesStatus && matchesBuyer && matchesStartDate && matchesEndDate;
   });
 
   // Unique Buyers list for dropdown
@@ -786,6 +988,24 @@ export function InspectionsView({
                 PO: {r.orderNumber}
               </span>
             ) : null}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'inspectionDate',
+      header: 'Inspection Date',
+      accessorKey: 'inspectionDate',
+      sortable: true,
+      accessor: (r) => r.inspectionDate || (r.createdAt ? r.createdAt.split('T')[0] : ''),
+      cell: (r) => {
+        const dateVal = r.inspectionDate || (r.createdAt ? r.createdAt.split('T')[0] : 'N/A');
+        return (
+          <div className="text-xs">
+            <span className="inline-flex items-center gap-1 font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+              <Calendar className="w-3 h-3 text-blue-600" />
+              <span>{dateVal}</span>
+            </span>
           </div>
         );
       },
@@ -938,16 +1158,18 @@ export function InspectionsView({
     },
     {
       key: 'inspectorName',
-      header: 'Auditor & Date',
+      header: 'Auditor & Floor',
       accessorKey: 'inspectorName',
       sortable: true,
       accessor: (r) => r.inspectorName,
       cell: (r) => (
         <div className="text-xs">
-          <div className="font-medium text-slate-800 truncate max-w-[120px]">
-            {r.inspectorName.split('(')[0]}
+          <div className="font-semibold text-slate-800 truncate max-w-[120px]">
+            {r.inspectorName?.split('(')[0] || 'Auditor'}
           </div>
-          <div className="text-[10px] text-slate-400">{new Date(r.createdAt).toLocaleDateString()}</div>
+          <div className="text-[10px] text-slate-500 truncate max-w-[120px]">
+            {r.sewingLine || r.shift || 'Floor QA'}
+          </div>
         </div>
       ),
     },
@@ -1326,16 +1548,19 @@ export function InspectionsView({
 
               {/* ── Primary KPI Cards ── */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                {/* Total Inspection Qty */}
+                {/* Total Inspected Qty */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     <Package className="w-3.5 h-3.5 text-blue-500" />
                     Total Inspected Qty
                   </div>
-                  <div className="text-2xl font-black font-mono text-slate-900">
-                    {summaryAgg.totalInspectedQty > 999 ? `${(summaryAgg.totalInspectedQty / 1000).toFixed(1)}k` : summaryAgg.totalInspectedQty}
+                  <div className="text-2xl font-black font-mono text-slate-900" title={`${summaryAgg.totalInspectedQty.toLocaleString()} pcs`}>
+                    {summaryAgg.totalInspectedQty.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-slate-400">Lot / presented pcs</div>
+                  <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                    <span>Lot / presented</span>
+                    <span className="font-semibold text-blue-600">{summaryAgg.fulfillmentRate}% fulfillment</span>
+                  </div>
                 </div>
 
                 {/* Total Order Qty */}
@@ -1344,10 +1569,13 @@ export function InspectionsView({
                     <ClipboardCheck className="w-3.5 h-3.5 text-indigo-500" />
                     Total Order Qty
                   </div>
-                  <div className="text-2xl font-black font-mono text-slate-900">
-                    {summaryAgg.totalOrderQty > 999 ? `${(summaryAgg.totalOrderQty / 1000).toFixed(1)}k` : summaryAgg.totalOrderQty}
+                  <div className="text-2xl font-black font-mono text-slate-900" title={`${summaryAgg.totalOrderQty.toLocaleString()} pcs`}>
+                    {summaryAgg.totalOrderQty.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-slate-400">PO ordered pcs</div>
+                  <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                    <span>Contracted PO</span>
+                    <span className="font-mono text-slate-500">{summaryAgg.recordCount} audits</span>
+                  </div>
                 </div>
 
                 {/* Excess */}
@@ -1356,10 +1584,15 @@ export function InspectionsView({
                     <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
                     Total Excess Qty
                   </div>
-                  <div className="text-2xl font-black font-mono text-emerald-700">
+                  <div className="text-2xl font-black font-mono text-emerald-700" title={`+${summaryAgg.totalExcessQty.toLocaleString()} pcs`}>
                     +{summaryAgg.totalExcessQty.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-emerald-500">Overproduction pcs</div>
+                  <div className="text-[10px] text-emerald-600 flex items-center justify-between">
+                    <span>Overproduction</span>
+                    <span className="font-semibold">
+                      {summaryAgg.totalOrderQty > 0 ? `+${((summaryAgg.totalExcessQty / summaryAgg.totalOrderQty) * 100).toFixed(1)}%` : '0%'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Short */}
@@ -1368,16 +1601,21 @@ export function InspectionsView({
                     <TrendingDown className="w-3.5 h-3.5 text-rose-500" />
                     Total Short Qty
                   </div>
-                  <div className="text-2xl font-black font-mono text-rose-700">
+                  <div className="text-2xl font-black font-mono text-rose-700" title={`-${summaryAgg.totalShortQty.toLocaleString()} pcs`}>
                     -{summaryAgg.totalShortQty.toLocaleString()}
                   </div>
-                  <div className="text-[10px] text-rose-500">Shortage pcs</div>
+                  <div className="text-[10px] text-rose-600 flex items-center justify-between">
+                    <span>Shortage pcs</span>
+                    <span className="font-semibold">
+                      {summaryAgg.totalOrderQty > 0 ? `-${((summaryAgg.totalShortQty / summaryAgg.totalOrderQty) * 100).toFixed(1)}%` : '0%'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Pass */}
                 <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-xs space-y-1">
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     Passed
                   </div>
                   <div className="text-2xl font-black font-mono text-emerald-800">{summaryAgg.passCount}</div>
@@ -1673,68 +1911,413 @@ export function InspectionsView({
 
               {/* ── Chart Row 1: Quantity Reconciliation + Verdict Donut ── */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                {/* Chart 1: Order vs Inspected Quantity Bar Chart */}
+                {/* Chart 1: Order vs Inspected Quantity Bar Chart & Live Reconciliation Hub */}
                 <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-slate-100">
                     <div>
                       <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 text-blue-500" />
+                        <BarChart3 className="w-4 h-4 text-blue-600" />
                         Order vs Inspected Quantity Reconciliation
                       </h3>
-                      <p className="text-[11px] text-slate-500 mt-0.5">PO order qty compared to presented lot qty per inspection</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Live comparison of contracted buyer PO quantities against presented lot sizes across audits
+                      </p>
                     </div>
-                    <span className="text-[10px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-500">{summaryAgg.barChartData.length} inspections</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-bold">
+                        {summaryAgg.barChartData.length} audits
+                      </span>
+                      <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold">
+                        {summaryAgg.balancedCount} balanced
+                      </span>
+                      {summaryAgg.excessCount > 0 && (
+                        <span className="text-[10px] font-mono bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-full font-semibold">
+                          +{summaryAgg.excessCount} excess
+                        </span>
+                      )}
+                      {summaryAgg.shortCount > 0 && (
+                        <span className="text-[10px] font-mono bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-semibold">
+                          -{summaryAgg.shortCount} short
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {summaryAgg.barChartData.length > 0 ? (
-                    <div className="relative">
-                      <svg viewBox="0 0 700 220" className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
-                        {/* Y-axis labels */}
-                        {(() => {
-                          const maxVal = Math.max(...summaryAgg.barChartData.flatMap(d => [d.orderQty, d.inspectedQty]), 1);
-                          const steps = [0, 0.25, 0.5, 0.75, 1];
-                          return steps.map((s, i) => {
-                            const val = Math.round(maxVal * s);
-                            const y = 200 - (s * 170);
-                            return (
-                              <g key={i}>
-                                <text x="45" y={y + 4} textAnchor="end" className="text-[9px] fill-slate-400" style={{fontSize: '9px'}}>{val > 999 ? `${(val/1000).toFixed(0)}k` : val}</text>
-                                <line x1="52" y1={y} x2="690" y2={y} stroke="#e2e8f0" strokeWidth="0.5" strokeDasharray="3,3" />
-                              </g>
-                            );
-                          });
-                        })()}
-                        {/* Bars */}
-                        {(() => {
-                          const maxVal = Math.max(...summaryAgg.barChartData.flatMap(d => [d.orderQty, d.inspectedQty]), 1);
-                          const barWidth = 28;
-                          const groupWidth = 80;
-                          const startX = 70;
-                          return summaryAgg.barChartData.map((d, i) => {
-                            const x = startX + i * groupWidth;
-                            const orderH = (d.orderQty / maxVal) * 170;
-                            const inspH = (d.inspectedQty / maxVal) * 170;
-                            return (
-                              <g key={i}>
-                                <rect x={x} y={200 - orderH} width={barWidth} height={orderH} rx="4" fill="#93c5fd" opacity="0.7">
-                                  <title>Order: {d.orderQty.toLocaleString()}</title>
-                                </rect>
-                                <rect x={x + barWidth + 3} y={200 - inspH} width={barWidth} height={inspH} rx="4" fill="#3b82f6">
-                                  <title>Inspected: {d.inspectedQty.toLocaleString()}</title>
-                                </rect>
-                                <text x={x + barWidth} y={215} textAnchor="middle" className="text-[8px] fill-slate-500" style={{fontSize: '8px'}}>{d.label}</text>
-                              </g>
-                            );
-                          });
-                        })()}
-                      </svg>
-                      {/* Legend */}
-                      <div className="flex items-center gap-4 justify-center mt-1">
-                        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-300 opacity-70" /><span className="text-[10px] text-slate-500">Order Qty</span></div>
-                        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-500" /><span className="text-[10px] text-slate-500">Inspected Qty</span></div>
+
+                  {/* Quick Reconciliation Summary Metrics Strip */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="space-y-0.5">
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Contracted PO</div>
+                      <div className="text-base font-black font-mono text-indigo-900">
+                        {summaryAgg.totalOrderQty.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">pcs</span>
                       </div>
                     </div>
+                    <div className="space-y-0.5">
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Presented Lot</div>
+                      <div className="text-base font-black font-mono text-blue-900">
+                        {summaryAgg.totalInspectedQty.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">pcs</span>
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Net Variance</div>
+                      <div className={`text-base font-black font-mono ${summaryAgg.netVariance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {summaryAgg.netVariance >= 0 ? '+' : ''}{summaryAgg.netVariance.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">pcs</span>
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Fulfillment Rate</div>
+                      <div className="text-base font-black font-mono text-slate-900">
+                        {summaryAgg.fulfillmentRate}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {summaryAgg.barChartData.length > 0 ? (
+                    <div className="space-y-4">
+                      {/* Responsive Scrollable Dual Bar Chart */}
+                      <div className="overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-300">
+                        {(() => {
+                          const barWidth = 24;
+                          const groupWidth = 82;
+                          const startX = 64;
+                          const totalWidth = Math.max(720, startX + summaryAgg.barChartData.length * groupWidth + 30);
+                          const chartHeight = 220;
+                          const baselineY = 175;
+                          const maxBarHeight = 135;
+                          const maxVal = Math.max(...summaryAgg.barChartData.flatMap((d) => [d.orderQty, d.inspectedQty]), 1);
+                          const steps = [0, 0.25, 0.5, 0.75, 1];
+
+                          return (
+                            <svg
+                              viewBox={`0 0 ${totalWidth} ${chartHeight}`}
+                              style={{ width: totalWidth, minWidth: '100%', height: chartHeight }}
+                              className="overflow-visible"
+                            >
+                              {/* Grid Lines & Y-axis labels */}
+                              {steps.map((s, i) => {
+                                const val = Math.round(maxVal * s);
+                                const y = baselineY - (s * maxBarHeight);
+                                return (
+                                  <g key={i}>
+                                    <text
+                                      x="52"
+                                      y={y + 3}
+                                      textAnchor="end"
+                                      className="text-[9px] fill-slate-400 font-mono"
+                                      style={{ fontSize: '9px' }}
+                                    >
+                                      {val > 999 ? `${(val / 1000).toFixed(0)}k` : val}
+                                    </text>
+                                    <line
+                                      x1="58"
+                                      y1={y}
+                                      x2={totalWidth - 10}
+                                      y2={y}
+                                      stroke="#e2e8f0"
+                                      strokeWidth="0.75"
+                                      strokeDasharray={i === 0 ? undefined : '3,3'}
+                                    />
+                                  </g>
+                                );
+                              })}
+
+                              {/* Bars per inspection */}
+                              {summaryAgg.barChartData.map((d, i) => {
+                                const x = startX + i * groupWidth;
+                                const orderH = Math.max(3, (d.orderQty / maxVal) * maxBarHeight);
+                                const inspH = Math.max(3, (d.inspectedQty / maxVal) * maxBarHeight);
+                                const orderY = baselineY - orderH;
+                                const inspY = baselineY - inspH;
+
+                                const inspColor = d.isShort
+                                  ? '#f43f5e'
+                                  : d.isExcess
+                                  ? '#10b981'
+                                  : '#3b82f6';
+
+                                const diffLabel = d.diff > 0
+                                  ? `+${d.diff > 999 ? (d.diff / 1000).toFixed(1) + 'k' : d.diff}`
+                                  : d.diff < 0
+                                  ? `-${Math.abs(d.diff) > 999 ? (Math.abs(d.diff) / 1000).toFixed(1) + 'k' : Math.abs(d.diff)}`
+                                  : '✓ 0';
+
+                                const diffColor = d.diff > 0
+                                  ? '#059669'
+                                  : d.diff < 0
+                                  ? '#e11d48'
+                                  : '#64748b';
+
+                                const tooltip = `Audit: ${d.inspectionCode} (${d.stage})\nBuyer: ${d.buyer}\nOrder: ${d.poNumber}\nStyle: ${d.style}\nPO Order Qty: ${d.orderQty.toLocaleString()} pcs\nInspected Lot: ${d.inspectedQty.toLocaleString()} pcs\nVariance: ${d.diff >= 0 ? '+' : ''}${d.diff.toLocaleString()} pcs (${d.variancePct}%)\nVerdict: ${d.status}`;
+
+                                return (
+                                  <g key={d.id} className="cursor-pointer group">
+                                    <title>{tooltip}</title>
+
+                                    {/* Hover background highlight */}
+                                    <rect
+                                      x={x - 4}
+                                      y="15"
+                                      width={groupWidth - 6}
+                                      height={chartHeight - 20}
+                                      rx="6"
+                                      fill="#f8fafc"
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                    />
+
+                                    {/* Order Bar (Indigo) */}
+                                    <rect
+                                      x={x}
+                                      y={orderY}
+                                      width={barWidth}
+                                      height={orderH}
+                                      rx="4"
+                                      fill="#a5b4fc"
+                                      stroke="#818cf8"
+                                      strokeWidth="0.5"
+                                    />
+
+                                    {/* Inspected Lot Bar */}
+                                    <rect
+                                      x={x + barWidth + 3}
+                                      y={inspY}
+                                      width={barWidth}
+                                      height={inspH}
+                                      rx="4"
+                                      fill={inspColor}
+                                    />
+
+                                    {/* Variance indicator chip above bars */}
+                                    <text
+                                      x={x + barWidth + 1}
+                                      y={Math.min(orderY, inspY) - 5}
+                                      textAnchor="middle"
+                                      className="font-mono font-bold"
+                                      style={{ fontSize: '8.5px', fill: diffColor }}
+                                    >
+                                      {diffLabel}
+                                    </text>
+
+                                    {/* Inspection Stage Tag */}
+                                    <text
+                                      x={x + barWidth + 1}
+                                      y={baselineY + 14}
+                                      textAnchor="middle"
+                                      className="font-mono font-bold"
+                                      style={{
+                                        fontSize: '8px',
+                                        fill: d.stage === 'FINAL' ? '#059669' : d.stage === 'PRE_FINAL' ? '#d97706' : '#2563eb'
+                                      }}
+                                    >
+                                      {d.stage === 'PRE_FINAL' ? 'PRE' : d.stage}
+                                    </text>
+
+                                    {/* Buyer & PO Label */}
+                                    <text
+                                      x={x + barWidth + 1}
+                                      y={baselineY + 28}
+                                      textAnchor="middle"
+                                      className="fill-slate-600 font-medium"
+                                      style={{ fontSize: '8.5px' }}
+                                    >
+                                      {d.label}
+                                    </text>
+                                  </g>
+                                );
+                              })}
+                            </svg>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Chart Legend */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded bg-indigo-300 border border-indigo-400" />
+                            <span>Contracted PO Qty</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded bg-blue-500" />
+                            <span>Inspected Lot (Balanced)</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded bg-emerald-500" />
+                            <span>Inspected Lot (Overproduction)</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded bg-rose-500" />
+                            <span>Inspected Lot (Shortage)</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowReconciliationTable(!showReconciliationTable)}
+                          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>{showReconciliationTable ? 'Hide Table' : 'Show Live Audit Breakdown'}</span>
+                        </button>
+                      </div>
+
+                      {/* Live Per-Inspection Reconciliation Breakdown Table */}
+                      {showReconciliationTable && (
+                        <div className="mt-3 space-y-3 pt-3 border-t border-slate-100">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Filter:</span>
+                              {(['ALL', 'BALANCED', 'EXCESS', 'SHORT'] as const).map((mode) => (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  onClick={() => setReconciliationFilter(mode)}
+                                  className={`px-2 py-0.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                                    reconciliationFilter === mode
+                                      ? 'bg-slate-900 text-white shadow-xs'
+                                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {mode === 'ALL'
+                                    ? `All (${summaryAgg.barChartData.length})`
+                                    : mode === 'BALANCED'
+                                    ? `Balanced (${summaryAgg.balancedCount})`
+                                    : mode === 'EXCESS'
+                                    ? `Excess (${summaryAgg.excessCount})`
+                                    : `Short (${summaryAgg.shortCount})`}
+                                </button>
+                              ))}
+                            </div>
+
+                            <div className="relative">
+                              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                              <input
+                                type="text"
+                                placeholder="Search PO, Buyer, Style..."
+                                value={reconciliationSearch}
+                                onChange={(e) => setReconciliationSearch(e.target.value)}
+                                className="pl-8 pr-3 py-1 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-blue-500 w-48"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-slate-200">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 sticky top-0 z-10 border-b border-slate-200">
+                                <tr>
+                                  <th className="py-2.5 px-3">Audit & Stage</th>
+                                  <th className="py-2.5 px-3">Buyer & PO</th>
+                                  <th className="py-2.5 px-3">Style / Item</th>
+                                  <th className="py-2.5 px-3 text-right">Order Qty</th>
+                                  <th className="py-2.5 px-3 text-right">Lot Qty</th>
+                                  <th className="py-2.5 px-3 text-right">Variance</th>
+                                  <th className="py-2.5 px-3 text-center">Verdict</th>
+                                  <th className="py-2.5 px-3 text-center">Action</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 bg-white">
+                                {summaryAgg.barChartData
+                                  .filter((d) => {
+                                    if (reconciliationFilter === 'BALANCED' && !d.isBalanced) return false;
+                                    if (reconciliationFilter === 'EXCESS' && !d.isExcess) return false;
+                                    if (reconciliationFilter === 'SHORT' && !d.isShort) return false;
+                                    if (reconciliationSearch) {
+                                      const q = reconciliationSearch.toLowerCase();
+                                      const match =
+                                        d.inspectionCode.toLowerCase().includes(q) ||
+                                        d.buyer.toLowerCase().includes(q) ||
+                                        d.poNumber.toLowerCase().includes(q) ||
+                                        d.style.toLowerCase().includes(q) ||
+                                        d.styleDescription.toLowerCase().includes(q);
+                                      if (!match) return false;
+                                    }
+                                    return true;
+                                  })
+                                  .map((d) => {
+                                    return (
+                                      <tr key={d.id} className="hover:bg-slate-50/80 transition-colors">
+                                        <td className="py-2 px-3">
+                                          <div className="font-mono font-bold text-slate-900">{d.inspectionCode}</div>
+                                          <span
+                                            className={`inline-block text-[9px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                                              d.stage === 'FINAL'
+                                                ? 'bg-emerald-100 text-emerald-800'
+                                                : d.stage === 'PRE_FINAL'
+                                                ? 'bg-amber-100 text-amber-800'
+                                                : 'bg-blue-100 text-blue-800'
+                                            }`}
+                                          >
+                                            {d.stage}
+                                          </span>
+                                        </td>
+                                        <td className="py-2 px-3">
+                                          <div className="font-medium text-slate-900">{d.buyer}</div>
+                                          <div className="text-[11px] font-mono text-slate-500">{d.poNumber}</div>
+                                        </td>
+                                        <td className="py-2 px-3">
+                                          <div className="font-medium text-slate-900">{d.style}</div>
+                                          <div className="text-[10px] text-slate-400 truncate max-w-[140px]" title={d.styleDescription}>
+                                            {d.styleDescription || '—'}
+                                          </div>
+                                        </td>
+                                        <td className="py-2 px-3 text-right font-mono text-slate-600">
+                                          {d.orderQty.toLocaleString()}
+                                        </td>
+                                        <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                                          {d.inspectedQty.toLocaleString()}
+                                        </td>
+                                        <td className="py-2 px-3 text-right font-mono">
+                                          {d.isBalanced ? (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                                              <Check className="w-3 h-3 text-emerald-600" />
+                                              Balanced
+                                            </span>
+                                          ) : d.isExcess ? (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                              <TrendingUp className="w-3 h-3 text-emerald-600" />
+                                              +{d.diff.toLocaleString()} (+{d.variancePct}%)
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                                              <TrendingDown className="w-3 h-3 text-rose-600" />
+                                              -{Math.abs(d.diff).toLocaleString()} ({d.variancePct}%)
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="py-2 px-3 text-center">
+                                          <span
+                                            className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                              d.status === 'PASSED'
+                                                ? 'bg-emerald-100 text-emerald-800'
+                                                : d.status === 'REJECTED'
+                                                ? 'bg-rose-100 text-rose-800'
+                                                : 'bg-amber-100 text-amber-800'
+                                            }`}
+                                          >
+                                            {d.status}
+                                          </span>
+                                        </td>
+                                        <td className="py-2 px-3 text-center">
+                                          <button
+                                            type="button"
+                                            onClick={() => setSubView({ type: 'details', record: d.record })}
+                                            className="px-2 py-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-md transition-all cursor-pointer inline-flex items-center gap-1"
+                                          >
+                                            <Eye className="w-3 h-3" />
+                                            <span>View</span>
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <div className="text-center py-10 text-xs text-slate-400">No inspection records for selected date range</div>
+                    <div className="text-center py-10 text-xs text-slate-400">
+                      No inspection records match the selected date or stage filter.
+                    </div>
                   )}
                 </div>
 
@@ -2085,6 +2668,155 @@ export function InspectionsView({
           {/* TAB 2: INSPECTION LIST (MATCHING BUYER & ORDER TABLE AND BUTTON DESIGNS) */}
           {viewMode === 'list' && (
             <div className="space-y-4 animate-in fade-in duration-200">
+              {/* COMPREHENSIVE FILTER TOOLBAR (DATE RANGE + PRESETS + TYPE + STATUS + BUYER) */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                {/* Row 1: Date Range Filter Bar with Quick Presets */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Calendar className="w-4 h-4 text-blue-600" />
+                      <span>Inspection Date Range:</span>
+                    </span>
+
+                    {/* Date Presets */}
+                    <div className="inline-flex p-0.5 rounded-lg bg-slate-100 border border-slate-200 text-xs">
+                      {[
+                        { key: 'ALL' as DateRangePreset, label: 'All Dates' },
+                        { key: 'TODAY' as DateRangePreset, label: 'Today' },
+                        { key: 'YESTERDAY' as DateRangePreset, label: 'Yesterday' },
+                        { key: 'LAST_7_DAYS' as DateRangePreset, label: 'Last 7 Days' },
+                        { key: 'THIS_MONTH' as DateRangePreset, label: 'This Month' },
+                      ].map((preset) => {
+                        const isSelected = dateRangePreset === preset.key;
+                        return (
+                          <button
+                            key={preset.key}
+                            type="button"
+                            onClick={() => handleSelectDatePreset(preset.key)}
+                            className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-blue-600 text-white shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Custom Date Pickers */}
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
+                      <span className="text-slate-400 font-semibold text-[11px]">From:</span>
+                      <input
+                        type="date"
+                        value={startDateFilter}
+                        onChange={(e) => {
+                          setStartDateFilter(e.target.value);
+                          setDateRangePreset('CUSTOM');
+                        }}
+                        className="bg-transparent border-0 text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
+                      <span className="text-slate-400 font-semibold text-[11px]">To:</span>
+                      <input
+                        type="date"
+                        value={endDateFilter}
+                        onChange={(e) => {
+                          setEndDateFilter(e.target.value);
+                          setDateRangePreset('CUSTOM');
+                        }}
+                        className="bg-transparent border-0 text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
+                      />
+                    </div>
+
+                    {(startDateFilter || endDateFilter || dateRangePreset !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => handleSelectDatePreset('ALL')}
+                        className="px-2 py-1 text-[11px] font-semibold text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Clear Date Filter"
+                      >
+                        Reset Date
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 2: Type, Status, Buyer and Record Count */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center flex-wrap gap-2">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                      <Filter className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Filters:</span>
+                    </span>
+
+                    {/* Inspection Type Filter */}
+                    <select
+                      value={typeFilter}
+                      onChange={(e) => setTypeFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors"
+                    >
+                      <option value="ALL">All Inspection Types</option>
+                      <option value="INLINE">🧵 Inline Inspection</option>
+                      <option value="PRE_FINAL">📦 Pre-Final Inspection</option>
+                      <option value="FINAL">🏆 Final Inspection (FRI)</option>
+                    </select>
+
+                    {/* Verdict Status Filter */}
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors"
+                    >
+                      <option value="ALL">All Verdicts</option>
+                      <option value="PASSED">✓ Passed</option>
+                      <option value="CONDITIONAL_PASS">~ Conditional Pass</option>
+                      <option value="REJECTED">✗ Rejected</option>
+                    </select>
+
+                    {/* Buyer Filter */}
+                    <select
+                      value={buyerFilter}
+                      onChange={(e) => setBuyerFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors max-w-[160px]"
+                    >
+                      <option value="ALL">All Buyers</option>
+                      {uniqueBuyers.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+
+                    {(typeFilter !== 'ALL' || statusFilter !== 'ALL' || buyerFilter !== 'ALL' || startDateFilter || endDateFilter) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTypeFilter('ALL');
+                          setStatusFilter('ALL');
+                          setBuyerFilter('ALL');
+                          handleSelectDatePreset('ALL');
+                        }}
+                        className="px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Reset All Filters
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className="font-mono text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                      Showing <strong>{filteredRecords.length}</strong> of {records.length} Audits
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <DataTable
                 id="qms-inspections-table"
                 data={filteredRecords}
@@ -2097,49 +2829,9 @@ export function InspectionsView({
                   'buyer',
                   'lotNumber',
                   'inspectorName',
+                  'inspectionDate',
                   'stage',
                 ]}
-                secondaryAction={
-                  <div className="flex items-center flex-wrap gap-2">
-                    {/* Inspection Type Filter */}
-                    <select
-                      value={typeFilter}
-                      onChange={(e) => setTypeFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors"
-                    >
-                      <option value="ALL">All Inspection Types</option>
-                      <option value="INLINE">🧵 Inline Inspection</option>
-                      <option value="PRE_FINAL">📦 Pre-Final Inspection</option>
-                      <option value="FINAL">🏆 Final Inspection (FRI)</option>
-                    </select>
-
-                    {/* Verdict Status Filter */}
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors"
-                    >
-                      <option value="ALL">All Verdicts</option>
-                      <option value="PASSED">Passed</option>
-                      <option value="CONDITIONAL_PASS">Conditional Pass</option>
-                      <option value="REJECTED">Rejected</option>
-                    </select>
-
-                    {/* Buyer Filter */}
-                    <select
-                      value={buyerFilter}
-                      onChange={(e) => setBuyerFilter(e.target.value)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors max-w-[160px]"
-                    >
-                      <option value="ALL">All Buyers</option>
-                      {uniqueBuyers.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                }
                 primaryAction={
                   canCreate ? (
                     <div className="flex items-center gap-2">

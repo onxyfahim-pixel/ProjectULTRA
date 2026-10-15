@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
   Download,
@@ -52,11 +52,35 @@ export function UniversalReportViewer({
   const { canExport } = useModulePermission('report_analysis');
   const [filters, setFilters] = useState<ReportFilterState>(INITIAL_REPORT_FILTER);
   const [tableSearch, setTableSearch] = useState('');
+  const [syncVersion, setSyncVersion] = useState(0);
+
+  // Auto-listen to production and inspection updates across modules
+  useEffect(() => {
+    const handleFloorUpdate = () => {
+      setSyncVersion((v) => v + 1);
+    };
+
+    window.addEventListener('erp_production_records_updated', handleFloorUpdate);
+    window.addEventListener('erp_production_orders_updated', handleFloorUpdate);
+    window.addEventListener('erp_sewing_track_updated', handleFloorUpdate);
+    window.addEventListener('erp_inspections_updated', handleFloorUpdate);
+    window.addEventListener('erp_inspection_records_updated', handleFloorUpdate);
+    window.addEventListener('erp_buyer_orders_updated', handleFloorUpdate);
+
+    return () => {
+      window.removeEventListener('erp_production_records_updated', handleFloorUpdate);
+      window.removeEventListener('erp_production_orders_updated', handleFloorUpdate);
+      window.removeEventListener('erp_sewing_track_updated', handleFloorUpdate);
+      window.removeEventListener('erp_inspections_updated', handleFloorUpdate);
+      window.removeEventListener('erp_inspection_records_updated', handleFloorUpdate);
+      window.removeEventListener('erp_buyer_orders_updated', handleFloorUpdate);
+    };
+  }, []);
 
   // Dynamically compute the synced real data based on current active filters
   const reportData = useMemo(() => {
     return generateSyncedReport(reportKey, filters);
-  }, [reportKey, filters]);
+  }, [reportKey, filters, syncVersion]);
 
   const { metaDef, filterSummary, kpis, tableHeaders, tableRows, chartData, comparisonData, notes } = reportData;
 
@@ -181,39 +205,54 @@ export function UniversalReportViewer({
         </div>
 
         {/* Quick Actions */}
-        {canExport && (
-          <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
-            <button
-              type="button"
-              onClick={handleDownloadCsv}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 transition-all cursor-pointer"
-              title="Download CSV"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-600" />
-              <span className="hidden sm:inline">CSV</span>
-            </button>
+        <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setSyncVersion((v) => v + 1);
+              showToast('Live synchronized with active production orders & quality inspections.');
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl shadow-2xs transition-all cursor-pointer"
+            title="Re-sync Live Floor Data"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-sky-600" />
+            <span className="hidden sm:inline">Sync Live</span>
+          </button>
 
-            <button
-              type="button"
-              onClick={handleDownloadExcel}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl shadow-2xs transition-all cursor-pointer"
-              title="Download Excel"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-              <span className="hidden sm:inline">Excel</span>
-            </button>
+          {canExport && (
+            <>
+              <button
+                type="button"
+                onClick={handleDownloadCsv}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 transition-all cursor-pointer"
+                title="Download CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-600" />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={handlePrintPdf}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-2xs transition-all cursor-pointer"
-              title="Print or Save PDF"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print / PDF</span>
-            </button>
-          </div>
-        )}
+              <button
+                type="button"
+                onClick={handleDownloadExcel}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl shadow-2xs transition-all cursor-pointer"
+                title="Download Excel"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                <span className="hidden sm:inline">Excel</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintPdf}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-2xs transition-all cursor-pointer"
+                title="Print or Save PDF"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print / PDF</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Interactive Customization Filter Toolbar */}

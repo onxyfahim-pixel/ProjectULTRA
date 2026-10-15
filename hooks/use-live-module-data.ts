@@ -55,11 +55,19 @@ export function useLiveModuleData<T>(
         const res = await fetch(`/api/modules/${moduleKey}`);
         if (res.ok) {
           const json = await res.json();
-          if (isMounted && json.data !== null && json.data !== undefined) {
-            setDataState(json.data);
-            try {
-              localStorage.setItem(`erp_module_${moduleKey}`, JSON.stringify(json.data));
-            } catch {}
+          if (isMounted) {
+            if (json.data !== null && json.data !== undefined) {
+              setDataState(json.data);
+              try {
+                localStorage.setItem(`erp_module_${moduleKey}`, JSON.stringify(json.data));
+              } catch {}
+            } else if (json.isZeroState) {
+              const emptyVal = Array.isArray(initialFallback) ? ([] as unknown as T) : ({} as unknown as T);
+              setDataState(emptyVal);
+              try {
+                localStorage.setItem(`erp_module_${moduleKey}`, JSON.stringify(emptyVal));
+              } catch {}
+            }
           }
         }
       } catch (err) {
@@ -74,7 +82,7 @@ export function useLiveModuleData<T>(
     return () => {
       isMounted = false;
     };
-  }, [moduleKey]);
+  }, [moduleKey, initialFallback]);
 
   // 2. Real-time Cross-Device & Cross-Tab synchronization listener
   useEffect(() => {
@@ -85,13 +93,24 @@ export function useLiveModuleData<T>(
       }
     };
 
+    const handleSystemResetBlank = () => {
+      const emptyVal = Array.isArray(initialFallback) ? ([] as unknown as T) : ({} as unknown as T);
+      setDataState(emptyVal);
+      try {
+        localStorage.removeItem(`erp_module_${moduleKey}`);
+        if (legacyKey) localStorage.removeItem(legacyKey);
+      } catch {}
+    };
+
     const eventName = `erp_module_${moduleKey}_updated`;
     window.addEventListener(eventName, handleModuleUpdate);
+    window.addEventListener('erp_system_reset_blank', handleSystemResetBlank);
 
     return () => {
       window.removeEventListener(eventName, handleModuleUpdate);
+      window.removeEventListener('erp_system_reset_blank', handleSystemResetBlank);
     };
-  }, [moduleKey]);
+  }, [moduleKey, legacyKey, initialFallback]);
 
   // 3. Update mutator
   const updateData = useCallback(

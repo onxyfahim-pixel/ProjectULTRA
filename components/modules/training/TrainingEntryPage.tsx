@@ -15,6 +15,10 @@ import {
   Check,
   User,
   Users,
+  Image as ImageIcon,
+  Upload,
+  Camera,
+  Sparkles,
 } from 'lucide-react';
 import { TrainingMatrixItem, TrainingStatus, TrainingFrequency, TrainingAttendee } from '@/lib/types/modules';
 
@@ -117,11 +121,98 @@ export function TrainingEntryPage({
         'Handheld magnetic wand scanning techniques for alarmed garments',
       ],
       attendees: [],
+      imageUrl: '',
+      evidenceImages: [],
       notes: '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString().split('T')[0],
     };
   });
+
+  const PRESET_SAMPLE_IMAGES = [
+    {
+      title: 'Needle & Metal Safety Drill',
+      url: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=800&auto=format&fit=crop&q=60',
+    },
+    {
+      title: 'Fabric 4-Point Lab Swatch Inspection',
+      url: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=60',
+    },
+    {
+      title: 'Active Sewing Demonstration',
+      url: 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&auto=format&fit=crop&q=60',
+    },
+    {
+      title: 'Chemical PPE & ZDHC Practical',
+      url: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=800&auto=format&fit=crop&q=60',
+    },
+  ];
+
+  const handlePrimaryImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file (PNG, JPG, WEBP)');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Image file size must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvt) => {
+      if (uploadEvt.target?.result) {
+        setFormData((prev) => ({
+          ...prev,
+          imageUrl: uploadEvt.target!.result as string,
+        }));
+        showToast('Training session photo attached successfully');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleEvidenceImagesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (fileList.length === 0) {
+      showToast('Please select valid image files');
+      return;
+    }
+
+    const readers = fileList.map((file) => {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          if (evt.target?.result) {
+            resolve(evt.target.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readers).then((newUrls) => {
+      setFormData((prev) => ({
+        ...prev,
+        evidenceImages: [...(prev.evidenceImages || []), ...newUrls],
+      }));
+      showToast(`Added ${newUrls.length} classroom evidence photo(s)`);
+    });
+  };
+
+  const handleRemoveEvidenceImage = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      evidenceImages: (prev.evidenceImages || []).filter((_, i) => i !== index),
+    }));
+    showToast('Removed evidence image');
+  };
 
   const [newTopic, setNewTopic] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -558,6 +649,168 @@ export function TrainingEntryPage({
             </div>
           </div>
 
+          {/* OFFICIAL TRAINING SESSION PHOTO & PHOTOGRAPHIC EVIDENCE UPLOAD */}
+          <div className="bg-slate-50/70 rounded-2xl p-5 border border-slate-200/90 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/70 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-blue-600" />
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    Session Media & Photographic Training Evidence
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Upload practical demonstration photos, classroom sessions, or machine calibration records. These automatically appear on the official export dossier.
+                </p>
+              </div>
+              <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 self-start sm:self-auto">
+                Appears on PDF & Export Page
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* PRIMARY TRAINING BANNER / PHOTO */}
+              <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Primary Training Session Photo / Poster</span>
+                  </label>
+                  {formData.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, imageUrl: '' })}
+                      className="text-[11px] text-rose-500 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Remove</span>
+                    </button>
+                  )}
+                </div>
+
+                {formData.imageUrl ? (
+                  <div className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-900/5 aspect-video sm:h-44 flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={formData.imageUrl}
+                      alt="Primary training session preview"
+                      className="w-full h-full object-cover rounded-xl"
+                    />
+                    <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <label className="px-3 py-1.5 rounded-lg bg-white/90 hover:bg-white text-slate-900 text-xs font-semibold cursor-pointer shadow-sm">
+                        Replace Photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePrimaryImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl bg-slate-50/50 hover:bg-blue-50/20 transition-all cursor-pointer group text-center">
+                    <div className="p-3 rounded-full bg-blue-50 group-hover:bg-blue-100 text-blue-600 mb-2 transition-colors">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-800">
+                      Click to upload session photo
+                    </span>
+                    <span className="text-[11px] text-slate-400 mt-1">
+                      PNG, JPG, WEBP up to 5MB • Formatted for A4 Export
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePrimaryImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+
+                {/* Preset Sample Banners */}
+                <div>
+                  <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 mb-1.5">
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>Quick presets for training demo:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRESET_SAMPLE_IMAGES.map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setFormData({ ...formData, imageUrl: preset.url });
+                          showToast(`Selected "${preset.title}" photo`);
+                        }}
+                        className={`text-[10px] px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
+                          formData.imageUrl === preset.url
+                            ? 'bg-blue-600 text-white border-blue-600 font-bold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
+                        }`}
+                      >
+                        {preset.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* SUPPORTING EVIDENCE GALLERY PHOTOS */}
+              <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Classroom &amp; Practical Activity Photos</span>
+                  </label>
+                  <span className="text-[11px] font-mono font-bold text-slate-500">
+                    {formData.evidenceImages?.length || 0} Photos Attached
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {(formData.evidenceImages || []).map((imgUrl, i) => (
+                    <div
+                      key={i}
+                      className="relative group rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-100"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imgUrl}
+                        alt={`Evidence thumbnail ${i + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveEvidenceImage(i)}
+                        className="absolute top-1 right-1 p-1 rounded-md bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-700 cursor-pointer shadow-xs"
+                        title="Remove photo"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Add evidence button */}
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-lg aspect-square bg-slate-50/50 hover:bg-indigo-50/20 transition-all cursor-pointer text-center p-2">
+                    <Upload className="w-4 h-4 text-indigo-500 mb-1" />
+                    <span className="text-[10px] font-bold text-slate-700">+ Add Evidence</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleEvidenceImagesUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Multiple photos supported (classroom attendance photo, trainee practical drills, test specimens).
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="pt-4 border-t border-slate-100 flex justify-end">
             <button
               type="button"
@@ -892,6 +1145,54 @@ export function TrainingEntryPage({
               </div>
             </div>
           </div>
+
+          {/* PREVIEW OF ATTACHED TRAINING SESSION PHOTOS */}
+          {(formData.imageUrl || (formData.evidenceImages && formData.evidenceImages.length > 0)) && (
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Photographic Media Attached (Will Appear on Export Dossier)</span>
+                </span>
+                <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold">
+                  {(formData.imageUrl ? 1 : 0) + (formData.evidenceImages?.length || 0)} Media Ready
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                {formData.imageUrl && (
+                  <div className="flex items-center gap-2.5 p-2 bg-white rounded-lg border border-slate-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={formData.imageUrl}
+                      alt="Primary banner"
+                      className="w-16 h-12 object-cover rounded border border-slate-100"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 block">Primary Session Photo</span>
+                      <span className="text-[10px] text-slate-400">A4 Header Banner</span>
+                    </div>
+                  </div>
+                )}
+
+                {(formData.evidenceImages || []).slice(0, 4).map((url, i) => (
+                  <div key={i} className="flex items-center gap-2 p-1.5 bg-white rounded-lg border border-slate-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt={`Evidence ${i + 1}`}
+                      className="w-12 h-12 object-cover rounded"
+                    />
+                  </div>
+                ))}
+                {(formData.evidenceImages?.length || 0) > 4 && (
+                  <span className="text-xs font-mono text-slate-500 font-bold">
+                    +{(formData.evidenceImages?.length || 0) - 4} more
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
             <button

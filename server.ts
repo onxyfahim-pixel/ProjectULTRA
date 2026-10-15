@@ -648,6 +648,7 @@ app.prepare().then(() => {
       success: true,
       moduleKey: key,
       data,
+      isZeroState: erpStore.isZeroState(),
       isMysqlConnected: erpStore.isMysqlActive(),
     });
   });
@@ -974,16 +975,204 @@ app.prepare().then(() => {
     }
   });
 
-  // 20. Database Reset / Factory Purge
+  // 20. Centralized Attachments & Media (Images, PDFs, Tech Packs, Documents in MySQL)
+  server.get('/api/attachments', async (req: Request, res: Response) => {
+    try {
+      const entityType = req.query.entityType ? String(req.query.entityType) : undefined;
+      const entityId = req.query.entityId ? String(req.query.entityId) : undefined;
+      const moduleKey = req.query.moduleKey ? String(req.query.moduleKey) : undefined;
+      const includeData = req.query.includeData === 'true';
+
+      let items = mysqlManager.getConnectedStatus()
+        ? await mysqlManager.loadAttachments({ entityType, entityId, moduleKey, includeData })
+        : [];
+      if (!items || items.length === 0) {
+        items = erpStore.getAttachments({ entityType, entityId, moduleKey });
+      }
+
+      return res.json({
+        success: true,
+        attachments: items,
+        count: items.length,
+        isMysqlConnected: mysqlManager.getConnectedStatus(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  server.get('/api/attachments/:id', async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const att = mysqlManager.getConnectedStatus()
+        ? await mysqlManager.getAttachment(id)
+        : erpStore.getAttachment(id);
+
+      if (!att) {
+        return res.status(404).json({ success: false, error: 'Attachment not found' });
+      }
+
+      // Check if user requested raw file download/stream
+      if (req.query.action === 'download' && att.fileData && att.fileData.startsWith('data:')) {
+        const matches = att.fileData.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const contentType = matches[1];
+          const buffer = Buffer.from(matches[2], 'base64');
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Content-Disposition', `attachment; filename="${att.fileName}"`);
+          return res.send(buffer);
+        }
+      }
+
+      return res.json({
+        success: true,
+        attachment: att,
+        isMysqlConnected: mysqlManager.getConnectedStatus(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  server.post('/api/attachments', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const body = req.body.attachment || req.body;
+      if (!body.fileName || !body.fileData) {
+        return res.status(400).json({ success: false, error: 'File name and file data are required.' });
+      }
+
+      const saved = erpStore.upsertAttachment(
+        {
+          id: body.id,
+          entityType: body.entityType || 'GENERAL',
+          entityId: body.entityId || 'general',
+          moduleKey: body.moduleKey || '',
+          fileName: body.fileName,
+          fileType: body.fileType || 'document',
+          fileSize: body.fileSize || Math.round((body.fileData.length || 0) * 0.75),
+          mimeType: body.mimeType || body.fileType || '',
+          category: body.category || 'GENERAL_ATTACHMENT',
+          fileData: body.fileData,
+          uploadedBy: req.user?.name || body.uploadedBy || 'Current User',
+          notes: body.notes,
+        },
+        req.user
+      );
+
+      return res.status(201).json({
+        success: true,
+        attachment: saved,
+        isMysqlConnected: mysqlManager.getConnectedStatus(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  server.delete('/api/attachments/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = erpStore.deleteAttachment(id, req.user);
+      return res.json({ success: deleted, id });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 21. Database Reset / Factory Purge - STRICTLY RESTRICTED TO SUPER ADMIN
   server.post('/api/database/reset', authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
+      const user = req.user;
+      const isSuperAdmin = user?.isSuperAdmin === true || user?.role === 'Super Admin' || user?.role === 'ADMIN';
+
+      if (!isSuperAdmin) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access Denied: Only a Super Administrator has permission to factory reset all ERP data records to zero.',
+        });
+      }
+
       const mode = (req.body.mode || 'blank') as 'blank' | 'defaults';
-      const result = await erpStore.resetDatabase(mode, req.user);
+      const result = await erpStore.resetDatabase(mode, user);
+
+      if (!result.success) {
+        return res.status(403).json({ success: false, error: result.message });
+      }
+
       return res.json({
         success: result.success,
         message: result.message,
         mode,
         isMysqlConnected: erpStore.isMysqlActive(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 22. Database Restore from JSON snapshot
+  server.post('/api/database/restore', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const body = req.body;
+      if (!body || (!body.inventory && !body.inspections && !body.modulesData)) {
+        return res.status(400).json({ success: false, error: 'Invalid backup file: Missing ERP entities.' });
+      }
+
+      const inventory = Array.isArray(body.inventory) ? body.inventory : [];
+      const inspections = Array.isArray(body.inspections) ? body.inspections : [];
+      const productionOrders = Array.isArray(body.productionOrders) ? body.productionOrders : [];
+      const productionRecords = Array.isArray(body.productionRecords) ? body.productionRecords : [];
+      const buyerOrders = Array.isArray(body.buyerOrders) ? body.buyerOrders : [];
+      const auditLogs = Array.isArray(body.auditLogs) ? body.auditLogs : [];
+      const attachments = Array.isArray(body.attachments) ? body.attachments : [];
+      const modulesData = body.modulesData && typeof body.modulesData === 'object' ? { ...body.modulesData } : {};
+
+      if (buyerOrders.length > 0) modulesData.buyer_orders = buyerOrders;
+      if (productionRecords.length > 0) modulesData.production_records = productionRecords;
+
+      // Save to local storage
+      const CentralStorageManager = (await import('./lib/db/central-storage')).CentralStorageManager;
+      CentralStorageManager.saveCentralData({
+        version: 2,
+        lastSavedAt: new Date().toISOString(),
+        hostSystem: 'Garments QMS ERP Host Center (Restored)',
+        inventory,
+        inspections,
+        productionOrders,
+        auditLogs,
+        modulesData,
+        attachments,
+      });
+
+      erpStore.loadFromDisk();
+
+      // Commit to MySQL if connected
+      if (erpStore.isMysqlActive()) {
+        for (const item of inventory) await mysqlManager.upsertInventoryItem(item);
+        for (const insp of inspections) await mysqlManager.insertInspection(insp);
+        for (const pr of productionRecords) await mysqlManager.upsertProductionRecord(pr);
+        for (const bo of buyerOrders) await mysqlManager.upsertBuyerOrder(bo);
+        for (const att of attachments) await mysqlManager.upsertAttachment(att);
+        for (const [key, data] of Object.entries(modulesData)) await mysqlManager.saveModuleData(key, data);
+      }
+
+      erpStore.addAuditLog({
+        action: 'DATABASE_BACKUP_RESTORED',
+        entity: 'SystemBackup',
+        entityId: 'backup_restore',
+        performedBy: req.user?.name || 'Super Administrator',
+        userRole: req.user?.role || 'Super Admin',
+        details: `Restored ${inventory.length} items, ${inspections.length} inspections, ${buyerOrders.length} orders, ${attachments.length} attachments, and ${Object.keys(modulesData).length} modules.`,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Database backup successfully restored into MySQL!',
+        restoredInventoryCount: inventory.length,
+        restoredInspectionsCount: inspections.length,
+        restoredOrdersCount: buyerOrders.length,
+        restoredAttachmentsCount: attachments.length,
+        restoredModulesCount: Object.keys(modulesData).length,
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });

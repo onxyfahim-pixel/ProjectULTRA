@@ -331,6 +331,11 @@ export function InspectionDetailsPage({
                   <StatusIcon className="w-3 h-3" />
                   <span>{statusConfig.label}</span>
                 </span>
+                {/* Inspection Date Pill */}
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border bg-slate-100 text-slate-700 border-slate-200">
+                  <Calendar className="w-3 h-3 text-blue-600" />
+                  <span>Date: {record.inspectionDate || (record.createdAt ? record.createdAt.split('T')[0] : 'N/A')}</span>
+                </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 {record.buyer} • Style: <span className="font-semibold text-slate-700">{record.styleNumber}</span>
@@ -725,10 +730,13 @@ export function InspectionDetailsPage({
                     </div>
 
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Audit Date & Time</div>
-                      <div className="font-bold text-slate-800 mt-0.5">{new Date(record.createdAt).toLocaleDateString()}</div>
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Inspection Date</div>
+                      <div className="font-bold text-slate-800 mt-0.5 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                        <span>{record.inspectionDate || (record.createdAt ? record.createdAt.split('T')[0] : 'N/A')}</span>
+                      </div>
                       <div className="text-[10px] text-slate-500 mt-0.5">
-                        {new Date(record.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        Logged: {new Date(record.createdAt).toLocaleDateString()} {new Date(record.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
 

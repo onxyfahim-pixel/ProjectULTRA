@@ -5,6 +5,7 @@ import {
   InspectionRecord,
   ProductionOrder,
   AuditLog,
+  AttachmentRecord,
 } from '../types/erp';
 import {
   INITIAL_INVENTORY,
@@ -22,6 +23,7 @@ export interface CentralErpData {
   productionOrders: ProductionOrder[];
   auditLogs: AuditLog[];
   modulesData: Record<string, any>;
+  attachments?: AttachmentRecord[];
 }
 
 // Data directory on the host PC
@@ -57,6 +59,70 @@ export class CentralStorageManager {
           Array.isArray(parsed.inspections) &&
           Array.isArray(parsed.productionOrders)
         ) {
+          let needsUpdate = false;
+
+          // 1. Ensure all INITIAL_PRODUCTION_ORDERS are present and synced with standard sections/lines/orders
+          const existingPoMap = new Map(parsed.productionOrders.map((p) => [p.id, p]));
+          INITIAL_PRODUCTION_ORDERS.forEach((initOrd) => {
+            const existing = existingPoMap.get(initOrd.id);
+            if (!existing) {
+              parsed.productionOrders.push(initOrd);
+              needsUpdate = true;
+            } else {
+              // Ensure orderNumber, buyer, style, section, line and valid recordDate are synced
+              const isSectionMismatch = existing.section !== initOrd.section;
+              const isLineMismatch = existing.lineId !== initOrd.lineId;
+              const isOrderMismatch = existing.orderNumber !== initOrd.orderNumber;
+              const isDateEmpty = !existing.recordDate || existing.recordDate === '';
+              if (isSectionMismatch || isLineMismatch || isOrderMismatch || isDateEmpty) {
+                Object.assign(existing, {
+                  orderNumber: initOrd.orderNumber,
+                  buyer: initOrd.buyer,
+                  styleName: initOrd.styleName,
+                  styleNumber: initOrd.styleNumber,
+                  unit: initOrd.unit,
+                  section: initOrd.section,
+                  sewingLine: initOrd.sewingLine,
+                  lineId: initOrd.lineId,
+                  recordDate: initOrd.recordDate || existing.recordDate,
+                  hourlyReports: existing.hourlyReports && existing.hourlyReports.length > 0 ? existing.hourlyReports : initOrd.hourlyReports,
+                  top3Defects: existing.top3Defects && existing.top3Defects.length > 0 ? existing.top3Defects : initOrd.top3Defects,
+                });
+                needsUpdate = true;
+              }
+            }
+          });
+
+          // 2. Ensure all INITIAL_INSPECTIONS are present and synced
+          const existingInspMap = new Map(parsed.inspections.map((i) => [i.id, i]));
+          INITIAL_INSPECTIONS.forEach((initInsp) => {
+            const existing = existingInspMap.get(initInsp.id);
+            if (!existing) {
+              parsed.inspections.push(initInsp);
+              needsUpdate = true;
+            } else {
+              const isOrderMismatch = existing.orderNumber !== initInsp.orderNumber;
+              const isLineMismatch = existing.lineId !== initInsp.lineId;
+              if (isOrderMismatch || isLineMismatch) {
+                Object.assign(existing, {
+                  orderNumber: initInsp.orderNumber,
+                  poNumbers: initInsp.poNumbers,
+                  buyer: initInsp.buyer,
+                  styleNumber: initInsp.styleNumber,
+                  styleDescription: initInsp.styleDescription,
+                  sewingLine: initInsp.sewingLine,
+                  lineId: initInsp.lineId,
+                  stage: initInsp.stage,
+                });
+                needsUpdate = true;
+              }
+            }
+          });
+
+          if (needsUpdate) {
+            this.saveCentralData(parsed);
+          }
+
           return parsed;
         }
       } catch (err) {

@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, AlertTriangle, Building2, Layers, ShieldCheck, Target, Activity } from 'lucide-react';
 import { ProductionOrder, LineStatus } from '@/lib/types/erp';
-import { getProductionUnits, getProductionLines } from '@/lib/db/production-management-store';
-import { ProductionUnit, ProductionLine } from '@/lib/types/production-management';
+import { getProductionUnits, getProductionLines, getProductionSections } from '@/lib/db/production-management-store';
+import { ProductionUnit, ProductionLine, ProductionSection } from '@/lib/types/production-management';
 
 interface AddProductionOrderModalProps {
   isOpen: boolean;
@@ -125,11 +125,13 @@ export function AddProductionOrderModal({
   });
   const [error, setError] = useState('');
   const [managedUnits, setManagedUnits] = useState<ProductionUnit[]>([]);
+  const [managedSections, setManagedSections] = useState<ProductionSection[]>([]);
   const [managedLines, setManagedLines] = useState<ProductionLine[]>([]);
 
   useEffect(() => {
     const load = () => {
       setManagedUnits(getProductionUnits());
+      setManagedSections(getProductionSections());
       setManagedLines(getProductionLines());
     };
     load();
@@ -146,7 +148,8 @@ export function AddProductionOrderModal({
         styleName: orderToEdit.styleName,
         styleNumber: orderToEdit.styleNumber || '',
         unit: orderToEdit.unit || 'Unit 01 (Dhaka Complex)',
-        section: orderToEdit.section || orderToEdit.sewingLine || 'Sewing Line 01 (Knit Tops)',
+        section: orderToEdit.section || 'Sewing Floor',
+        sewingLine: orderToEdit.sewingLine || orderToEdit.lineId || 'Line 01',
         lineId: orderToEdit.lineId || 'Line 01',
         targetQuantity: orderToEdit.targetQuantity,
         completedQuantity: orderToEdit.completedQuantity || 0,
@@ -164,10 +167,16 @@ export function AddProductionOrderModal({
         remarks: orderToEdit.remarks || '',
       });
     } else {
+      const defaultUnit = managedUnits[0]?.name || 'Unit 01 (Dhaka Complex)';
+      const defaultSec = managedSections[0]?.name || 'Sewing Floor';
+      const defaultLine = managedLines[0];
       setForm({
-        unit: 'Unit 01 (Dhaka Complex)',
-        section: 'Sewing Line 01 (Knit Tops)',
-        lineId: 'Line 01',
+        unit: defaultUnit,
+        section: defaultSec,
+        lineId: defaultLine?.lineCode || 'Line 01',
+        sewingLine: defaultLine?.name || 'Sewing Line 01 (Knit Tops)',
+        supervisorName: defaultLine?.lineChief || 'Kabir Hossain',
+        operatorCount: defaultLine?.operatorCount || 48,
         status: 'RUNNING',
         targetQuantity: 10000,
         completedQuantity: 0,
@@ -176,16 +185,66 @@ export function AddProductionOrderModal({
         rftRate: 98.5,
         efficiencyPercent: 82,
         rejectQuantity: 15,
-        operatorCount: 45,
         recordDate: new Date().toISOString().split('T')[0],
         createdAt: new Date().toISOString(),
         dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString().split('T')[0],
       });
     }
-  }, [orderToEdit, isOpen]);
+  }, [orderToEdit, isOpen, managedUnits.length, managedSections.length, managedLines.length]);
 
   const set = (field: keyof NewProductionOrderData, value: any) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  // Available lines filtered by current section or all lines
+  const availableLines = React.useMemo(() => {
+    if (!managedLines.length) return [];
+    if (!form.section || form.section === 'ALL') return managedLines;
+    const secLower = form.section.toLowerCase();
+    const filtered = managedLines.filter((l) => {
+      const lineSec = (l.sectionName || '').toLowerCase();
+      return lineSec.includes(secLower) || secLower.includes(lineSec);
+    });
+    return filtered.length > 0 ? filtered : managedLines;
+  }, [managedLines, form.section]);
+
+  const handleSectionSelect = (secName: string) => {
+    setForm((prev) => {
+      const next = { ...prev, section: secName };
+      const secLower = secName.toLowerCase();
+      const matched = managedLines.filter((l) => {
+        const lineSec = (l.sectionName || '').toLowerCase();
+        return lineSec.includes(secLower) || secLower.includes(lineSec);
+      });
+      const firstLine = matched[0] || managedLines[0];
+      if (firstLine) {
+        next.lineId = firstLine.lineCode;
+        next.sewingLine = firstLine.name;
+        if (firstLine.lineChief) next.supervisorName = firstLine.lineChief;
+        if (firstLine.operatorCount) next.operatorCount = firstLine.operatorCount;
+        if (firstLine.unitName) next.unit = firstLine.unitName;
+      }
+      return next;
+    });
+  };
+
+  const handleLineSelect = (selLineCodeOrName: string) => {
+    const found = managedLines.find(
+      (l) => l.lineCode === selLineCodeOrName || l.id === selLineCodeOrName || l.name === selLineCodeOrName
+    );
+    if (found) {
+      setForm((prev) => ({
+        ...prev,
+        lineId: found.lineCode,
+        sewingLine: found.name,
+        section: found.sectionName || prev.section,
+        unit: found.unitName || prev.unit,
+        supervisorName: found.lineChief || prev.supervisorName,
+        operatorCount: found.operatorCount || prev.operatorCount,
+      }));
+    } else {
+      set('lineId', selLineCodeOrName);
+    }
+  };
 
   const handleSave = () => {
     if (!form.orderNumber?.trim()) {
@@ -209,8 +268,9 @@ export function AddProductionOrderModal({
       return;
     }
 
-    const currentLines = SECTION_LINE_PRESETS[form.section || 'Sewing Floor'] || SECTION_LINE_PRESETS['Sewing Floor'];
-    const matchedLine = currentLines.find((s) => s.id === form.lineId || s.name === form.lineId);
+    const matchedLine = managedLines.find(
+      (l) => l.lineCode === form.lineId || l.id === form.lineId || l.name === form.sewingLine
+    );
 
     onSave({
       id: form.id,
@@ -218,8 +278,8 @@ export function AddProductionOrderModal({
       buyer: form.buyer.trim(),
       styleName: form.styleName.trim(),
       styleNumber: form.styleNumber?.trim() || `STY-${Math.floor(1000 + Math.random() * 9000)}`,
-      unit: form.unit || 'Unit 01 (Dhaka Complex)',
-      section: form.section || 'Sewing Floor',
+      unit: form.unit || matchedLine?.unitName || 'Unit 01 (Dhaka Complex)',
+      section: form.section || matchedLine?.sectionName || 'Sewing Floor',
       targetQuantity: Number(form.targetQuantity) || 10000,
       completedQuantity: Number(form.completedQuantity) || 0,
       totalDefects: Number(form.totalDefects) || 0,
@@ -227,14 +287,14 @@ export function AddProductionOrderModal({
       rftRate: Number(form.rftRate) || 98.0,
       efficiencyPercent: Number(form.efficiencyPercent) || 82,
       rejectQuantity: Number(form.rejectQuantity) || 0,
-      sewingLine: matchedLine?.name || form.lineId || 'Line 01',
-      lineId: matchedLine?.id || form.lineId || 'Line 01',
+      sewingLine: form.sewingLine || matchedLine?.name || form.lineId || 'Line 01',
+      lineId: form.lineId || matchedLine?.lineCode || 'Line 01',
       status: (form.status as LineStatus) || 'RUNNING',
       dueDate: form.dueDate,
       recordDate: form.recordDate || new Date().toISOString().split('T')[0],
       createdAt: form.createdAt || new Date().toISOString(),
-      operatorCount: Number(form.operatorCount) || 45,
-      supervisorName: form.supervisorName?.trim() || 'Floor Supervisor',
+      operatorCount: Number(form.operatorCount) || matchedLine?.operatorCount || 45,
+      supervisorName: form.supervisorName?.trim() || matchedLine?.lineChief || 'Floor Supervisor',
       remarks: form.remarks?.trim() || '',
     });
 
@@ -309,20 +369,10 @@ export function AddProductionOrderModal({
                 </label>
                 <select
                   value={form.section || 'Sewing Floor'}
-                  onChange={(e) => {
-                    const sec = e.target.value;
-                    set('section', sec);
-                    const presets = SECTION_LINE_PRESETS[sec] || [];
-                    if (presets.length > 0) {
-                      set('lineId', presets[0].id);
-                      set('sewingLine', presets[0].name);
-                      if (presets[0].chief) set('supervisorName', presets[0].chief);
-                      if (presets[0].operators) set('operatorCount', presets[0].operators);
-                    }
-                  }}
+                  onChange={(e) => handleSectionSelect(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
                 >
-                  {STANDARD_SECTIONS.map((sec) => (
+                  {(managedSections.length > 0 ? managedSections.map((s) => s.name) : STANDARD_SECTIONS).map((sec) => (
                     <option key={sec} value={sec}>
                       {sec}
                     </option>
@@ -336,25 +386,22 @@ export function AddProductionOrderModal({
                 </label>
                 <select
                   value={form.lineId || 'Line 01'}
-                  onChange={(e) => {
-                    const selId = e.target.value;
-                    const curSec = form.section || 'Sewing Floor';
-                    const presets = SECTION_LINE_PRESETS[curSec] || Object.values(SECTION_LINE_PRESETS).flat();
-                    const found = presets.find((p) => p.id === selId);
-                    set('lineId', selId);
-                    if (found) {
-                      set('sewingLine', found.name);
-                      if (found.chief) set('supervisorName', found.chief);
-                      if (found.operators) set('operatorCount', found.operators);
-                    }
-                  }}
+                  onChange={(e) => handleLineSelect(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
                 >
-                  {(SECTION_LINE_PRESETS[form.section || 'Sewing Floor'] || SECTION_LINE_PRESETS['Sewing Floor']).map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name} • Chief: {l.chief}
-                    </option>
-                  ))}
+                  {availableLines.length > 0 ? (
+                    availableLines.map((l) => (
+                      <option key={l.id || l.lineCode} value={l.lineCode}>
+                        [{l.lineCode}] {l.name} • Chief: {l.lineChief}
+                      </option>
+                    ))
+                  ) : (
+                    (SECTION_LINE_PRESETS[form.section || 'Sewing Floor'] || SECTION_LINE_PRESETS['Sewing Floor']).map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name} • Chief: {l.chief}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
             </div>

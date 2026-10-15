@@ -216,9 +216,12 @@ export function AddProductionRecordPage({
     initialOrder?.unit || 'Unit 01 (Dhaka Complex)'
   );
   const [section, setSection] = useState<string>(
-    initialOrder?.section || initialOrder?.sewingLine || 'Sewing Line 04 (Heavy Denim)'
+    initialOrder?.section || 'Sewing Floor'
   );
-  const [lineId, setLineId] = useState<string>(initialOrder?.lineId || 'Line 04');
+  const [sewingLine, setSewingLine] = useState<string>(
+    initialOrder?.sewingLine || 'Sewing Line 01 (Knit Tops)'
+  );
+  const [lineId, setLineId] = useState<string>(initialOrder?.lineId || 'L-01');
   const [status, setStatus] = useState<LineStatus>(initialOrder?.status || 'RUNNING');
   const [targetQuantity, setTargetQuantity] = useState<number>(
     initialOrder?.targetQuantity || 15000
@@ -283,20 +286,28 @@ export function AddProductionRecordPage({
       setManagedLines(l);
 
       // Match initialOrder to line if present
-      if (initialOrder?.lineId || initialOrder?.section) {
+      if (initialOrder?.lineId || initialOrder?.sewingLine) {
         const found = l.find(
           (item) =>
             item.id === initialOrder.lineId ||
             item.lineCode === initialOrder.lineId ||
-            item.name === initialOrder.section
+            item.name === initialOrder.sewingLine ||
+            item.name.toLowerCase() === (initialOrder.sewingLine || '').toLowerCase()
         );
-        if (found) setSelectedManagedLine(found);
+        if (found) {
+          setSelectedManagedLine(found);
+          setSewingLine(found.name);
+          setLineId(found.lineCode || found.id);
+          setUnit(found.unitName || initialOrder.unit || 'Unit 01 (Dhaka Complex)');
+          setSection(found.sectionName || initialOrder.section || 'Sewing Floor');
+        }
       } else if (!initialOrder && l.length > 0) {
         // Pre-select first managed line if creating a fresh record
         const defaultLine = l[0];
         setSelectedManagedLine(defaultLine);
-        setUnit(defaultLine.unitName);
-        setSection(defaultLine.name);
+        setUnit(defaultLine.unitName || 'Unit 01 (Dhaka Complex)');
+        setSection(defaultLine.sectionName || 'Sewing Floor');
+        setSewingLine(defaultLine.name);
         setLineId(defaultLine.lineCode || defaultLine.id);
         if (!supervisorName) setSupervisorName(defaultLine.lineChief);
         if (!qualityInspector) setQualityInspector(defaultLine.qualityController);
@@ -308,6 +319,22 @@ export function AddProductionRecordPage({
     window.addEventListener('erp_production_management_updated', loadManagedData);
     return () => window.removeEventListener('erp_production_management_updated', loadManagedData);
   }, [initialOrder]);
+
+  const handleSelectUnit = (newUnit: string) => {
+    setUnit(newUnit);
+    // Find lines associated with this unit
+    const matchingLines = managedLines.filter(
+      (l) => l.unitName === newUnit || (l.unitId && l.unitId.includes(newUnit.slice(0, 7)))
+    );
+    if (matchingLines.length > 0) {
+      const lineInCurrentSection = matchingLines.find((l) => l.sectionName === section);
+      if (lineInCurrentSection) {
+        handleSelectLine(lineInCurrentSection.id);
+      } else {
+        handleSelectLine(matchingLines[0].id);
+      }
+    }
+  };
 
   const handleSelectSection = (newSection: string) => {
     setSection(newSection);
@@ -333,14 +360,24 @@ export function AddProductionRecordPage({
 
     const presets = SECTION_LINE_PRESETS[newSection] || [];
     const matchingManaged = managedLines.filter(
-      (l) => l.sectionName === newSection || l.name.toLowerCase().includes(newSection.toLowerCase().slice(0, 3))
+      (l) =>
+        (l.sectionName === newSection || l.name.toLowerCase().includes(newSection.toLowerCase().slice(0, 3))) &&
+        (!unit || l.unitName === unit)
     );
     if (matchingManaged.length > 0) {
       handleSelectLine(matchingManaged[0].id);
-    } else if (presets.length > 0) {
-      handleSelectLine(presets[0].id);
     } else {
-      setLineId('Line 01');
+      const anyMatchingSec = managedLines.filter(
+        (l) => l.sectionName === newSection || l.name.toLowerCase().includes(newSection.toLowerCase().slice(0, 3))
+      );
+      if (anyMatchingSec.length > 0) {
+        handleSelectLine(anyMatchingSec[0].id);
+      } else if (presets.length > 0) {
+        handleSelectLine(presets[0].id);
+      } else {
+        setLineId('L-01');
+        setSewingLine(newSection);
+      }
     }
 
     showToast(`✓ Switched to ${secTarget.sectionName}: Hourly Target ${secTarget.hourlyTarget} pcs/hr (SMV ${secTarget.smv}m) linked from WIP/IE`);
@@ -353,7 +390,9 @@ export function AddProductionRecordPage({
     if (foundManaged) {
       setSelectedManagedLine(foundManaged);
       setLineId(foundManaged.lineCode || foundManaged.id);
+      setSewingLine(foundManaged.name);
       if (foundManaged.unitName) setUnit(foundManaged.unitName);
+      if (foundManaged.sectionName) setSection(foundManaged.sectionName);
       if (foundManaged.lineChief) setSupervisorName(foundManaged.lineChief);
       if (foundManaged.qualityController) setQualityInspector(foundManaged.qualityController);
       if (foundManaged.operatorCount) setOperatorCount(foundManaged.operatorCount);
@@ -365,11 +404,13 @@ export function AddProductionRecordPage({
     const foundPreset = allPresets.find((p) => p.id === selectedIdOrName || p.name === selectedIdOrName);
     if (foundPreset) {
       setLineId(foundPreset.id);
+      setSewingLine(foundPreset.name);
       if (foundPreset.chief) setSupervisorName(foundPreset.chief);
       if (foundPreset.qc) setQualityInspector(foundPreset.qc);
       showToast(`Linked ${foundPreset.name} — Chief: ${foundPreset.chief}, QC: ${foundPreset.qc}`);
     } else {
       setLineId(selectedIdOrName);
+      setSewingLine(selectedIdOrName);
     }
   };
 
@@ -884,8 +925,8 @@ export function AddProductionRecordPage({
       rftRate: Number(rftRate) || hourlySummary.avgRft || 98.2,
       efficiencyPercent: Number(efficiencyPercent) || 84.5,
       rejectQuantity: Number(rejectQuantity) || 0,
-      sewingLine: section,
-      lineId: lineId,
+      sewingLine: sewingLine || selectedManagedLine?.name || lineId,
+      lineId: lineId || selectedManagedLine?.lineCode || 'L-01',
       status: status,
       dueDate: dueDate,
       operatorCount: Number(operatorCount) || 48,
@@ -1373,7 +1414,7 @@ export function AddProductionRecordPage({
             <label className="text-xs font-bold text-slate-800">Manufacturing Unit</label>
             <select
               value={unit}
-              onChange={(e) => setUnit(e.target.value)}
+              onChange={(e) => handleSelectUnit(e.target.value)}
               className="w-full px-3 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             >
               {(managedUnits.length > 0 ? managedUnits.map((u) => u.name) : MANUFACTURING_UNITS).map(

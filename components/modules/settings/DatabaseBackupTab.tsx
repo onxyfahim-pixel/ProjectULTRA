@@ -30,7 +30,11 @@ import {
   CheckSquare,
   Trash2,
   RotateCcw,
+  ShieldAlert,
+  Lock,
+  Paperclip,
 } from 'lucide-react';
+import { useErpAuth } from '@/hooks/use-erp-auth';
 
 interface BackupFile {
   fileName: string;
@@ -75,30 +79,69 @@ export function DatabaseBackupTab() {
     details?: string;
   } | null>(null);
 
+  const { user: currentUser, token } = useErpAuth();
+  const isSuperAdmin = currentUser?.isSuperAdmin === true || currentUser?.role === 'Super Admin' || currentUser?.role === 'ADMIN';
+
   const [activeGuideTab, setActiveGuideTab] = useState<'xampp' | 'installer' | 'docker' | 'bat'>('xampp');
   const [resetModal, setResetModal] = useState<{ isOpen: boolean; mode: 'blank' | 'defaults' } | null>(null);
+  const [confirmText, setConfirmText] = useState('');
   const [resetting, setResetting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleConfirmReset = async () => {
     if (!resetModal) return;
+
+    if (resetModal.mode === 'blank' && !isSuperAdmin) {
+      setMessage({
+        type: 'error',
+        text: 'Access Denied: Only a Super Administrator has permission to factory reset all data to zero.',
+      });
+      setResetModal(null);
+      return;
+    }
+
+    if (
+      resetModal.mode === 'blank' &&
+      confirmText.trim().toUpperCase() !== 'RESET-TO-ZERO' &&
+      confirmText.trim().toUpperCase() !== 'CONFIRM'
+    ) {
+      setMessage({
+        type: 'error',
+        text: 'Confirmation failed: Please type "RESET-TO-ZERO" to confirm permanent database purge.',
+      });
+      return;
+    }
+
     setResetting(true);
     setMessage(null);
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/database/reset', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ mode: resetModal.mode }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
         if (resetModal.mode === 'blank') {
           try {
-            localStorage.setItem('erp_production_orders_v1', JSON.stringify([]));
-            localStorage.setItem('erp_buyer_orders_v1', JSON.stringify([]));
-            localStorage.setItem('erp_buyer_orders', JSON.stringify([]));
+            const keysToRemove: string[] = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k && (k.startsWith('erp_') || k.startsWith('buyer_orders') || k.startsWith('production_'))) {
+                if (k !== 'erp_token' && k !== 'erp_user_profile') {
+                  keysToRemove.push(k);
+                }
+              }
+            }
+            keysToRemove.forEach((k) => localStorage.removeItem(k));
           } catch {}
+          window.dispatchEvent(new CustomEvent('erp_system_reset_blank'));
         }
         window.dispatchEvent(new CustomEvent('erp_production_records_updated'));
         window.dispatchEvent(new CustomEvent('erp_buyer_orders_updated'));
@@ -118,6 +161,7 @@ export function DatabaseBackupTab() {
     } finally {
       setResetting(false);
       setResetModal(null);
+      setConfirmText('');
     }
   };
 

@@ -123,6 +123,54 @@ export function GeneralTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const logoFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setStatusMessage({ type: 'error', text: 'Please select an image file (PNG, JPG, SVG, WebP).' });
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setStatusMessage({ type: 'error', text: 'Logo image must be smaller than 2MB.' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) {
+        setForm((prev) => ({ ...prev, erpLogoUrl: dataUrl }));
+        // Immediately sync to PDF header settings in localStorage so PDF Export tab updates
+        try {
+          const existingPdf = localStorage.getItem('garments_erp_pdf_header_settings');
+          if (existingPdf) {
+            const parsed = JSON.parse(existingPdf);
+            parsed.logoUrl = dataUrl;
+            parsed.showLogo = true;
+            localStorage.setItem('garments_erp_pdf_header_settings', JSON.stringify(parsed));
+          }
+        } catch {}
+        window.dispatchEvent(
+          new CustomEvent('erp_general_settings_updated', {
+            detail: { ...form, erpLogoUrl: dataUrl },
+          })
+        );
+        setStatusMessage({
+          type: 'success',
+          text: 'Company logo uploaded and synchronized with PDF Export Settings! Click "Save Settings" to persist.',
+        });
+        setTimeout(() => setStatusMessage(null), 4000);
+      }
+    };
+    reader.onerror = () => {
+      setStatusMessage({ type: 'error', text: 'Failed to read the logo file.' });
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Load from real backend API or localStorage fallback
   useEffect(() => {
@@ -171,6 +219,26 @@ export function GeneralTab() {
     try {
       if (typeof window !== 'undefined') {
         localStorage.setItem('garments_erp_general_settings', JSON.stringify(payload));
+        // Also sync company identity & logo into PDF Header settings
+        try {
+          const existingPdf = localStorage.getItem('garments_erp_pdf_header_settings');
+          if (existingPdf) {
+            const parsed = JSON.parse(existingPdf);
+            if (parsed.autoSyncWithGeneral !== false) {
+              if (payload.erpLogoUrl) {
+                parsed.logoUrl = payload.erpLogoUrl;
+                parsed.showLogo = true;
+              }
+              parsed.companyName = payload.companyLegalName || payload.tradeName || parsed.companyName;
+              parsed.companySubtitle = payload.erpTagline || parsed.companySubtitle;
+              parsed.factoryAddress = payload.factoryAddress || payload.hqAddress || parsed.factoryAddress;
+              parsed.phone = payload.supportPhone || parsed.phone;
+              parsed.email = payload.officialEmail || parsed.email;
+              parsed.website = payload.websiteUrl || parsed.website;
+              localStorage.setItem('garments_erp_pdf_header_settings', JSON.stringify(parsed));
+            }
+          }
+        } catch {}
         window.dispatchEvent(new CustomEvent('erp_general_settings_updated', { detail: payload }));
       }
 
@@ -184,7 +252,7 @@ export function GeneralTab() {
         setForm(payload);
         setStatusMessage({
           type: 'success',
-          text: 'General ERP settings and organization profile saved and synchronized across all modules!',
+          text: 'General ERP settings and organization profile saved and synchronized across all modules and PDF headers!',
         });
       } else {
         const errJson = await res.json();
@@ -253,16 +321,22 @@ export function GeneralTab() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Logo Preview & Uploader (4 cols) */}
           <div className="lg:col-span-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-3">
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-              System Logo Preview
-            </label>
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center overflow-hidden shadow-xs shrink-0">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Company &amp; System Logo
+              </label>
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Auto-syncs to PDF
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 flex items-center justify-center overflow-hidden shadow-xs shrink-0 p-1">
                 {form.erpLogoUrl ? (
                   <img
                     src={form.erpLogoUrl}
                     alt="ERP Logo"
-                    className="w-full h-full object-cover"
+                    className="max-h-full max-w-full object-contain"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src =
                         'https://images.unsplash.com/photo-1542744094-3a31f272c490?w=120&h=120&fit=crop&q=80';
@@ -271,37 +345,69 @@ export function GeneralTab() {
                 ) : (
                   <div className="flex flex-col items-center justify-center text-slate-400 text-center p-2">
                     <Building2 className="w-8 h-8 text-blue-600 mb-1" />
-                    <span className="text-[9px] font-bold">ERP Logo</span>
+                    <span className="text-[9px] font-bold">No Logo</span>
                   </div>
                 )}
               </div>
-              <div className="space-y-1.5 min-w-0">
-                <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                  {form.erpName || 'ERP System'}
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Recommended: 256x256 PNG or SVG with transparent background
+
+              <div className="space-y-1.5 min-w-0 flex-1">
+                <input
+                  ref={logoFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                />
+                <button
+                  type="button"
+                  onClick={() => logoFileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-2xs transition-colors cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload Logo File</span>
+                </button>
+                {form.erpLogoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((prev) => ({ ...prev, erpLogoUrl: '' }));
+                      try {
+                        const existingPdf = localStorage.getItem('garments_erp_pdf_header_settings');
+                        if (existingPdf) {
+                          const parsed = JSON.parse(existingPdf);
+                          parsed.logoUrl = '';
+                          localStorage.setItem('garments_erp_pdf_header_settings', JSON.stringify(parsed));
+                        }
+                      } catch {}
+                    }}
+                    className="w-full text-center text-[10px] text-rose-600 hover:text-rose-700 font-bold underline cursor-pointer"
+                  >
+                    Remove Logo
+                  </button>
+                )}
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                  PNG, JPG, SVG or WebP (max 2MB)
                 </div>
               </div>
             </div>
 
             {/* Logo Presets Selection */}
-            <div>
-              <div className="text-[11px] font-semibold text-slate-500 mb-2">Or select from presets:</div>
+            <div className="pt-1">
+              <div className="text-[11px] font-semibold text-slate-500 mb-1.5">Or choose standard preset:</div>
               <div className="flex items-center gap-2">
                 {LOGO_PRESETS.map((preset) => (
                   <button
                     key={preset.name}
                     type="button"
                     onClick={() => setForm({ ...form, erpLogoUrl: preset.url })}
-                    className={`w-9 h-9 rounded-xl border-2 overflow-hidden transition-all cursor-pointer ${
+                    className={`w-9 h-9 rounded-xl border-2 overflow-hidden transition-all cursor-pointer p-0.5 bg-white ${
                       form.erpLogoUrl === preset.url
                         ? 'border-blue-600 ring-2 ring-blue-500/20 shadow-xs'
                         : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
                     }`}
                     title={preset.name}
                   >
-                    <img src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
+                    <img src={preset.url} alt={preset.name} className="w-full h-full object-contain" />
                   </button>
                 ))}
               </div>

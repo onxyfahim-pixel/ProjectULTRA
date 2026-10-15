@@ -12,6 +12,8 @@ import {
   GraduationCap,
   Users,
   Award,
+  Image as ImageIcon,
+  Camera,
 } from 'lucide-react';
 import { TrainingMatrixItem } from '@/lib/types/modules';
 import {
@@ -42,6 +44,7 @@ export function TrainingSingleExportModal({
   const [signatureMode, setSignatureMode] = useState<PdfSignatureMode>(
     pdfSettings.signatureSettings?.mode || 'triple'
   );
+  const [includeImages, setIncludeImages] = useState<boolean>(true);
 
   if (!isOpen || !course) return null;
 
@@ -54,6 +57,7 @@ export function TrainingSingleExportModal({
     try {
       exportSingleTrainingPdf(course, {
         signatureMode: includeSignatures ? signatureMode : 'none',
+        includeImages,
       });
     } finally {
       setIsExporting(null);
@@ -179,20 +183,32 @@ export function TrainingSingleExportModal({
 
           {/* Record Quick Profile Card */}
           <div className="p-4 rounded-xl border border-indigo-200/60 dark:border-indigo-900/40 bg-gradient-to-br from-indigo-50/40 to-blue-50/20 dark:from-indigo-950/20 dark:to-blue-950/10">
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300">
-                  {course.courseCode}
-                </span>
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-1">
-                  {course.title}
-                </h4>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                  Dept: {course.department || 'Quality Assurance'} • Trainer: {course.trainerName}
-                </p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                {(course.imageUrl || (course.evidenceImages && course.evidenceImages.length > 0)) && (
+                  <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={course.imageUrl || course.evidenceImages?.[0]}
+                      alt="Session thumbnail"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <div>
+                  <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300">
+                    {course.courseCode}
+                  </span>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-1">
+                    {course.title}
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                    Dept: {course.department || 'Quality Assurance'} • Trainer: {course.trainerName}
+                  </p>
+                </div>
               </div>
               <span
-                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${getStatusBadgeClass(course.status)}`}
+                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${getStatusBadgeClass(course.status)}`}
               >
                 {course.status.replace(/_/g, ' ')}
               </span>
@@ -261,6 +277,47 @@ export function TrainingSingleExportModal({
                   <option value="triple">Triple (Instructor, HR &amp; QA Mgr)</option>
                   <option value="single">Single (Authorization Only)</option>
                 </select>
+              </div>
+            )}
+          </div>
+
+          {/* Photographic Media & Evidence Inclusion Toggle */}
+          <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={includeImages}
+                  onChange={(e) => setIncludeImages(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                />
+                <span className="flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Include Training Photos &amp; Photographic Evidence in Dossier</span>
+                </span>
+              </label>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                  includeImages && (course.imageUrl || (course.evidenceImages && course.evidenceImages.length > 0))
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                    : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                }`}
+              >
+                {course.imageUrl || (course.evidenceImages && course.evidenceImages.length > 0)
+                  ? includeImages ? 'Photos ON' : 'Photos OFF'
+                  : 'No Media'}
+              </span>
+            </div>
+
+            {(course.imageUrl || (course.evidenceImages && course.evidenceImages.length > 0)) && (
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/80 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+                <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
+                <span>
+                  {course.imageUrl ? 'Primary session banner' : ''}
+                  {course.imageUrl && course.evidenceImages && course.evidenceImages.length > 0 ? ' + ' : ''}
+                  {course.evidenceImages && course.evidenceImages.length > 0 ? `${course.evidenceImages.length} practical evidence photo(s)` : ''}
+                  {' will be rendered in Section 4 of PDF'}
+                </span>
               </div>
             )}
           </div>

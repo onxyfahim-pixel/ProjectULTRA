@@ -22,6 +22,11 @@ import {
   HelpCircle,
   FileCheck,
   FileDown,
+  Image as ImageIcon,
+  Camera,
+  Upload,
+  Maximize2,
+  X,
 } from 'lucide-react';
 import { TrainingMatrixItem, TrainingStatus, TrainingAttendee } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
@@ -52,6 +57,7 @@ export function TrainingDetailsPage({
   const { canExport } = useModulePermission('training');
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [attendees, setAttendees] = useState<TrainingAttendee[]>(course.attendees || []);
+  const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
 
   // Quick add trainee form state
   const [showAddTrainee, setShowAddTrainee] = useState(false);
@@ -325,7 +331,136 @@ export function TrainingDetailsPage({
         )}
       </div>
 
-      {/* SECTION 2: TRAINEE DETAILS & ATTENDANCE ROSTER */}
+      {/* SECTION 2: OFFICIAL PHOTOGRAPHIC EVIDENCE & SESSION MEDIA */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Camera className="w-4 h-4 text-blue-600" />
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                Photographic Training Evidence &amp; Session Records
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Visual records of classroom delivery, practical machine demonstrations, and operator competence evaluation.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+              {(course.imageUrl ? 1 : 0) + (course.evidenceImages?.length || 0)} Media Files
+            </span>
+            <button
+              type="button"
+              onClick={() => onEdit(course)}
+              className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+            >
+              <Edit className="w-3.5 h-3.5 text-slate-500" />
+              <span>Manage Photos</span>
+            </button>
+          </div>
+        </div>
+
+        {course.imageUrl || (course.evidenceImages && course.evidenceImages.length > 0) ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {/* Primary Training Photo */}
+            <div className={`p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2 ${course.evidenceImages && course.evidenceImages.length > 0 ? 'lg:col-span-1' : 'lg:col-span-3'}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Primary Session Photo</span>
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                  Included in PDF
+                </span>
+              </div>
+
+              {course.imageUrl ? (
+                <div className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-900/5 aspect-video sm:h-52 flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={course.imageUrl}
+                    alt={course.title}
+                    className="w-full h-full object-cover rounded-xl"
+                  />
+                  <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedImageModal(course.imageUrl!)}
+                      className="px-3 py-1.5 rounded-lg bg-white/90 hover:bg-white text-slate-900 text-xs font-semibold cursor-pointer shadow-sm flex items-center gap-1"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      <span>Enlarge View</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-300 rounded-xl">
+                  No primary poster attached
+                </div>
+              )}
+              <div className="text-[11px] text-slate-500 pt-1">
+                Course: <strong className="text-slate-800">{course.courseCode}</strong> • Lead Trainer: {course.trainerName}
+              </div>
+            </div>
+
+            {/* Supporting Evidence Photos Gallery */}
+            {course.evidenceImages && course.evidenceImages.length > 0 && (
+              <div className="lg:col-span-2 p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Practical Classroom &amp; Demonstration Evidence ({course.evidenceImages.length})</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Click photo to zoom
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {course.evidenceImages.map((imgUrl, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setSelectedImageModal(imgUrl)}
+                      className="relative group rounded-xl overflow-hidden border border-slate-200 aspect-square bg-slate-100 cursor-pointer hover:shadow-md transition-shadow"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imgUrl}
+                        alt={`Evidence ${idx + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      />
+                      <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Maximize2 className="w-4 h-4 text-white" />
+                      </div>
+                      <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white font-mono text-[9px] font-bold">
+                        #{idx + 1}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-8 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 space-y-2">
+            <ImageIcon className="w-8 h-8 text-slate-400 mx-auto" />
+            <div className="text-xs font-bold text-slate-700">No session photos uploaded yet</div>
+            <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+              Attach primary training photos or practical demonstration evidence to have them printed in the official audit dossier.
+            </p>
+            <button
+              type="button"
+              onClick={() => onEdit(course)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Upload Training Photos</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 3: TRAINEE DETAILS & ATTENDANCE ROSTER */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
@@ -561,6 +696,40 @@ export function TrainingDetailsPage({
         onClose={() => setIsExportModalOpen(false)}
         course={course}
       />
+
+      {/* Photo Lightbox Modal */}
+      {selectedImageModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setSelectedImageModal(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl overflow-hidden shadow-2xl p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-3 border-b border-slate-100">
+              <span className="text-xs font-bold text-slate-800">
+                {course.title} — Training Photo
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedImageModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-2 flex items-center justify-center max-h-[75vh] overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={selectedImageModal}
+                alt="Enlarged training record evidence"
+                className="max-h-[72vh] max-w-full object-contain rounded-xl"
+              />
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

@@ -724,6 +724,11 @@ export function MobileProductionEntryPage({
 
     // If editing existing order, keep its ID; otherwise create a fresh ID
     const finalRecordId = initialOrder?.id || `po-record-${Date.now()}`;
+    const matchedLine = managedLines.find(
+      (l) => l.name === lineId || l.id === lineId || l.lineCode === lineId
+    );
+    const lineNameToSave = matchedLine ? matchedLine.name : lineId;
+    const lineCodeToSave = matchedLine ? (matchedLine.lineCode || matchedLine.id) : (initialOrder?.lineId || 'L-01');
 
     const savedOrder: ProductionOrder = {
       id: finalRecordId,
@@ -734,10 +739,10 @@ export function MobileProductionEntryPage({
       styleName: styleName.trim() || 'Cotton Crew Tee',
       styleNumber: styleNumber.trim() || 'STY-TS-2026',
       itemInfo: itemInfo.trim(),
-      unit: unit,
-      section: section,
-      sewingLine: lineId,
-      lineId: lineId,
+      unit: matchedLine?.unitName || unit,
+      section: matchedLine?.sectionName || section,
+      sewingLine: lineNameToSave,
+      lineId: lineCodeToSave,
       targetQuantity: shiftTotals.totalTarget,
       completedQuantity: shiftTotals.totalPassed,
       totalDefects: shiftTotals.totalDefects,

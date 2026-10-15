@@ -6,9 +6,14 @@ export interface PdfHeaderSettings {
   companyName: string;
   companySubtitle: string;
   logoUrl: string;
-  logoPosition: 'left' | 'center' | 'right';
+  logoPosition: 'left' | 'center' | 'right' | 'top';
   logoWidth: number; // in pixels (e.g. 130)
   showLogo: boolean;
+
+  // Header Element Alignment & Positioning (Customizable by user)
+  companyPosition?: 'left' | 'center' | 'right';
+  docCodePosition?: 'right' | 'left' | 'center' | 'below_title';
+  docTitlePosition?: 'right' | 'left' | 'center';
 
   // Address & Contacts (Auto-synced from General Settings with override capability)
   factoryAddress: string;
@@ -34,6 +39,7 @@ export interface PdfHeaderSettings {
   defaultOrientation?: 'portrait' | 'landscape';
   recordDocCodes?: Record<string, string>;
   moduleWiseConfigs?: Record<string, ModuleCustomHeaderConfig>;
+  moduleWiseSignatures?: Record<string, PdfSignatureSettings>;
   showQrVerificationCode: boolean;
   qrCodeText: string;
   showConfidentialNotice: boolean;
@@ -47,45 +53,70 @@ export interface PdfHeaderSettings {
   lastUpdatedAt?: string;
 }
 
-export type PdfSignatureMode = 'dual' | 'triple' | 'single' | 'none';
+export type PdfSignatureMode = 'single' | 'dual' | 'triple' | 'quad' | 'penta' | 'hexa' | 'none';
 
 export interface SignatureSlotConfig {
   title: string;        // e.g. "PREPARED & INSPECTED BY"
   designation: string;  // e.g. "Lead Quality Auditor / Merchandiser"
   department?: string;  // e.g. "Quality Assurance & Operations"
   name?: string;        // e.g. "Md. Rafiqul Islam" (or empty for line)
+  enabled?: boolean;    // optional toggle per slot
 }
 
 export interface PdfSignatureSettings {
   enabled: boolean;          // Overall default toggle: true | false (makes it optional)
-  mode: PdfSignatureMode;    // 'dual' | 'triple' | 'single' | 'none'
+  mode: PdfSignatureMode;    // 'single' | 'dual' | 'triple' | 'quad' | 'penta' | 'hexa' | 'none'
+  count?: number;            // 1 to 6
   style: 'classic_line' | 'bordered_card' | 'modern_minimal';
   showDate: boolean;         // Show Date line underneath
-  slot1: SignatureSlotConfig; // Initiator / Prepared By (left)
-  slot2: SignatureSlotConfig; // Reviewer / Verified By (middle, in triple mode)
-  slot3: SignatureSlotConfig; // Approver / Authorized By (right)
+  slot1: SignatureSlotConfig; // Slot 1: Initiator / Prepared / Issued By
+  slot2: SignatureSlotConfig; // Slot 2: Checked / Reviewed / Verified By
+  slot3: SignatureSlotConfig; // Slot 3: Technical & IE Verification
+  slot4?: SignatureSlotConfig; // Slot 4: Quality Assurance Head
+  slot5?: SignatureSlotConfig; // Slot 5: Operations & Factory Review
+  slot6?: SignatureSlotConfig; // Slot 6: Authorized & Approved By
+  useModuleCustom?: boolean;  // True if this module overrides global
 }
 
 export const DEFAULT_PDF_SIGNATURE_SETTINGS: PdfSignatureSettings = {
   enabled: true,
   mode: 'dual',
+  count: 2,
   style: 'classic_line',
   showDate: true,
   slot1: {
     title: 'PREPARED & INSPECTED BY',
-    designation: 'Lead Quality Auditor / Merchandiser',
+    designation: 'Lead Quality Auditor / Line QC',
     department: 'Quality Assurance & Operations',
     name: '',
   },
   slot2: {
     title: 'CHECKED & REVIEWED BY',
-    designation: 'Technical Manager / QMS Lead',
-    department: 'Quality & Process Engineering',
+    designation: 'Production Supervisor / Section In-Charge',
+    department: 'Garment Manufacturing & Floor Control',
     name: '',
   },
   slot3: {
+    title: 'TECHNICAL & IE VERIFICATION',
+    designation: 'Industrial Engineering & Work Study Lead',
+    department: 'Industrial Engineering Division',
+    name: '',
+  },
+  slot4: {
+    title: 'QUALITY ASSURANCE HEAD',
+    designation: 'Quality Assurance Manager / QMS Lead',
+    department: 'Executive Quality Assurance Directorate',
+    name: '',
+  },
+  slot5: {
+    title: 'OPERATIONS & FACTORY REVIEW',
+    designation: 'AGM Operations / Factory Manager',
+    department: 'Plant Operations & Manufacturing Directorate',
+    name: '',
+  },
+  slot6: {
     title: 'AUTHORIZED & APPROVED BY',
-    designation: 'General Manager / Operations Head',
+    designation: 'General Manager / Executive Director',
     department: 'Executive Factory Directorate',
     name: '',
   },
@@ -96,6 +127,7 @@ export interface ModuleCustomHeaderConfig {
   registerDocCode?: string;
   singleTitle?: string;
   singleDocCode?: string;
+  signatureSettings?: PdfSignatureSettings;
 }
 
 export interface ModuleHeaderDefinition {
@@ -119,6 +151,16 @@ export const DEFAULT_MODULE_HEADER_CONFIGS: ModuleHeaderDefinition[] = [
     defaultRegisterDocCode: 'PRD-REG',
     defaultSingleTitle: 'DAILY PRODUCTION BATCH & LINE INSPECTION DOSSIER',
     defaultSingleDocCode: 'PRD-SPEC',
+  },
+  {
+    key: 'production_quality',
+    name: 'Production Quality Pareto & Efficiency',
+    category: 'Manufacturing & Operations',
+    department: 'Garment Manufacturing & Floor Production Control',
+    defaultRegisterTitle: 'QUALITY DEFECT PARETO (80/20) & EFFICIENCY PERFORMANCE DOSSIER',
+    defaultRegisterDocCode: 'PRD-PAR',
+    defaultSingleTitle: 'LINE DEFECT PARETO ROOT-CAUSE & CAPA INVESTIGATION REPORT',
+    defaultSingleDocCode: 'PAR-SPEC',
   },
   {
     key: 'buyer_order',
@@ -351,6 +393,36 @@ export const DEFAULT_MODULE_HEADER_CONFIGS: ModuleHeaderDefinition[] = [
     defaultSingleDocCode: 'TRN-CURR',
   },
   {
+    key: 'training_calendar',
+    name: 'Training Annual Master Calendar & Matrix',
+    category: 'Organization & Workforce',
+    department: 'Factory Quality Training & HR Development',
+    defaultRegisterTitle: 'ANNUAL MASTER TRAINING SCHEDULE & SECTION MATRIX',
+    defaultRegisterDocCode: 'TRN-CAL',
+    defaultSingleTitle: 'MONTHLY VISUAL TRAINING CALENDAR & DATE MARKINGS',
+    defaultSingleDocCode: 'TRN-MON',
+  },
+  {
+    key: 'training_exam',
+    name: 'Technical Examination Papers & Question Banks',
+    category: 'Organization & Workforce',
+    department: 'Technical Training & Competency Assessment',
+    defaultRegisterTitle: 'TECHNICAL EXAMINATION PAPERS & QUESTION BANK REGISTER',
+    defaultRegisterDocCode: 'TRN-EXAM',
+    defaultSingleTitle: 'TECHNICAL COMPETENCY EXAMINATION QUESTION PAPER',
+    defaultSingleDocCode: 'EXAM-SPEC',
+  },
+  {
+    key: 'training_evaluation',
+    name: 'Trainee Competency Evaluation Records',
+    category: 'Organization & Workforce',
+    department: 'Technical Training & Skill Certification',
+    defaultRegisterTitle: 'TRAINEE COMPETENCY EVALUATION & CERTIFICATION REGISTER',
+    defaultRegisterDocCode: 'TRN-EVAL',
+    defaultSingleTitle: 'PRACTICAL & THEORETICAL EVALUATION DOSSIER',
+    defaultSingleDocCode: 'EVAL-SPEC',
+  },
+  {
     key: 'job_description',
     name: 'Job Descriptions',
     category: 'Organization & Workforce',
@@ -425,6 +497,7 @@ export const DEFAULT_MODULE_HEADER_CONFIGS: ModuleHeaderDefinition[] = [
 export const DEFAULT_PDF_HEADER_SETTINGS: PdfHeaderSettings = {
   autoSyncWithGeneral: true,
   moduleWiseConfigs: {},
+  moduleWiseSignatures: {},
 
   companyName: 'Valiant Garments Manufacturing Ltd.',
   companySubtitle: 'Precision Quality, Production & Global Compliance Suite',
@@ -432,6 +505,9 @@ export const DEFAULT_PDF_HEADER_SETTINGS: PdfHeaderSettings = {
   logoPosition: 'left',
   logoWidth: 125,
   showLogo: true,
+  companyPosition: 'left',
+  docCodePosition: 'right',
+  docTitlePosition: 'right',
 
   factoryAddress: 'Complex 14, Gazipur Industrial Area, Dhaka Division, Bangladesh',
   phone: '+880 2 9845120',
@@ -597,6 +673,9 @@ export function loadPdfHeaderSettings(): PdfHeaderSettings {
           moduleWiseConfigs: {
             ...(parsed.moduleWiseConfigs || {}),
           },
+          moduleWiseSignatures: {
+            ...(parsed.moduleWiseSignatures || {}),
+          },
           signatureSettings: {
             ...DEFAULT_PDF_SIGNATURE_SETTINGS,
             ...(parsed.signatureSettings || {}),
@@ -611,6 +690,18 @@ export function loadPdfHeaderSettings(): PdfHeaderSettings {
             slot3: {
               ...DEFAULT_PDF_SIGNATURE_SETTINGS.slot3,
               ...(parsed.signatureSettings?.slot3 || {}),
+            },
+            slot4: {
+              ...DEFAULT_PDF_SIGNATURE_SETTINGS.slot4!,
+              ...(parsed.signatureSettings?.slot4 || {}),
+            },
+            slot5: {
+              ...DEFAULT_PDF_SIGNATURE_SETTINGS.slot5!,
+              ...(parsed.signatureSettings?.slot5 || {}),
+            },
+            slot6: {
+              ...(DEFAULT_PDF_SIGNATURE_SETTINGS.slot6 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot3),
+              ...(parsed.signatureSettings?.slot6 || parsed.signatureSettings?.slot3 || {}),
             },
           },
         };
@@ -785,6 +876,9 @@ export function renderPdfHeaderHtml(
     logoUrl,
     logoWidth,
     showLogo,
+    logoPosition = 'left',
+    companyPosition = 'left',
+    docCodePosition = 'right',
     factoryAddress,
     phone,
     email,
@@ -820,11 +914,38 @@ export function renderPdfHeaderHtml(
     </div>`
     : '';
 
+  // Helpers for Logo & Company Alignment
+  const isLogoRight = logoPosition === 'right';
+  const isLogoTop = logoPosition === 'top' || logoPosition === 'center';
+  const logoFlexDir = isLogoTop ? 'column' : isLogoRight ? 'row-reverse' : 'row';
+  const companyTextAlign = companyPosition === 'center' ? 'center' : companyPosition === 'right' ? 'right' : 'left';
+  const companyAlignItems = companyPosition === 'center' ? 'center' : companyPosition === 'right' ? 'flex-end' : 'flex-start';
+
+  // Helper for Document Code Block
+  const renderDocCodeBlock = (align: 'left' | 'center' | 'right' = 'right') => {
+    if (!showDocumentMetadata) return '';
+    if (docCodePosition === 'below_title') {
+      return `
+        <div style="margin-top: 5px; display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 4px; background: #f8fafc; border: 1px solid #cbd5e1; font-family: monospace; font-size: 8.5px; color: #334155;">
+          <span>DOC: <strong style="color: ${accentColor};">${docCode}</strong></span>
+          <span>•</span>
+          <span>DATE: <strong>${docDate}</strong></span>
+        </div>
+      `;
+    }
+    return `
+      <div style="margin-top: 4px; font-family: monospace; font-size: 9px; color: #334155; line-height: 1.4; text-align: ${align};">
+        <div>DOC CODE: <strong style="color: ${accentColor};">${docCode}</strong></div>
+        <div>DATE: <strong>${docDate}</strong></div>
+      </div>
+    `;
+  };
+
   // 1. Layout Style: Executive Centered
   if (layoutStyle === 'executive_centered') {
     return `
-      <header class="universal-pdf-header" style="padding: ${paddingY} 0; border-bottom: 2px solid ${accentColor}; margin-bottom: 14px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        ${showLogo ? `<div style="margin-bottom: 6px;">${logoImgHtml}</div>` : ''}
+      <header class="universal-pdf-header" style="padding: ${paddingY} 0; border-bottom: 2px solid ${accentColor}; margin-bottom: 14px; text-align: ${companyTextAlign}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        ${showLogo ? `<div style="margin-bottom: 6px; display: flex; justify-content: ${companyPosition === 'center' ? 'center' : companyPosition === 'right' ? 'flex-end' : 'flex-start'};">${logoImgHtml}</div>` : ''}
         <div style="font-size: 19px; font-weight: 900; color: ${accentColor}; letter-spacing: 0.5px; text-transform: uppercase;">${companyName}</div>
         ${companySubtitle ? `<div style="font-size: 11px; font-weight: 600; color: #475569; margin-top: 2px;">${companySubtitle}</div>` : ''}
         <div style="font-size: 9.5px; color: #64748b; margin-top: 3px;">
@@ -833,43 +954,52 @@ export function renderPdfHeaderHtml(
         </div>
         ${showIsoCertification ? `<div style="display: inline-block; margin-top: 5px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; font-size: 8.5px; font-weight: 700; color: ${accentColor}; border: 1px solid #e2e8f0;">${isoStandardBadge}</div>` : ''}
         
-        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; text-align: left;">
+        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; flex-direction: ${docCodePosition === 'left' ? 'row-reverse' : 'row'}; text-align: left;">
           <div>
             <div style="font-size: 14px; font-weight: 800; color: #0f172a; text-transform: uppercase;">${docTitle}</div>
             <div style="font-size: 9px; color: #64748b;">${department}</div>
+            ${docCodePosition === 'below_title' && showDocumentMetadata ? `
+              <div style="margin-top: 3px; font-family: monospace; font-size: 8.5px; color: #475569;">
+                <span>REF: <strong>${docCode}</strong></span> | <span>DATE: <strong>${docDate}</strong></span>
+              </div>` : ''}
           </div>
-          ${showDocumentMetadata ? `
-          <div style="text-align: right; font-size: 9px; font-family: monospace; color: #334155;">
+          ${showDocumentMetadata && docCodePosition !== 'below_title' ? `
+          <div style="text-align: ${docCodePosition === 'left' ? 'left' : 'right'}; font-size: 9px; font-family: monospace; color: #334155;">
             <div><strong>DOC NO:</strong> ${docCode}</div>
             <div><strong>DATE:</strong> ${docDate}</div>
           </div>` : ''}
         </div>
-        ${showConfidentialNotice ? `<div style="margin-top: 4px; font-size: 8px; font-weight: 800; color: #b91c1c; letter-spacing: 0.5px;">${confidentialNoticeText}</div>` : ''}
+        ${showConfidentialNotice ? `<div style="margin-top: 4px; font-size: 8px; font-weight: 800; color: #b91c1c; letter-spacing: 0.5px; text-align: center;">${confidentialNoticeText}</div>` : ''}
       </header>
     `;
   }
 
   // 2. Layout Style: Classic Bordered Factory
   if (layoutStyle === 'classic_bordered') {
+    const isCompanyCenter = companyPosition === 'center';
     return `
       <header class="universal-pdf-header" style="padding: ${paddingY}; border: 2px solid ${accentColor}; border-radius: 6px; margin-bottom: 14px; background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 8px;">
-          <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="display: flex; justify-content: ${isCompanyCenter ? 'center' : 'space-between'}; align-items: center; flex-direction: ${companyPosition === 'right' ? 'row-reverse' : 'row'}; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; gap: 12px; ${logoFlexDir === 'row-reverse' ? 'flex-direction: row-reverse;' : ''}">
             ${logoImgHtml}
-            <div>
+            <div style="text-align: ${companyTextAlign};">
               <div style="font-size: 17px; font-weight: 900; color: ${accentColor}; text-transform: uppercase;">${companyName}</div>
               <div style="font-size: 9.5px; color: #475569;">${factoryAddress} • Email: ${email}</div>
             </div>
           </div>
-          ${qrHtml}
+          ${!isCompanyCenter ? qrHtml : ''}
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-direction: ${docCodePosition === 'left' ? 'row-reverse' : 'row'};">
+          <div style="text-align: ${docCodePosition === 'center' ? 'center' : 'left'}; ${docCodePosition === 'center' ? 'width: 100%;' : ''}">
             <span style="font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase;">${docTitle}</span>
             ${showIsoCertification ? `<span style="margin-left: 8px; font-size: 8.5px; font-weight: 700; color: #047857; background: #ecfdf5; padding: 1px 6px; border-radius: 3px;">${isoStandardBadge}</span>` : ''}
+            ${docCodePosition === 'below_title' && showDocumentMetadata ? `
+              <div style="font-size: 8.5px; font-family: monospace; color: #475569; margin-top: 2px;">
+                <span>REF: <strong>${docCode}</strong></span> | <span>DATE: <strong>${docDate}</strong></span>
+              </div>` : ''}
           </div>
-          ${showDocumentMetadata ? `
-          <div style="font-size: 9px; font-family: monospace; color: #475569;">
+          ${showDocumentMetadata && docCodePosition !== 'below_title' && docCodePosition !== 'center' ? `
+          <div style="font-size: 9px; font-family: monospace; color: #475569; text-align: ${docCodePosition === 'left' ? 'left' : 'right'};">
             <span>REF: <strong>${docCode}</strong></span> | <span>DATE: <strong>${docDate}</strong></span>
           </div>` : ''}
         </div>
@@ -879,11 +1009,12 @@ export function renderPdfHeaderHtml(
 
   // 3. Layout Style: Ribbon Accent Top
   if (layoutStyle === 'ribbon_accent') {
+    const isCompanyCenter = companyPosition === 'center';
     return `
       <header class="universal-pdf-header" style="margin-bottom: 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
         <div style="height: 5px; background: linear-gradient(90deg, ${accentColor} 0%, ${secondaryColor} 100%); border-radius: 2px;"></div>
-        <div style="padding: ${paddingY} 0; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #cbd5e1;">
-          <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="padding: ${paddingY} 0; display: flex; ${isCompanyCenter ? 'flex-direction: column; align-items: center; text-align: center; gap: 8px;' : `justify-content: space-between; align-items: flex-start; flex-direction: ${companyPosition === 'right' ? 'row-reverse' : 'row'};`} border-bottom: 1px solid #cbd5e1;">
+          <div style="display: flex; align-items: ${companyAlignItems}; gap: 12px; flex-direction: ${logoFlexDir}; text-align: ${companyTextAlign}; ${isCompanyCenter ? 'width: 100%; justify-content: center;' : ''}">
             ${logoImgHtml}
             <div>
               <div style="font-size: 18px; font-weight: 900; color: ${accentColor}; letter-spacing: 0.3px;">${companyName}</div>
@@ -891,14 +1022,10 @@ export function renderPdfHeaderHtml(
               ${showIsoCertification ? `<div style="font-size: 8.5px; font-weight: 700; color: ${accentColor}; margin-top: 3px;">✓ ${isoStandardBadge}</div>` : ''}
             </div>
           </div>
-          <div style="display: flex; align-items: center;">
-            <div style="text-align: right;">
+          <div style="display: flex; align-items: center; ${isCompanyCenter ? 'width: 100%; justify-content: space-between; margin-top: 4px;' : companyPosition === 'right' ? 'flex-direction: row-reverse;' : ''}">
+            <div style="text-align: ${docCodePosition === 'left' ? 'left' : docCodePosition === 'center' ? 'center' : 'right'}; ${isCompanyCenter && docCodePosition === 'center' ? 'width: 100%;' : ''}">
               <div style="font-size: 14px; font-weight: 900; color: #0f172a; text-transform: uppercase;">${docTitle}</div>
-              ${showDocumentMetadata ? `
-              <div style="font-size: 9px; font-family: monospace; color: #475569; margin-top: 2px;">
-                <div>CODE: <strong>${docCode}</strong></div>
-                <div>DATE: <strong>${docDate}</strong></div>
-              </div>` : ''}
+              ${renderDocCodeBlock(docCodePosition === 'left' ? 'left' : docCodePosition === 'center' ? 'center' : 'right')}
             </div>
             ${qrHtml}
           </div>
@@ -911,28 +1038,29 @@ export function renderPdfHeaderHtml(
   // 4. Layout Style: Compact Clean (for multi-page floor sheets)
   if (layoutStyle === 'compact_clean') {
     return `
-      <header class="universal-pdf-header" style="padding: 6px 0; border-bottom: 1.5px solid #0f172a; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        <div style="display: flex; align-items: center; gap: 8px;">
+      <header class="universal-pdf-header" style="padding: 6px 0; border-bottom: 1.5px solid #0f172a; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-direction: ${companyPosition === 'right' ? 'row-reverse' : 'row'}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 8px; ${logoFlexDir === 'row-reverse' ? 'flex-direction: row-reverse;' : ''}">
           ${logoImgHtml}
-          <div>
+          <div style="text-align: ${companyTextAlign};">
             <span style="font-size: 14px; font-weight: 900; color: ${accentColor};">${companyName}</span>
             <span style="font-size: 9px; color: #64748b; margin-left: 8px;">${factoryAddress}</span>
           </div>
         </div>
-        <div style="text-align: right; font-size: 9px;">
+        <div style="text-align: ${docCodePosition === 'left' ? 'left' : 'right'}; font-size: 9px;">
           <span style="font-size: 11px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin-right: 10px;">${docTitle}</span>
-          <span style="font-family: monospace; color: #475569;">${docCode} • ${docDate}</span>
+          ${showDocumentMetadata ? `<span style="font-family: monospace; color: #475569;">${docCode} • ${docDate}</span>` : ''}
         </div>
       </header>
     `;
   }
 
   // 5. Default: Modern Split (Default standard high-impact split header)
+  const isCompanyCenter = companyPosition === 'center';
   return `
     <header class="universal-pdf-header" style="padding: ${paddingY} 0; border-bottom: 2.5px solid ${accentColor}; margin-bottom: 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <!-- Left: Logo & Company Identity -->
-        <div style="display: flex; align-items: flex-start; gap: 14px;">
+      <div style="display: flex; ${isCompanyCenter ? 'flex-direction: column; align-items: center; text-align: center; gap: 8px;' : `justify-content: space-between; align-items: flex-start; flex-direction: ${companyPosition === 'right' ? 'row-reverse' : 'row'};`}">
+        <!-- Logo & Company Identity -->
+        <div style="display: flex; align-items: ${companyAlignItems}; gap: 14px; flex-direction: ${logoFlexDir}; text-align: ${companyTextAlign}; ${isCompanyCenter ? 'width: 100%; justify-content: center;' : 'max-width: 58%;'}">
           ${logoImgHtml}
           <div>
             <div style="font-size: 18px; font-weight: 900; color: ${accentColor}; letter-spacing: 0.5px; text-transform: uppercase;">
@@ -951,20 +1079,16 @@ export function renderPdfHeaderHtml(
           </div>
         </div>
 
-        <!-- Right: Document Info & QR Verification -->
-        <div style="display: flex; align-items: flex-start;">
-          <div style="text-align: right;">
+        <!-- Document Info & Metadata Block -->
+        <div style="display: flex; align-items: flex-start; ${isCompanyCenter ? 'width: 100%; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0;' : companyPosition === 'right' ? 'flex-direction: row-reverse;' : ''}">
+          <div style="text-align: ${docCodePosition === 'left' ? 'left' : docCodePosition === 'center' ? 'center' : 'right'}; ${isCompanyCenter && docCodePosition === 'center' ? 'width: 100%;' : ''}">
             <div style="font-size: 15px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.3px;">
               ${docTitle}
             </div>
             <div style="font-size: 9.5px; font-weight: 600; color: #64748b; margin-top: 1px;">
               ${department}
             </div>
-            ${showDocumentMetadata ? `
-            <div style="margin-top: 4px; font-family: monospace; font-size: 9px; color: #334155; line-height: 1.4;">
-              <div>DOC CODE: <strong style="color: ${accentColor};">${docCode}</strong></div>
-              <div>DATE: <strong>${docDate}</strong></div>
-            </div>` : ''}
+            ${renderDocCodeBlock(docCodePosition === 'left' ? 'left' : docCodePosition === 'center' ? 'center' : 'right')}
           </div>
           ${qrHtml}
         </div>
@@ -983,21 +1107,127 @@ export interface RenderSignaturesOptions {
   signatureMode?: PdfSignatureMode;
   enabled?: boolean;
   dateStr?: string;
+  moduleKey?: string;
+  count?: number;
   slot1Override?: Partial<SignatureSlotConfig>;
   slot2Override?: Partial<SignatureSlotConfig>;
   slot3Override?: Partial<SignatureSlotConfig>;
+  slot4Override?: Partial<SignatureSlotConfig>;
+  slot5Override?: Partial<SignatureSlotConfig>;
+  slot6Override?: Partial<SignatureSlotConfig>;
+}
+
+/**
+ * Resolves signature configuration for a specific module or global defaults.
+ */
+export function getModuleSignatureSettings(
+  settings?: PdfHeaderSettings | null,
+  moduleKey?: string
+): PdfSignatureSettings {
+  if (!settings) return DEFAULT_PDF_SIGNATURE_SETTINGS;
+  const globalSig: PdfSignatureSettings = {
+    ...DEFAULT_PDF_SIGNATURE_SETTINGS,
+    ...(settings.signatureSettings || {}),
+    slot1: { ...DEFAULT_PDF_SIGNATURE_SETTINGS.slot1, ...(settings.signatureSettings?.slot1 || {}) },
+    slot2: { ...DEFAULT_PDF_SIGNATURE_SETTINGS.slot2, ...(settings.signatureSettings?.slot2 || {}) },
+    slot3: { ...DEFAULT_PDF_SIGNATURE_SETTINGS.slot3, ...(settings.signatureSettings?.slot3 || {}) },
+    slot4: { ...(DEFAULT_PDF_SIGNATURE_SETTINGS.slot4!), ...(settings.signatureSettings?.slot4 || {}) },
+    slot5: { ...(DEFAULT_PDF_SIGNATURE_SETTINGS.slot5!), ...(settings.signatureSettings?.slot5 || {}) },
+    slot6: {
+      ...(DEFAULT_PDF_SIGNATURE_SETTINGS.slot6 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot3),
+      ...(settings.signatureSettings?.slot6 || settings.signatureSettings?.slot3 || {}),
+    },
+  };
+
+  if (!moduleKey) return globalSig;
+
+  const normalizedKey =
+    moduleKey === 'complaint' ? 'customer_complaint' :
+    moduleKey === 'rca' ? 'root_cause' :
+    moduleKey === 'sop' ? 'sop_management' :
+    moduleKey === 'planning' ? 'planning_ie' :
+    moduleKey === 'inspection' ? 'inspections' :
+    moduleKey === 'defect_library' ? 'defects_library' :
+    moduleKey === 'reports' ? 'report_analysis' :
+    moduleKey;
+
+  const custom =
+    settings.moduleWiseSignatures?.[normalizedKey] ||
+    settings.moduleWiseSignatures?.[moduleKey] ||
+    settings.moduleWiseConfigs?.[normalizedKey]?.signatureSettings ||
+    settings.moduleWiseConfigs?.[moduleKey]?.signatureSettings;
+
+  if (custom && custom.useModuleCustom) {
+    return {
+      ...globalSig,
+      ...custom,
+      enabled: custom.enabled ?? globalSig.enabled,
+      mode: custom.mode || globalSig.mode,
+      count: custom.count || globalSig.count,
+      style: custom.style || globalSig.style,
+      showDate: custom.showDate !== undefined ? custom.showDate : globalSig.showDate,
+      slot1: { ...globalSig.slot1, ...(custom.slot1 || {}) },
+      slot2: { ...globalSig.slot2, ...(custom.slot2 || {}) },
+      slot3: { ...globalSig.slot3, ...(custom.slot3 || {}) },
+      slot4: { ...(globalSig.slot4 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot4!), ...(custom.slot4 || {}) },
+      slot5: { ...(globalSig.slot5 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot5!), ...(custom.slot5 || {}) },
+      slot6: { ...(globalSig.slot6 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot6!), ...(custom.slot6 || {}) },
+    };
+  }
+
+  return globalSig;
+}
+
+/**
+ * Returns active signature slots (from 1 to 6) based on mode or count.
+ */
+export function getActiveSignatureSlots(
+  sig: PdfSignatureSettings,
+  modeOverride?: PdfSignatureMode
+): SignatureSlotConfig[] {
+  const mode = modeOverride || sig.mode || 'dual';
+  if (mode === 'none') return [];
+
+  const s1 = sig.slot1 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot1;
+  const s2 = sig.slot2 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot2;
+  const s3 = sig.slot3 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot3;
+  const s4 = sig.slot4 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot4!;
+  const s5 = sig.slot5 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot5!;
+  const s6 = sig.slot6 || sig.slot3 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot6!;
+
+  if (mode === 'single' || mode === ('1' as any)) {
+    return [s6];
+  }
+  if (mode === 'dual' || mode === ('2' as any)) {
+    return [s1, s6];
+  }
+  if (mode === 'triple' || mode === ('3' as any)) {
+    return [s1, s2, s6];
+  }
+  if (mode === 'quad' || mode === ('4' as any)) {
+    return [s1, s2, s4, s6];
+  }
+  if (mode === 'penta' || mode === ('5' as any)) {
+    return [s1, s2, s3, s4, s6];
+  }
+  if (mode === 'hexa' || mode === ('6' as any)) {
+    return [s1, s2, s3, s4, s5, s6];
+  }
+
+  return [s1, s6];
 }
 
 /**
  * Universal PDF Footer Signatures Renderer
- * Renders customizable authorization sign-off blocks based on settings or modal overrides.
+ * Renders customizable authorization sign-off blocks (up to 6 signatures) based on settings or modal overrides.
+ * Supports module-specific overrides when options.moduleKey is provided.
  * Returns empty string if signatures are disabled or mode is 'none'.
  */
 export function renderPdfFooterSignaturesHtml(
   pdfSettings?: PdfHeaderSettings | null,
   options?: RenderSignaturesOptions
 ): string {
-  const sig = pdfSettings?.signatureSettings || DEFAULT_PDF_SIGNATURE_SETTINGS;
+  const sig = getModuleSignatureSettings(pdfSettings, options?.moduleKey);
 
   // If explicitly disabled or mode is 'none', render nothing
   if (options?.enabled === false) return '';
@@ -1025,6 +1255,18 @@ export function renderPdfFooterSignaturesHtml(
     ...sig.slot3,
     ...(options?.slot3Override || {}),
   };
+  const slot4: SignatureSlotConfig = {
+    ...(sig.slot4 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot4!),
+    ...(options?.slot4Override || {}),
+  };
+  const slot5: SignatureSlotConfig = {
+    ...(sig.slot5 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot5!),
+    ...(options?.slot5Override || {}),
+  };
+  const slot6: SignatureSlotConfig = {
+    ...(sig.slot6 || sig.slot3 || DEFAULT_PDF_SIGNATURE_SETTINGS.slot6!),
+    ...(options?.slot6Override || {}),
+  };
 
   const style = sig.style || 'classic_line';
   const showDate = sig.showDate !== false;
@@ -1032,11 +1274,11 @@ export function renderPdfFooterSignaturesHtml(
   const renderSlotHtml = (slot: SignatureSlotConfig) => {
     if (style === 'bordered_card') {
       return `
-        <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; background: #f8fafc; text-align: center;">
+        <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 12px; background: #f8fafc; text-align: center;">
           <div style="font-size: 7.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.4px;">
             ${slot.title}
           </div>
-          <div style="height: 38px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #cbd5e1;">
+          <div style="height: 36px; display: flex; align-items: center; justify-content: center; margin: 4px 0; border-bottom: 1px dashed #cbd5e1;">
             ${slot.name ? `<strong style="font-size: 10px; color: #0f172a; font-family: monospace;">${slot.name}</strong>` : `<span style="font-size: 7.5px; color: #94a3b8; font-style: italic;">Official Signature Stamp</span>`}
           </div>
           <div style="font-size: 8.5px; font-weight: 800; color: #1e293b; margin-top: 2px;">
@@ -1052,7 +1294,7 @@ export function renderPdfFooterSignaturesHtml(
 
     if (style === 'modern_minimal') {
       return `
-        <div style="text-align: center; padding: 6px 10px;">
+        <div style="text-align: center; padding: 6px 8px;">
           <div style="height: 32px; border-bottom: 1.5px solid #0f172a; margin-bottom: 5px; display: flex; align-items: flex-end; justify-content: center;">
             ${slot.name ? `<strong style="font-size: 9.5px; color: #0f172a; margin-bottom: 2px;">${slot.name}</strong>` : ''}
           </div>
@@ -1068,7 +1310,7 @@ export function renderPdfFooterSignaturesHtml(
     // Default: classic_line
     return `
       <div style="text-align: center;">
-        <div style="height: 36px; border-bottom: 1px dashed #64748b; margin-bottom: 5px; display: flex; align-items: flex-end; justify-content: center;">
+        <div style="height: 34px; border-bottom: 1px dashed #64748b; margin-bottom: 5px; display: flex; align-items: flex-end; justify-content: center;">
           ${slot.name ? `<strong style="font-size: 9.5px; color: #1e293b; padding-bottom: 2px; font-family: monospace;">${slot.name}</strong>` : ''}
         </div>
         <div style="font-size: 8px; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: 0.3px;">
@@ -1083,31 +1325,72 @@ export function renderPdfFooterSignaturesHtml(
     `;
   };
 
-  if (mode === 'single') {
+  // Determine active slots based on mode or count
+  let slotsToRender: SignatureSlotConfig[] = [];
+  if (mode === 'single' || mode === ('1' as any) || options?.count === 1) {
+    slotsToRender = [slot6];
+  } else if (mode === 'dual' || mode === ('2' as any) || options?.count === 2) {
+    slotsToRender = [slot1, slot6];
+  } else if (mode === 'triple' || mode === ('3' as any) || options?.count === 3) {
+    slotsToRender = [slot1, slot2, slot6];
+  } else if (mode === 'quad' || mode === ('4' as any) || options?.count === 4) {
+    slotsToRender = [slot1, slot2, slot4, slot6];
+  } else if (mode === 'penta' || mode === ('5' as any) || options?.count === 5) {
+    slotsToRender = [slot1, slot2, slot3, slot4, slot6];
+  } else if (mode === 'hexa' || mode === ('6' as any) || options?.count === 6) {
+    slotsToRender = [slot1, slot2, slot3, slot4, slot5, slot6];
+  } else {
+    slotsToRender = [slot1, slot6];
+  }
+
+  const count = slotsToRender.length;
+
+  if (count === 1) {
     return `
       <div style="display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; page-break-inside: avoid;">
         <div style="width: 250px;">
-          ${renderSlotHtml(slot3)}
+          ${renderSlotHtml(slotsToRender[0])}
         </div>
       </div>
     `;
   }
 
-  if (mode === 'triple') {
+  if (count === 2) {
     return `
-      <div style="margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; page-break-inside: avoid;">
-        ${renderSlotHtml(slot1)}
-        ${renderSlotHtml(slot2)}
-        ${renderSlotHtml(slot3)}
+      <div style="margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 48px; max-width: 650px; margin-left: auto; margin-right: auto; page-break-inside: avoid;">
+        ${slotsToRender.map(renderSlotHtml).join('')}
       </div>
     `;
   }
 
-  // Dual mode (default)
+  if (count === 3) {
+    return `
+      <div style="margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; page-break-inside: avoid;">
+        ${slotsToRender.map(renderSlotHtml).join('')}
+      </div>
+    `;
+  }
+
+  if (count === 4) {
+    return `
+      <div style="margin-top: 22px; padding-top: 14px; border-top: 1px dashed #cbd5e1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; page-break-inside: avoid;">
+        ${slotsToRender.map(renderSlotHtml).join('')}
+      </div>
+    `;
+  }
+
+  if (count === 5) {
+    return `
+      <div style="margin-top: 20px; padding-top: 12px; border-top: 1px dashed #cbd5e1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; page-break-inside: avoid;">
+        ${slotsToRender.map(renderSlotHtml).join('')}
+      </div>
+    `;
+  }
+
+  // 6 signatures: 2 balanced rows of 3 columns
   return `
-    <div style="margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 48px; max-width: 650px; margin-left: auto; margin-right: auto; page-break-inside: avoid;">
-      ${renderSlotHtml(slot1)}
-      ${renderSlotHtml(slot3)}
+    <div style="margin-top: 22px; padding-top: 14px; border-top: 1px dashed #cbd5e1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 20px; page-break-inside: avoid;">
+      ${slotsToRender.map(renderSlotHtml).join('')}
     </div>
   `;
 }

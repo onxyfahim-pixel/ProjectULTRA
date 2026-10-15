@@ -36,6 +36,7 @@ import {
   saveProductionSections,
   getProductionLines,
   saveProductionLines,
+  cascadeManagementUpdateToRecords,
 } from '@/lib/db/production-management-store';
 import {
   getProductionDefects,
@@ -149,17 +150,19 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
   // Handle Save Line
   const handleSaveLine = (lineData: Partial<ProductionLine>) => {
     if (editingLine) {
-      const updated = lines.map((l) => (l.id === editingLine.id ? ({ ...l, ...lineData } as ProductionLine) : l));
+      const updatedLine = { ...editingLine, ...lineData } as ProductionLine;
+      const updated = lines.map((l) => (l.id === editingLine.id ? updatedLine : l));
       saveProductionLines(updated);
       setLines(updated);
-      showToast(`Updated ${lineData.name} — Chief: ${lineData.lineChief}, QC: ${lineData.qualityController}`);
+      cascadeManagementUpdateToRecords('line', updatedLine, editingLine);
+      showToast(`Updated ${lineData.name} — Chief: ${lineData.lineChief}, QC: ${lineData.qualityController} (synced to records)`);
     } else {
       const newLine: ProductionLine = {
         id: `line-${Date.now()}`,
         name: lineData.name || 'New Line',
         lineCode: lineData.lineCode || `L-${lines.length + 1}`,
         unitId: lineData.unitId || units[0]?.id || 'unit-01',
-        unitName: lineData.unitName || units[0]?.name || 'Unit 01',
+        unitName: lineData.unitName || units[0]?.name || 'Unit 01 (Dhaka Complex)',
         sectionId: lineData.sectionId || sections[0]?.id || 'sec-01',
         sectionName: lineData.sectionName || sections[0]?.name || 'Sewing Floor',
         lineChief: lineData.lineChief || 'Unassigned Chief',
@@ -183,10 +186,12 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
   // Handle Save Unit
   const handleSaveUnit = (unitData: Partial<ProductionUnit>) => {
     if (editingUnit) {
-      const updated = units.map((u) => (u.id === editingUnit.id ? ({ ...u, ...unitData } as ProductionUnit) : u));
+      const updatedUnit = { ...editingUnit, ...unitData } as ProductionUnit;
+      const updated = units.map((u) => (u.id === editingUnit.id ? updatedUnit : u));
       saveProductionUnits(updated);
       setUnits(updated);
-      showToast(`Updated Manufacturing Unit: ${unitData.name}`);
+      cascadeManagementUpdateToRecords('unit', updatedUnit, editingUnit);
+      showToast(`Updated Manufacturing Unit: ${unitData.name} (synced to records)`);
     } else {
       const newUnit: ProductionUnit = {
         id: `unit-${Date.now()}`,
@@ -210,17 +215,19 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
   // Handle Save Section
   const handleSaveSection = (secData: Partial<ProductionSection>) => {
     if (editingSection) {
-      const updated = sections.map((s) => (s.id === editingSection.id ? ({ ...s, ...secData } as ProductionSection) : s));
+      const updatedSection = { ...editingSection, ...secData } as ProductionSection;
+      const updated = sections.map((s) => (s.id === editingSection.id ? updatedSection : s));
       saveProductionSections(updated);
       setSections(updated);
-      showToast(`Updated Section: ${secData.name}`);
+      cascadeManagementUpdateToRecords('section', updatedSection, editingSection);
+      showToast(`Updated Section: ${secData.name} (synced to records)`);
     } else {
       const newSec: ProductionSection = {
         id: `sec-${Date.now()}`,
         name: secData.name || 'New Section',
         sectionCode: secData.sectionCode || `SEC-0${sections.length + 1}`,
         unitId: secData.unitId || units[0]?.id || 'unit-01',
-        unitName: secData.unitName || units[0]?.name || 'Unit 01',
+        unitName: secData.unitName || units[0]?.name || 'Unit 01 (Dhaka Complex)',
         inchargeName: secData.inchargeName || '',
         status: secData.status || 'ACTIVE',
         description: secData.description || '',

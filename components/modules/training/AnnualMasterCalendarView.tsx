@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Calendar,
   Clock,
@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Layers,
   ChevronRight,
+  ChevronLeft,
   Filter,
   Plus,
   Eye,
@@ -21,8 +22,13 @@ import {
   ListFilter,
   ArrowRight,
   Download,
+  Printer,
+  FileSpreadsheet,
+  FileDown,
+  Info,
 } from 'lucide-react';
 import { AnnualTrainingScheduleItem, TrainingMatrixItem } from '@/lib/types/modules';
+import { TrainingCalendarExportModal } from './TrainingCalendarExportModal';
 
 interface AnnualMasterCalendarViewProps {
   scheduleItems: AnnualTrainingScheduleItem[];
@@ -41,6 +47,15 @@ const SECTIONS = [
   { key: 'QUALITY_ASSURANCE', label: 'Quality Assurance' },
   { key: 'MAINTENANCE_SAFETY', label: 'Maintenance & Safety' },
 ];
+
+const SECTION_CONFIG: Record<string, { label: string; color: string; border: string; bg: string; text: string; dot: string }> = {
+  CUTTING_SECTION: { label: 'Cutting Division', color: '#f59e0b', border: 'border-amber-300', bg: 'bg-amber-50', text: 'text-amber-800', dot: 'bg-amber-500' },
+  SEWING_SECTION: { label: 'Sewing Production', color: '#3b82f6', border: 'border-blue-300', bg: 'bg-blue-50', text: 'text-blue-800', dot: 'bg-blue-500' },
+  FINISHING_PACKING: { label: 'Finishing & Packing', color: '#8b5cf6', border: 'border-purple-300', bg: 'bg-purple-50', text: 'text-purple-800', dot: 'bg-purple-500' },
+  FABRIC_LAB: { label: 'Fabric Warehouse & Lab', color: '#0d9488', border: 'border-teal-300', bg: 'bg-teal-50', text: 'text-teal-800', dot: 'bg-teal-500' },
+  QUALITY_ASSURANCE: { label: 'Quality Assurance', color: '#10b981', border: 'border-emerald-300', bg: 'bg-emerald-50', text: 'text-emerald-800', dot: 'bg-emerald-500' },
+  MAINTENANCE_SAFETY: { label: 'Maintenance & Safety', color: '#ef4444', border: 'border-rose-300', bg: 'bg-rose-50', text: 'text-rose-800', dot: 'bg-rose-500' },
+};
 
 const MONTHS = [
   { index: 0, label: 'Full Year (12M)', short: 'All 12M' },
@@ -67,8 +82,18 @@ export function AnnualMasterCalendarView({
 }: AnnualMasterCalendarViewProps) {
   const [selectedSection, setSelectedSection] = useState<string>('ALL');
   const [selectedMonth, setSelectedMonth] = useState<number>(0); // 0 = all year
-  const [viewStyle, setViewStyle] = useState<'schedule_cards' | 'section_matrix'>('schedule_cards');
+  const [activeCalendarMonth, setActiveCalendarMonth] = useState<number>(10); // Default to October 2026 for visual calendar
+  const [viewStyle, setViewStyle] = useState<'visual_calendar' | 'section_matrix' | 'schedule_cards'>('visual_calendar');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  // If user selects a specific month via the top tabs, keep activeCalendarMonth synced
+  const handleSelectMonth = (mIndex: number) => {
+    setSelectedMonth(mIndex);
+    if (mIndex > 0) {
+      setActiveCalendarMonth(mIndex);
+    }
+  };
 
   // Filter schedule items
   const filteredSchedule = scheduleItems.filter((item) => {
@@ -97,7 +122,6 @@ export function AnnualMasterCalendarView({
     if (match) {
       onSelectCourse(match);
     } else {
-      // Find by title substring or open first course
       const titleMatch = courses.find(
         (c) => c.title.toLowerCase().includes(fallbackTitle.toLowerCase()) ||
                fallbackTitle.toLowerCase().includes(c.title.toLowerCase())
@@ -110,6 +134,64 @@ export function AnnualMasterCalendarView({
     }
   };
 
+  // ─────────────────────────────────────────────────────────────
+  // VISUAL MONTHLY CALENDAR GRID CALCULATIONS
+  // ─────────────────────────────────────────────────────────────
+  const calendarGridData = useMemo(() => {
+    const year = 2026;
+    const mIndex = activeCalendarMonth; // 1..12
+    const firstDayOfWeek = new Date(year, mIndex - 1, 1).getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+    const daysInMonth = new Date(year, mIndex, 0).getDate(); // 28, 30, 31
+
+    // Filter items for this month & section
+    const monthItems = scheduleItems.filter((item) => {
+      const matchesMonth = item.monthIndex === mIndex;
+      const matchesSection = selectedSection === 'ALL' || item.section === selectedSection;
+      return matchesMonth && matchesSection;
+    });
+
+    // Map sessions by date (day of month)
+    const daySessionsMap: Record<number, AnnualTrainingScheduleItem[]> = {};
+    monthItems.forEach((item) => {
+      const parts = item.date.split('-');
+      if (parts.length === 3) {
+        const d = parseInt(parts[2], 10);
+        if (!daySessionsMap[d]) daySessionsMap[d] = [];
+        daySessionsMap[d].push(item);
+      }
+    });
+
+    // Generate grid slots
+    const totalSlots = Math.ceil((firstDayOfWeek + daysInMonth) / 7) * 7;
+    const slots = [];
+    for (let i = 0; i < totalSlots; i++) {
+      if (i < firstDayOfWeek || i >= firstDayOfWeek + daysInMonth) {
+        slots.push({ dayNumber: null, sessions: [] });
+      } else {
+        const dayNumber = i - firstDayOfWeek + 1;
+        slots.push({
+          dayNumber,
+          sessions: daySessionsMap[dayNumber] || [],
+        });
+      }
+    }
+
+    return {
+      monthLabel: MONTHS[mIndex]?.label || 'Month',
+      monthItems,
+      slots,
+      totalSeats: monthItems.reduce((acc, i) => acc + (i.targetSeats || 0), 0),
+    };
+  }, [scheduleItems, activeCalendarMonth, selectedSection]);
+
+  const handlePrevMonth = () => {
+    setActiveCalendarMonth((prev) => (prev <= 1 ? 12 : prev - 1));
+  };
+
+  const handleNextMonth = () => {
+    setActiveCalendarMonth((prev) => (prev >= 12 ? 1 : prev + 1));
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* 1. TOP HEADER & METRIC SUMMARY */}
@@ -120,10 +202,10 @@ export function AnnualMasterCalendarView({
             <span>Master Annual Training Schedule (Full Year 2026)</span>
           </div>
           <h2 className="text-base sm:text-lg font-bold text-slate-900">
-            Section-Wise Annual Training Matrix &amp; Day-of-Training Master Schedule
+            Visual Training Calendar, Section Matrix &amp; Master Markings
           </h2>
           <p className="text-xs text-slate-500 max-w-3xl leading-relaxed mt-0.5">
-            Complete 12-month master schedule mapping required training days, time slots, lead trainers, and target seats across Cutting, Sewing, Finishing, Lab, QMS, and Maintenance.
+            Interactive visual calendar mapping scheduled training dates, 12-month section coverage matrix, and ISO 9001 Clause 7.2 compliance logs with full PDF/Excel export.
           </p>
         </div>
 
@@ -132,15 +214,16 @@ export function AnnualMasterCalendarView({
           <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
             <button
               type="button"
-              onClick={() => setViewStyle('schedule_cards')}
+              onClick={() => setViewStyle('visual_calendar')}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                viewStyle === 'schedule_cards'
+                viewStyle === 'visual_calendar'
                   ? 'bg-white text-blue-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
+              title="Interactive Visual Month Grid with Markings"
             >
-              <ListFilter className="w-3.5 h-3.5" />
-              <span>Day-of-Training Schedule</span>
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Visual Calendar</span>
             </button>
             <button
               type="button"
@@ -150,12 +233,38 @@ export function AnnualMasterCalendarView({
                   ? 'bg-white text-blue-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
+              title="12-Month Section Matrix Cross Table"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
               <span>Section Matrix (12M)</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setViewStyle('schedule_cards')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                viewStyle === 'schedule_cards'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Session Agenda & Cards List"
+            >
+              <ListFilter className="w-3.5 h-3.5" />
+              <span>Session Agenda</span>
+            </button>
           </div>
 
+          {/* Export Button */}
+          <button
+            type="button"
+            onClick={() => setIsExportModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
+            title="Export Visual Calendar, 12M Matrix & Agenda (PDF / Excel / CSV)"
+          >
+            <Printer className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Export Calendar</span>
+          </button>
+
+          {/* Schedule New Button */}
           <button
             type="button"
             onClick={onScheduleNew}
@@ -214,7 +323,7 @@ export function AnnualMasterCalendarView({
               <button
                 key={m.index}
                 type="button"
-                onClick={() => setSelectedMonth(m.index)}
+                onClick={() => handleSelectMonth(m.index)}
                 className={`px-3 py-1.5 text-xs font-bold rounded-lg shrink-0 transition-colors cursor-pointer ${
                   selectedMonth === m.index
                     ? 'bg-blue-600 text-white shadow-xs'
@@ -265,126 +374,213 @@ export function AnnualMasterCalendarView({
 
       {/* 4. ACTIVE VIEW RENDERING */}
 
-      {/* VIEW A: DAY-OF-TRAINING SCHEDULE CARDS & TIMELINE */}
-      {viewStyle === 'schedule_cards' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-slate-500 px-1">
-            <span>
-              Showing <strong>{filteredSchedule.length}</strong> master scheduled sessions
-              {selectedMonth > 0 ? ` for ${MONTHS[selectedMonth]?.label}` : ' across 12 months'}
-              {selectedSection !== 'ALL' ? ` in ${SECTIONS.find((s) => s.key === selectedSection)?.label}` : ''}
-            </span>
-            <span className="font-mono text-[11px]">ISO 9001 Clause 7.2 Compliant</span>
-          </div>
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* VIEW A: VISUAL MONTHLY CALENDAR GRID WITH MARKINGS ON DATES */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {viewStyle === 'visual_calendar' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden space-y-3">
+          {/* Calendar Month Navigation Header */}
+          <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center bg-white border border-slate-200 rounded-xl p-0.5 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                  title="Previous Month"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="px-3 py-1 font-bold text-sm text-slate-900 font-mono">
+                  {calendarGridData.monthLabel} 2026
+                </span>
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                  title="Next Month"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
 
-          {filteredSchedule.length === 0 ? (
-            <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
-              <Calendar className="w-10 h-10 text-slate-300 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-800">No training sessions found</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                No scheduled training matches the selected section or month filter. Try clearing filters or schedule a new session.
-              </p>
+              <span className="text-xs text-slate-500 font-mono">
+                {calendarGridData.monthItems.length} Sessions Planned • {calendarGridData.totalSeats} Target Seats
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedSection('ALL');
-                  setSelectedMonth(0);
-                  setSearchQuery('');
-                }}
-                className="px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer transition-colors"
+                onClick={() => setIsExportModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
               >
-                Reset All Filters
+                <Printer className="w-3.5 h-3.5" />
+                <span>Export {calendarGridData.monthLabel} Calendar</span>
               </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSchedule.map((item) => {
-                const isCompleted = item.status === 'COMPLETED';
-                const isUpcoming = item.status === 'UPCOMING';
-                return (
+          </div>
+
+          {/* 7-Column Calendar Grid */}
+          <div className="overflow-x-auto p-4 pt-1">
+            <div className="min-w-[760px]">
+              {/* Day Headers (Sun to Sat) */}
+              <div className="grid grid-cols-7 gap-1.5 mb-1.5 text-center">
+                {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => (
                   <div
-                    key={item.id}
-                    className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-blue-300 transition-all flex flex-col justify-between space-y-3 group"
+                    key={d}
+                    className={`py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg border ${
+                      i === 0 || i === 6
+                        ? 'bg-rose-50/70 border-rose-100 text-rose-700'
+                        : 'bg-slate-100/70 border-slate-200 text-slate-700'
+                    }`}
                   >
-                    <div className="space-y-2.5">
-                      {/* Section & Status Top Line */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 truncate">
-                          {item.sectionName}
-                        </span>
+                    {d.slice(0, 3)}
+                  </div>
+                ))}
+              </div>
+
+              {/* Day Cells Grid */}
+              <div className="grid grid-cols-7 gap-1.5">
+                {calendarGridData.slots.map((slot, idx) => {
+                  if (slot.dayNumber === null) {
+                    return (
+                      <div
+                        key={`empty-${idx}`}
+                        className="min-h-[115px] p-2 rounded-xl bg-slate-50/40 border border-slate-100/60 opacity-40"
+                      />
+                    );
+                  }
+
+                  const hasSessions = slot.sessions.length > 0;
+                  return (
+                    <div
+                      key={`day-${slot.dayNumber}`}
+                      className={`min-h-[120px] p-2 rounded-xl border transition-all flex flex-col justify-between ${
+                        hasSessions
+                          ? 'bg-white border-blue-200 shadow-2xs hover:border-blue-400'
+                          : 'bg-white/80 border-slate-200 hover:bg-slate-50/50'
+                      }`}
+                    >
+                      {/* Day Number Header */}
+                      <div className="flex items-center justify-between pb-1 border-b border-slate-100">
                         <span
-                          className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
-                            isCompleted
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : isUpcoming
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          className={`font-mono font-bold text-xs px-1.5 py-0.5 rounded ${
+                            hasSessions
+                              ? 'bg-blue-600 text-white shadow-2xs'
+                              : 'text-slate-700'
                           }`}
                         >
-                          {item.status}
+                          {slot.dayNumber}
                         </span>
+                        {hasSessions && (
+                          <span className="text-[10px] font-bold text-blue-700">
+                            {slot.sessions.length} {slot.sessions.length > 1 ? 'Sessions' : 'Session'}
+                          </span>
+                        )}
                       </div>
 
-                      {/* Day of Week & Date */}
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-mono">
-                          {item.dayOfWeek}
-                        </span>
-                        <span className="font-mono text-slate-800 font-semibold">{item.date}</span>
-                        <span className="text-slate-400">•</span>
-                        <span className="font-mono text-slate-500 text-[11px]">{item.timeSlot}</span>
+                      {/* Sessions Markings Container */}
+                      <div className="space-y-1.5 py-1.5 flex-1">
+                        {slot.sessions.map((session) => {
+                          const secCfg = SECTION_CONFIG[session.section] || {
+                            label: session.sectionName,
+                            border: 'border-blue-300',
+                            bg: 'bg-blue-50',
+                            text: 'text-blue-800',
+                            dot: 'bg-blue-500',
+                          };
+                          const isDone = session.status === 'COMPLETED';
+                          const isUpcoming = session.status === 'UPCOMING';
+
+                          return (
+                            <div
+                              key={session.id}
+                              onClick={() => handleOpenCourse(session.courseCode, session.topicTitle)}
+                              className={`p-1.5 rounded-lg border text-left cursor-pointer transition-all hover:scale-[1.02] shadow-2xs group ${secCfg.bg} ${secCfg.border}`}
+                              title={`${session.topicTitle} • ${session.trainerName} • ${session.timeSlot}`}
+                            >
+                              {/* Top Bar with Course Code & Status Dot */}
+                              <div className="flex items-center justify-between gap-1 mb-0.5">
+                                <span className="font-mono text-[9px] font-bold text-slate-800 truncate">
+                                  {session.courseCode}
+                                </span>
+                                <span
+                                  className={`text-[8px] font-bold px-1 py-0.2 rounded shrink-0 ${
+                                    isDone
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : isUpcoming
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {isDone ? '✓ Done' : isUpcoming ? '★ Up' : '⏳ Plan'}
+                                </span>
+                              </div>
+
+                              {/* Topic Title */}
+                              <div className="text-[10px] font-bold text-slate-900 group-hover:text-blue-700 leading-tight line-clamp-2">
+                                {session.topicTitle}
+                              </div>
+
+                              {/* Time & Venue */}
+                              <div className="text-[9px] text-slate-600 mt-1 flex items-center justify-between font-mono">
+                                <span>{session.timeSlot.split(' - ')[0]}</span>
+                                <span className="font-bold">{session.targetSeats} Seats</span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
 
-                      {/* Topic Title */}
-                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-snug">
-                        {item.topicTitle}
-                      </h4>
-
-                      {/* Trainer & Venue */}
-                      <div className="space-y-1 text-xs text-slate-600 pt-1 border-t border-slate-100">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate">{item.trainerName}</span>
+                      {/* Bottom Quick Indicator */}
+                      {hasSessions ? (
+                        <div className="pt-1 border-t border-slate-100 text-[9px] text-slate-400 font-mono truncate">
+                          {slot.sessions[0]?.sectionName}
                         </div>
-                        <div className="flex items-center gap-1.5 text-slate-500 truncate text-[11px]">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate">{item.venue} • {item.durationHours}h</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
-                          <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>Target Capacity: {item.targetSeats} Seats</span>
-                        </div>
-                      </div>
-
-                      {item.notes && (
-                        <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2 rounded-lg border border-slate-100 line-clamp-2">
-                          {item.notes}
-                        </p>
+                      ) : (
+                        <div />
                       )}
                     </div>
-
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <span className="font-mono text-[10px] text-slate-400 font-bold">
-                        {item.courseCode}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenCourse(item.courseCode, item.topicTitle)}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
-                      >
-                        <span>View Training Record</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* Color Key & Legend Bar */}
+          <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-blue-600" />
+                <span>Division Markings:</span>
+              </span>
+              {Object.entries(SECTION_CONFIG).map(([secKey, cfg]) => (
+                <div key={secKey} className="flex items-center gap-1 text-[11px] text-slate-700">
+                  <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
+                  <span>{cfg.label}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3 font-mono text-[11px]">
+              <span className="flex items-center gap-1 text-emerald-700 font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" /> Completed
+              </span>
+              <span className="flex items-center gap-1 text-blue-700 font-semibold">
+                <span className="w-2 h-2 rounded-full bg-blue-500" /> Upcoming
+              </span>
+              <span className="flex items-center gap-1 text-amber-700 font-semibold">
+                <span className="w-2 h-2 rounded-full bg-amber-500" /> Scheduled
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
+      {/* ───────────────────────────────────────────────────────────── */}
       {/* VIEW B: SECTION-WISE ANNUAL MASTER MATRIX (ROWS = 6 SECTIONS, COLUMNS = 12 MONTHS) */}
+      {/* ───────────────────────────────────────────────────────────── */}
       {viewStyle === 'section_matrix' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden space-y-2">
           <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -397,6 +593,14 @@ export function AnnualMasterCalendarView({
               </p>
             </div>
             <div className="flex items-center gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer mr-2"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Export Matrix Wall Chart</span>
+              </button>
               <span className="flex items-center gap-1 font-mono text-[11px] text-emerald-700">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" /> Done
               </span>
@@ -473,6 +677,143 @@ export function AnnualMasterCalendarView({
           </div>
         </div>
       )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* VIEW C: DAY-OF-TRAINING SCHEDULE CARDS & TIMELINE */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {viewStyle === 'schedule_cards' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+            <span>
+              Showing <strong>{filteredSchedule.length}</strong> master scheduled sessions
+              {selectedMonth > 0 ? ` for ${MONTHS[selectedMonth]?.label}` : ' across 12 months'}
+              {selectedSection !== 'ALL' ? ` in ${SECTIONS.find((s) => s.key === selectedSection)?.label}` : ''}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Export Agenda Log</span>
+            </button>
+          </div>
+
+          {filteredSchedule.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
+              <Calendar className="w-10 h-10 text-slate-300 mx-auto" />
+              <h3 className="text-sm font-bold text-slate-800">No training sessions found</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                No scheduled training matches the selected section or month filter. Try clearing filters or schedule a new session.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSection('ALL');
+                  setSelectedMonth(0);
+                  setSearchQuery('');
+                }}
+                className="px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer transition-colors"
+              >
+                Reset All Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredSchedule.map((item) => {
+                const isCompleted = item.status === 'COMPLETED';
+                const isUpcoming = item.status === 'UPCOMING';
+                return (
+                  <div
+                    key={item.id}
+                    className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-blue-300 transition-all flex flex-col justify-between space-y-3 group"
+                  >
+                    <div className="space-y-2.5">
+                      {/* Section & Status Top Line */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 truncate">
+                          {item.sectionName}
+                        </span>
+                        <span
+                          className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
+                            isCompleted
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : isUpcoming
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}
+                        >
+                          {item.status}
+                        </span>
+                      </div>
+
+                      {/* Day of Week & Date */}
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-mono">
+                          {item.dayOfWeek}
+                        </span>
+                        <span className="font-mono text-slate-800 font-semibold">{item.date}</span>
+                        <span className="text-slate-400">•</span>
+                        <span className="font-mono text-slate-500 text-[11px]">{item.timeSlot}</span>
+                      </div>
+
+                      {/* Topic Title */}
+                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-snug">
+                        {item.topicTitle}
+                      </h4>
+
+                      {/* Trainer & Venue */}
+                      <div className="space-y-1 text-xs text-slate-600 pt-1 border-t border-slate-100">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{item.trainerName}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-slate-500 truncate text-[11px]">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{item.venue} • {item.durationHours}h</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+                          <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>Target Capacity: {item.targetSeats} Seats</span>
+                        </div>
+                      </div>
+
+                      {item.notes && (
+                        <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2 rounded-lg border border-slate-100 line-clamp-2">
+                          {item.notes}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <span className="font-mono text-[10px] text-slate-400 font-bold">
+                        {item.courseCode}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCourse(item.courseCode, item.topicTitle)}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
+                      >
+                        <span>View Training Record</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TRAINING CALENDAR & MATRIX EXPORT MODAL */}
+      <TrainingCalendarExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        scheduleItems={scheduleItems}
+        defaultMonth={selectedMonth > 0 ? selectedMonth : activeCalendarMonth}
+        defaultSection={selectedSection}
+      />
     </div>
   );
 }

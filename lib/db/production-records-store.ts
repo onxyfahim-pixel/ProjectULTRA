@@ -2,6 +2,7 @@ import { ProductionOrder } from '@/lib/types/erp';
 import { BuyerOrder } from '@/lib/types/modules';
 import { INITIAL_PRODUCTION_ORDERS } from '@/lib/db/mock-data';
 import { MOCK_BUYER_ORDERS } from '@/lib/db/modules-mock-data';
+import { getProductionLines, getProductionSections, getProductionUnits } from '@/lib/db/production-management-store';
 
 const STORAGE_KEYS = {
   PRODUCTION_ORDERS: 'erp_production_orders_v1',
@@ -106,33 +107,62 @@ export function getProductionRecords(): ProductionOrder[] {
     if (Array.isArray(parsed) && parsed.length > 0) {
       const todayStr = new Date().toISOString().split('T')[0];
       let needsResave = false;
+      const managedLines = getProductionLines();
+      const managedUnits = getProductionUnits();
+
       const patched = parsed.map((p) => {
-        if (p.id === 'po-206' && (!p.recordDate || p.recordDate === '2026-09-21')) {
+        let updated = { ...p };
+
+        // Fix legacy unit naming
+        if (updated.unit === 'Unit 02 (Gazipur Facility)') {
+          updated.unit = 'Unit 02 (Chittagong SEZ)';
           needsResave = true;
-          return {
-            ...p,
-            recordDate: todayStr,
-            section: p.section || 'Finishing & Packing Section 01',
-            sewingLine: p.sewingLine || 'Finishing Line 01 (Steam Tunnel Pressing)',
-            lineId: p.lineId || 'FIN-01',
-          };
         }
-        if (p.id === 'po-201' && (!p.recordDate || p.recordDate === '2026-09-21')) {
+
+        // Match line in production management store to follow modified line/unit/section details
+        const matchingLine = managedLines.find(
+          (l) =>
+            l.id === updated.lineId ||
+            l.lineCode === updated.lineId ||
+            (updated.sewingLine && (l.name === updated.sewingLine || l.name.toLowerCase() === updated.sewingLine.toLowerCase()))
+        );
+
+        if (matchingLine) {
+          if (updated.sewingLine !== matchingLine.name) {
+            updated.sewingLine = matchingLine.name;
+            needsResave = true;
+          }
+          if (updated.lineId !== (matchingLine.lineCode || matchingLine.id)) {
+            updated.lineId = matchingLine.lineCode || matchingLine.id;
+            needsResave = true;
+          }
+          if (matchingLine.unitName && updated.unit !== matchingLine.unitName) {
+            updated.unit = matchingLine.unitName;
+            needsResave = true;
+          }
+          if (matchingLine.sectionName && updated.section !== matchingLine.sectionName) {
+            updated.section = matchingLine.sectionName;
+            needsResave = true;
+          }
+        }
+
+        if (!updated.recordDate) {
+          updated.recordDate = updated.createdAt ? updated.createdAt.split('T')[0] : todayStr;
           needsResave = true;
-          return {
-            ...p,
-            recordDate: todayStr,
-          };
         }
-        if (!p.recordDate) {
-          needsResave = true;
-          return {
-            ...p,
-            recordDate: p.createdAt ? p.createdAt.split('T')[0] : todayStr,
-          };
-        }
-        return p;
+
+        return updated;
       });
+
+      // Ensure all seed initial production orders are present
+      INITIAL_PRODUCTION_ORDERS.forEach((initOrd) => {
+        const existingIdx = patched.findIndex((p) => p.id === initOrd.id);
+        if (existingIdx === -1) {
+          patched.push(initOrd);
+          needsResave = true;
+        }
+      });
+
       if (needsResave) {
         try {
           localStorage.setItem(STORAGE_KEYS.PRODUCTION_ORDERS, JSON.stringify(patched));

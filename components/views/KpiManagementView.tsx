@@ -40,6 +40,7 @@ import { KpiEntryPage } from '../modules/kpi-management/KpiEntryPage';
 import { DeleteKpiModal } from '../modules/kpi-management/DeleteKpiModal';
 import { KpiExportModal } from '../modules/kpi-management/KpiExportModal';
 import { KpiSingleExportModal } from '../modules/kpi-management/KpiSingleExportModal';
+import { KpiSummaryCharts } from '../modules/kpi-management/KpiSummaryCharts';
 import { useModulePermission } from '@/hooks/use-module-permission';
 
 type KpiSubView =
@@ -114,6 +115,12 @@ export function KpiManagementView() {
   const atRiskCount = kpis.filter((k) => k.status === 'AT_RISK').length;
   const criticalCount = kpis.filter((k) => k.status === 'CRITICAL').length;
   const exceededCount = kpis.filter((k) => k.status === 'EXCEEDED').length;
+
+  // Executive Spotlight KPIs
+  const kpiQA01 = kpis.find((k) => k.kpiCode === 'KPI-QA-01') || kpis[0];
+  const kpiQA02 = kpis.find((k) => k.kpiCode === 'KPI-QA-02') || kpis[1];
+  const kpiQA06 = kpis.find((k) => k.kpiCode === 'KPI-QA-06') || kpis.find((k) => k.metricName.toLowerCase().includes('audit')) || kpis[2];
+  const kpiCS04 = kpis.find((k) => k.kpiCode === 'KPI-CS-04') || kpis.find((k) => k.category === 'COST') || kpis[3];
 
   // Cross-KPI Corrective Actions
   const allActionItems = kpis.flatMap((k) =>
@@ -503,127 +510,49 @@ export function KpiManagementView() {
               {/* Executive Stat Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
-                  title="Floor DHU Rate"
-                  value="1.8%"
-                  subtitle="Target < 1.5% Defect Rate"
+                  title={kpiQA01?.metricName ? (kpiQA01.metricName.length > 28 ? `${kpiQA01.metricName.substring(0, 25)}...` : kpiQA01.metricName) : "Floor DHU Rate"}
+                  value={kpiQA01 ? `${kpiQA01.currentValue}${kpiQA01.unit}` : "1.8%"}
+                  subtitle={kpiQA01 ? `Target ${kpiQA01.desiredDirection === 'LOWER_IS_BETTER' ? '≤' : '≥'} ${kpiQA01.targetValue}${kpiQA01.unit} Defect Benchmark` : "Target < 1.5% Defect Rate"}
                   icon={Target}
-                  tone="emerald"
+                  tone={kpiQA01?.status === 'CRITICAL' ? 'rose' : kpiQA01?.status === 'AT_RISK' ? 'amber' : 'emerald'}
                 />
                 <StatCard
-                  title="Right First Time (RFT)"
-                  value="94.6%"
-                  subtitle="World-Class Benchmark >95%"
+                  title={kpiQA02?.metricName ? (kpiQA02.metricName.length > 28 ? `${kpiQA02.metricName.substring(0, 25)}...` : kpiQA02.metricName) : "Right First Time (RFT)"}
+                  value={kpiQA02 ? `${kpiQA02.currentValue}${kpiQA02.unit}` : "94.6%"}
+                  subtitle={kpiQA02 ? `Target ≥ ${kpiQA02.targetValue}${kpiQA02.unit} (Benchmark: ${kpiQA02.benchmark?.split(' ')[0] || '>95%'})` : "World-Class Benchmark >95%"}
                   icon={CheckCircle2}
-                  tone="blue"
+                  tone={kpiQA02?.status === 'CRITICAL' ? 'rose' : kpiQA02?.status === 'AT_RISK' ? 'amber' : 'blue'}
                 />
                 <StatCard
-                  title="Final Audit Pass"
-                  value="98.8%"
-                  subtitle="Pre-Shipment Inspections"
+                  title={kpiQA06?.metricName ? (kpiQA06.metricName.length > 28 ? `${kpiQA06.metricName.substring(0, 25)}...` : kpiQA06.metricName) : "Final Audit Pass"}
+                  value={kpiQA06 ? `${kpiQA06.currentValue}${kpiQA06.unit}` : "98.8%"}
+                  subtitle={kpiQA06 ? `Target ≥ ${kpiQA06.targetValue}${kpiQA06.unit} AQL Inspections` : "Pre-Shipment Inspections"}
                   icon={BarChart3}
-                  tone="indigo"
+                  tone={kpiQA06?.status === 'CRITICAL' ? 'rose' : kpiQA06?.status === 'AT_RISK' ? 'amber' : 'indigo'}
                 />
                 <StatCard
-                  title="Cost of Quality (CoQ)"
-                  value="1.15%"
-                  subtitle="Percent of Total FOB Turnover"
+                  title={kpiCS04?.metricName ? (kpiCS04.metricName.length > 28 ? `${kpiCS04.metricName.substring(0, 25)}...` : kpiCS04.metricName) : "Cost of Quality (CoQ)"}
+                  value={kpiCS04 ? `${kpiCS04.currentValue}${kpiCS04.unit}` : "1.15%"}
+                  subtitle={kpiCS04 ? `Target ≤ ${kpiCS04.targetValue}${kpiCS04.unit} FOB Turnover` : "Percent of Total FOB Turnover"}
                   icon={AlertCircle}
-                  tone="amber"
+                  tone={kpiCS04?.status === 'CRITICAL' ? 'rose' : kpiCS04?.status === 'AT_RISK' ? 'amber' : 'amber'}
                 />
               </div>
 
-              {/* 2-Column Summary Breakdown */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* KPI Health Status */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <PieChart className="w-4 h-4 text-emerald-600" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                        KPI Health Compliance Status
-                      </h3>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-500">ISO 9001 Clause 9.1</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 text-xs">
-                    <div
-                      onClick={() => {
-                        setStatusFilter('ON_TRACK');
-                        setViewMode('list');
-                      }}
-                      className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 hover:bg-emerald-100/60 transition-colors cursor-pointer"
-                    >
-                      <span className="text-[11px] text-emerald-700 font-semibold block">On Track</span>
-                      <div className="text-lg font-bold font-mono text-emerald-900 mt-1">{onTrackCount}</div>
-                      <span className="text-[10px] text-slate-500">Meeting targets</span>
-                    </div>
-                    <div
-                      onClick={() => {
-                        setStatusFilter('AT_RISK');
-                        setViewMode('list');
-                      }}
-                      className="p-3 rounded-xl bg-amber-50/60 border border-amber-100 hover:bg-amber-100/60 transition-colors cursor-pointer"
-                    >
-                      <span className="text-[11px] text-amber-700 font-semibold block">At Risk</span>
-                      <div className="text-lg font-bold font-mono text-amber-900 mt-1">{atRiskCount}</div>
-                      <span className="text-[10px] text-slate-500">Within 5% variance</span>
-                    </div>
-                    <div
-                      onClick={() => {
-                        setStatusFilter('CRITICAL');
-                        setViewMode('list');
-                      }}
-                      className="p-3 rounded-xl bg-rose-50/60 border border-rose-100 hover:bg-rose-100/60 transition-colors cursor-pointer"
-                    >
-                      <span className="text-[11px] text-rose-700 font-semibold block">Critical</span>
-                      <div className="text-lg font-bold font-mono text-rose-900 mt-1">{criticalCount}</div>
-                      <span className="text-[10px] text-slate-500">Action plan required</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Domains Breakdown */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-blue-600" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                        KPIs by Operational Domain
-                      </h3>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-500">Dimensions</span>
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    {Object.entries(KPI_CATEGORY_CONFIG).map(([catKey, cfg]) => {
-                      const count = kpis.filter((k) => k.category === catKey).length;
-                      if (count === 0) return null;
-                      const pct = Math.round((count / (kpis.length || 1)) * 100);
-
-                      return (
-                        <div
-                          key={catKey}
-                          onClick={() => {
-                            setCategoryFilter(catKey);
-                            setViewMode('list');
-                          }}
-                          className="space-y-1 p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
-                        >
-                          <div className="flex justify-between text-slate-700">
-                            <span className="font-medium">{cfg.label}</span>
-                            <span className="font-mono text-slate-500">{count} metrics ({pct}%)</span>
-                          </div>
-                          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                            <div
-                              className="bg-blue-600 h-full rounded-full transition-all duration-300"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+              {/* Advanced Visual Charts & Graphical Intelligence Suite */}
+              <KpiSummaryCharts
+                kpis={kpis}
+                onFilterCategory={(cat) => {
+                  setCategoryFilter(cat);
+                  setViewMode('list');
+                }}
+                onFilterStatus={(status) => {
+                  setStatusFilter(status);
+                  setViewMode('list');
+                }}
+                onNavigateToList={() => setViewMode('list')}
+                onSelectKpiDetails={(kpi) => setSubView({ type: 'details', kpi })}
+              />
 
               <SwitchToListBanner
                 label="Open Complete KPI Performance Scorecard Register"

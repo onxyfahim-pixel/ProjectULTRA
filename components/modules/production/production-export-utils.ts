@@ -4,10 +4,11 @@ import {
   renderPdfHeaderHtml,
   getModuleExportConfig,
   renderPdfFooterSignaturesHtml,
+  PdfSignatureMode,
 } from '@/lib/pdf/pdf-header-store';
 import { INITIAL_PRODUCTION_ORDERS } from '@/lib/db/mock-data';
 
-export type FooterSignatureMode = 'dual' | 'triple' | 'single' | 'none';
+export type FooterSignatureMode = PdfSignatureMode;
 
 export interface ExportPdfOptions {
   signatureMode?: FooterSignatureMode;
