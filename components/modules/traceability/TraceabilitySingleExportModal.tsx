@@ -166,6 +166,31 @@ export function TraceabilitySingleExportModal({
             </span>
           </div>
 
+          {/* DETAILED EXPORT CONTENTS INCLUSION BADGE */}
+          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-2">
+            <span className="font-bold text-[11px] text-slate-900 uppercase tracking-wider block">
+              Certified Export Includes:
+            </span>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="flex items-center gap-1.5 text-slate-800 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>
+                <span>6-Tier Material Genealogy</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-800 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>
+                <span>Full 7-Stage Lifecycle Table</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-800 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>
+                <span>Quantity Reconciliation Ledger</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-800 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>
+                <span>Auditor Sign-off & Verification</span>
+              </div>
+            </div>
+          </div>
+
           {/* EXPORT ACTION BUTTONS */}
           <div className="grid grid-cols-3 gap-3">
             <button

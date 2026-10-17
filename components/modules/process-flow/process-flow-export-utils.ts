@@ -532,9 +532,9 @@ export function exportProcessFlowSinglePdf(flow: ProcessFlowChart): void {
         <td style="padding: 7px 8px; text-align: center; font-family: monospace; font-weight: bold; color: #1e3a8a;">
           ${s.stepNumber}
         </td>
-        <td style="padding: 7px 8px;">
           <div style="font-weight: 700; color: #0f172a;">${s.stageName}</div>
           <div style="font-size: 7.5pt; color: #64748b;">${s.department}</div>
+          ${s.actionTag ? `<span style="display: inline-block; padding: 1px 6px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 4px; font-weight: bold; font-size: 6.5pt; margin-top: 2px;">${s.actionTag}</span>` : ''}
         </td>
         <td style="padding: 7px 8px; font-size: 8pt; color: #334155;">
           ${s.inputMaterials}

@@ -110,8 +110,8 @@ export function AddProductionOrderModal({
 }: AddProductionOrderModalProps) {
   const [form, setForm] = useState<Partial<NewProductionOrderData>>({
     unit: 'Unit 01 (Dhaka Complex)',
-    section: 'Sewing Line 01 (Knit Tops)',
-    lineId: 'Line 01',
+    section: 'Sewing Floor',
+    lineId: 'L-01',
     status: 'RUNNING',
     targetQuantity: 10000,
     completedQuantity: 0,
@@ -195,23 +195,59 @@ export function AddProductionOrderModal({
   const set = (field: keyof NewProductionOrderData, value: any) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  // Available lines filtered by current section or all lines
+  // Connected Sections filtered by current unit
+  const availableSections = React.useMemo(() => {
+    const allSecs = managedSections.length > 0 ? managedSections : STANDARD_SECTIONS.map((name, i) => ({ id: `sec-${i}`, name, sectionCode: `SEC-${i}`, unitId: 'unit-01', unitName: 'Unit 01 (Dhaka Complex)', status: 'ACTIVE' as const }));
+    if (!form.unit) return allSecs;
+    const unitMatches = allSecs.filter(s => s.unitName === form.unit || s.unitId === form.unit);
+    return unitMatches.length > 0 ? unitMatches : allSecs;
+  }, [managedSections, form.unit]);
+
+  // Connected Lines filtered by current unit AND current section
   const availableLines = React.useMemo(() => {
     if (!managedLines.length) return [];
-    if (!form.section || form.section === 'ALL') return managedLines;
-    const secLower = form.section.toLowerCase();
-    const filtered = managedLines.filter((l) => {
-      const lineSec = (l.sectionName || '').toLowerCase();
-      return lineSec.includes(secLower) || secLower.includes(lineSec);
+    return managedLines.filter(l => {
+      if (form.unit && l.unitName && l.unitName !== form.unit) return false;
+      if (form.section && form.section !== 'ALL') {
+        const secLower = form.section.toLowerCase();
+        const lineSec = (l.sectionName || '').toLowerCase();
+        return lineSec.includes(secLower) || secLower.includes(lineSec);
+      }
+      return true;
     });
-    return filtered.length > 0 ? filtered : managedLines;
-  }, [managedLines, form.section]);
+  }, [managedLines, form.unit, form.section]);
+
+  const handleUnitSelect = (unitName: string) => {
+    setForm((prev) => {
+      const next = { ...prev, unit: unitName };
+      const allSecs = managedSections.length > 0 ? managedSections : STANDARD_SECTIONS.map((name, i) => ({ id: `sec-${i}`, name, sectionCode: `SEC-${i}`, unitId: 'unit-01', unitName: 'Unit 01 (Dhaka Complex)', status: 'ACTIVE' as const }));
+      const unitSecs = allSecs.filter(s => s.unitName === unitName || s.unitId === unitName);
+      const chosenSec = unitSecs[0]?.name || next.section || 'Sewing Floor';
+      next.section = chosenSec;
+
+      const matchedLines = managedLines.filter(l => {
+        if (l.unitName && l.unitName !== unitName) return false;
+        const secLower = chosenSec.toLowerCase();
+        const lineSec = (l.sectionName || '').toLowerCase();
+        return lineSec.includes(secLower) || secLower.includes(lineSec);
+      });
+      const firstLine = matchedLines[0];
+      if (firstLine) {
+        next.lineId = firstLine.lineCode;
+        next.sewingLine = firstLine.name;
+        if (firstLine.lineChief) next.supervisorName = firstLine.lineChief;
+        if (firstLine.operatorCount) next.operatorCount = firstLine.operatorCount;
+      }
+      return next;
+    });
+  };
 
   const handleSectionSelect = (secName: string) => {
     setForm((prev) => {
       const next = { ...prev, section: secName };
       const secLower = secName.toLowerCase();
       const matched = managedLines.filter((l) => {
+        if (prev.unit && l.unitName && l.unitName !== prev.unit) return false;
         const lineSec = (l.sectionName || '').toLowerCase();
         return lineSec.includes(secLower) || secLower.includes(lineSec);
       });
@@ -352,7 +388,7 @@ export function AddProductionOrderModal({
                 </label>
                 <select
                   value={form.unit || ''}
-                  onChange={(e) => set('unit', e.target.value)}
+                  onChange={(e) => handleUnitSelect(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 >
                   {(managedUnits.length > 0 ? managedUnits.map((u) => u.name) : MANUFACTURING_UNITS).map((u) => (
@@ -372,9 +408,9 @@ export function AddProductionOrderModal({
                   onChange={(e) => handleSectionSelect(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-medium"
                 >
-                  {(managedSections.length > 0 ? managedSections.map((s) => s.name) : STANDARD_SECTIONS).map((sec) => (
-                    <option key={sec} value={sec}>
-                      {sec}
+                  {availableSections.map((sec) => (
+                    <option key={sec.id || sec.name} value={sec.name}>
+                      {sec.name}
                     </option>
                   ))}
                 </select>

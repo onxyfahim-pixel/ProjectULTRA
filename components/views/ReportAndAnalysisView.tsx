@@ -127,9 +127,34 @@ export function ReportAndAnalysisView() {
   // Cross-module floor events reactive sync
   const [syncVersion, setSyncVersion] = useState(0);
 
+  // Initial legacy cache purge & validation to ensure real synchronized reports
+  useEffect(() => {
+    const isLegacy =
+      !reports ||
+      reports.length < 22 ||
+      reports.some(
+        (r) =>
+          r.period?.includes('September 2026') ||
+          r.generatedBy?.includes('Fahim Rahman') ||
+          (r.id.startsWith('RPT-2026-') && !r.id.includes('PRD') && !r.id.includes('QMS') && !r.id.includes('CMP'))
+      );
+    if (isLegacy) {
+      try {
+        const live = generateLiveLedgerReports();
+        setReports(live);
+      } catch (e) {
+        console.error('Failed to migrate live reports:', e);
+      }
+    }
+  }, [reports, setReports]);
+
   useEffect(() => {
     const handleFloorEvent = () => {
       setSyncVersion((v) => v + 1);
+      try {
+        const live = generateLiveLedgerReports();
+        setReports(live);
+      } catch (e) {}
     };
 
     window.addEventListener('erp_production_records_updated', handleFloorEvent);
@@ -147,7 +172,7 @@ export function ReportAndAnalysisView() {
       window.removeEventListener('erp_inspection_records_updated', handleFloorEvent);
       window.removeEventListener('erp_buyer_orders_updated', handleFloorEvent);
     };
-  }, []);
+  }, [setReports]);
 
   const handleSyncAllFloorData = () => {
     setIsSyncing(true);
@@ -564,6 +589,7 @@ export function ReportAndAnalysisView() {
         onBack={() => setSubView({ type: 'none' })}
         onUpdateStatus={handleUpdateStatus}
         onExportCsv={handleExportCsv}
+        onOpenStudio={(reportKey) => setSubView({ type: 'synced-report', reportKey })}
       />
     );
   }
@@ -878,9 +904,9 @@ export function ReportAndAnalysisView() {
                   {period === 'WEEK'
                     ? 'Last 7 Days'
                     : period === 'MONTH'
-                    ? 'September 2026'
+                    ? 'This Month'
                     : period === 'Q3'
-                    ? 'Q3 2026'
+                    ? 'Q3'
                     : 'Year-to-Date (YTD)'}
                 </button>
               ))}
@@ -1173,20 +1199,25 @@ export function ReportAndAnalysisView() {
             >
               All Reports ({reports.length})
             </button>
-            {Object.entries(REPORT_CATEGORY_CONFIG).map(([key, cfg]) => {
-              const count = reports.filter((r) => r.category === key).length;
+            {[
+              { id: 'PRODUCTION', label: 'Production & IE' },
+              { id: 'QUALITY', label: 'Quality Assurance' },
+              { id: 'COMPLIANCE', label: 'Compliance & Audit' },
+              { id: 'EXECUTIVE', label: 'Executive Dashboards' },
+            ].map((cat) => {
+              const count = reports.filter((r) => r.category === cat.id).length;
               return (
                 <button
-                  key={key}
+                  key={cat.id}
                   type="button"
-                  onClick={() => setCategoryFilter(key)}
+                  onClick={() => setCategoryFilter(cat.id)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-xl whitespace-nowrap transition-colors cursor-pointer ${
-                    categoryFilter === key
+                    categoryFilter === cat.id
                       ? 'bg-indigo-600 text-white shadow-2xs'
                       : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                   }`}
                 >
-                  {cfg.label} ({count})
+                  {cat.label} ({count})
                 </button>
               );
             })}

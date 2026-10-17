@@ -43,6 +43,11 @@ import {
   Clock,
   Printer,
   ExternalLink,
+  RefreshCw,
+  Palette,
+  Image as ImageIcon,
+  SlidersHorizontal,
+  AlertCircle,
 } from 'lucide-react';
 import {
   InspectionRecord,
@@ -65,7 +70,12 @@ import {
   calculateQuantityVariance,
   AqlCalculationResult,
 } from '@/lib/aql';
-import { calculateSizeSamplePickups, deriveSizeBreakdownFromBuyerOrder } from './inspection-size-utils';
+import {
+  calculateSizeSamplePickups,
+  deriveSizeBreakdownFromBuyerOrder,
+  summarizeInspectionSizeBreakdown,
+  STANDARD_INSPECTION_SIZES,
+} from './inspection-size-utils';
 
 export interface MobileInspectionEntryPageProps {
   orders: BuyerOrder[];
@@ -150,7 +160,119 @@ const DEFECT_LOCATIONS = [
   'Overall Garment',
 ];
 
-// Responsive Signature Pad Canvas Component (fits 100% container width)
+// ─── REUSABLE DUAL CAMERA / GALLERY PHOTO ACTION BUTTONS COMPONENT ─────
+interface MobilePhotoActionButtonsProps {
+  onPhotoSelected: (file: File) => void;
+  cameraLabel?: string;
+  uploadLabel?: string;
+  className?: string;
+  compact?: boolean;
+}
+
+function MobilePhotoActionButtons({
+  onPhotoSelected,
+  cameraLabel = 'Take Photo',
+  uploadLabel = 'Upload Gallery',
+  className = '',
+  compact = false,
+}: MobilePhotoActionButtonsProps) {
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onPhotoSelected(file);
+      e.target.value = '';
+    }
+  };
+
+  if (compact) {
+    return (
+      <div className={`flex items-center gap-1.5 ${className}`}>
+        {/* Direct Camera Button */}
+        <button
+          type="button"
+          onClick={() => cameraInputRef.current?.click()}
+          className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] flex items-center gap-1 shadow-2xs active:scale-95 transition-transform cursor-pointer"
+          title="Take Photo Directly via Device Camera"
+        >
+          <Camera className="w-3.5 h-3.5" />
+          <span>Camera</span>
+        </button>
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
+        {/* Upload / Gallery Button */}
+        <button
+          type="button"
+          onClick={() => galleryInputRef.current?.click()}
+          className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-[10px] flex items-center gap-1 shadow-2xs active:scale-95 transition-transform cursor-pointer"
+          title="Upload Photo from Device Album / Storage"
+        >
+          <Upload className="w-3.5 h-3.5 text-blue-600" />
+          <span>Upload</span>
+        </button>
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`grid grid-cols-2 gap-2.5 ${className}`}>
+      {/* 1. Direct Camera Viewfinder Capture */}
+      <button
+        type="button"
+        onClick={() => cameraInputRef.current?.click()}
+        className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+        title="Direct Camera Viewfinder Capture"
+      >
+        <Camera className="w-4 h-4 shrink-0" />
+        <span className="truncate">{cameraLabel}</span>
+      </button>
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {/* 2. Photo Upload from File System / Photo Album */}
+      <button
+        type="button"
+        onClick={() => galleryInputRef.current?.click()}
+        className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white border border-slate-300 hover:border-slate-400 hover:bg-slate-50 active:scale-98 text-slate-700 font-bold text-xs shadow-2xs transition-all cursor-pointer"
+        title="Select from Photo Gallery or Local Storage"
+      >
+        <Upload className="w-4 h-4 text-blue-600 shrink-0" />
+        <span className="truncate">{uploadLabel}</span>
+      </button>
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+    </div>
+  );
+}
+
+// ─── RESPONSIVE SQUARE SIGNATURE PAD COMPONENT ───────────────────────────
 function SignaturePad({
   label,
   value,
@@ -167,24 +289,23 @@ function SignaturePad({
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasContent, setHasContent] = useState(Boolean(value));
 
-  // Dynamically match canvas internal width to actual container width
   useEffect(() => {
     const handleResize = () => {
       const container = containerRef.current;
       const canvas = canvasRef.current;
       if (!container || !canvas) return;
       const rect = container.getBoundingClientRect();
-      const targetWidth = Math.max(260, Math.floor(rect.width));
-      const targetHeight = 120;
+      // Enforce 1:1 square dimensions based on container width
+      const squareSize = Math.max(200, Math.floor(rect.width));
 
-      if (canvas.width !== targetWidth) {
+      if (canvas.width !== squareSize || canvas.height !== squareSize) {
         let prevData: string | null = null;
         if (hasContent && canvas.width > 0) {
           prevData = canvas.toDataURL('image/png');
         }
 
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
+        canvas.width = squareSize;
+        canvas.height = squareSize;
 
         const dataToDraw = prevData || value;
         if (dataToDraw) {
@@ -192,7 +313,7 @@ function SignaturePad({
           if (ctx) {
             const img = new Image();
             img.onload = () => {
-              ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+              ctx.drawImage(img, 0, 0, squareSize, squareSize);
               setHasContent(true);
             };
             img.src = dataToDraw;
@@ -286,9 +407,11 @@ function SignaturePad({
           </button>
         )}
       </div>
+
+      {/* 1:1 Square Shaped Signature Pad Container */}
       <div
         ref={containerRef}
-        className="relative w-full border-2 border-dashed border-slate-300 rounded-xl bg-white overflow-hidden shadow-2xs hover:border-blue-400 transition-colors"
+        className="relative w-full max-w-[280px] sm:max-w-[320px] aspect-square mx-auto border-2 border-dashed border-slate-300 rounded-2xl bg-white overflow-hidden shadow-2xs hover:border-blue-400 transition-colors"
       >
         <canvas
           ref={canvasRef}
@@ -299,11 +422,17 @@ function SignaturePad({
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
-          className="w-full h-[120px] touch-none cursor-crosshair bg-slate-50/50 block"
+          className="w-full h-full touch-none cursor-crosshair bg-slate-50/50 block"
         />
+
+        {/* Square Guide Line */}
+        <div className="absolute left-6 right-6 bottom-12 border-b border-dashed border-slate-300/80 pointer-events-none" />
+
         {!hasContent && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-slate-400 text-xs font-medium">
-            <span>✍️ Sign with finger inside box</span>
+          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center text-slate-400 text-xs font-medium space-y-1">
+            <PenTool className="w-6 h-6 text-slate-300 stroke-[1.5]" />
+            <span>✍️ Sign with finger inside square box</span>
+            <span className="text-[10px] text-slate-400 font-mono">1:1 Square Pad</span>
           </div>
         )}
       </div>
@@ -311,6 +440,7 @@ function SignaturePad({
   );
 }
 
+// ─── MAIN MOBILE INSPECTION ENTRY PAGE COMPONENT ────────────────────────
 export function MobileInspectionEntryPage({
   orders,
   initialRecord,
@@ -398,19 +528,36 @@ export function MobileInspectionEntryPage({
   const [packedPercent, setPackedPercent] = useState<number>(initialRecord?.packedPercent || 100);
   const [quantityVarianceNotes, setQuantityVarianceNotes] = useState<string>(initialRecord?.remarks || '');
 
-  // STEP 3 STATE: Sample Pickup Page (Color & Size Breakdown)
+  // SIZE & COLOR BREAKDOWN STATE (Editable Matrix for Sizewise & Colorwise Inspection Qty Entry)
   const [sizeBreakdown, setSizeBreakdown] = useState<InspectionSizeBreakdownItem[]>(() => {
     if (initialRecord?.sizeBreakdown && initialRecord.sizeBreakdown.length > 0) {
       return initialRecord.sizeBreakdown;
     }
+    const matchedOrder = orders.find(
+      (o) => o.id === initialRecord?.buyerOrderId || o.orderNumber === initialRecord?.orderNumber
+    );
+    if (matchedOrder) {
+      return deriveSizeBreakdownFromBuyerOrder(
+        matchedOrder,
+        initialRecord?.lotQuantity || initialRecord?.orderQuantity || 10000,
+        315
+      );
+    }
     return [
-      { size: 'S', orderQuantity: 2000, inspectedQuantity: 2000, samplePickupQuantity: 42, colorName: 'Black / Navy' },
-      { size: 'M', orderQuantity: 3000, inspectedQuantity: 3000, samplePickupQuantity: 63, colorName: 'Black / Navy' },
-      { size: 'L', orderQuantity: 2500, inspectedQuantity: 2500, samplePickupQuantity: 52, colorName: 'Black / Navy' },
-      { size: 'XL', orderQuantity: 1500, inspectedQuantity: 1500, samplePickupQuantity: 31, colorName: 'Black / Navy' },
-      { size: 'XXL', orderQuantity: 1000, inspectedQuantity: 1000, samplePickupQuantity: 21, colorName: 'Black / Navy' },
+      { size: 'S', orderQuantity: 2000, inspectedQuantity: 2000, samplePickupQuantity: 42, colorName: 'Black' },
+      { size: 'M', orderQuantity: 3000, inspectedQuantity: 3000, samplePickupQuantity: 63, colorName: 'Black' },
+      { size: 'L', orderQuantity: 2500, inspectedQuantity: 2500, samplePickupQuantity: 52, colorName: 'Navy' },
+      { size: 'XL', orderQuantity: 1500, inspectedQuantity: 1500, samplePickupQuantity: 31, colorName: 'Navy' },
+      { size: '2XL', orderQuantity: 1000, inspectedQuantity: 1000, samplePickupQuantity: 21, colorName: 'Heather Grey' },
     ];
   });
+
+  // State for adding a new Color / Size row
+  const [showAddSizeRow, setShowAddSizeRow] = useState<boolean>(false);
+  const [newSizeName, setNewSizeName] = useState<string>('L');
+  const [newColorName, setNewColorName] = useState<string>('Main Color');
+  const [newOrderQty, setNewOrderQty] = useState<number>(1000);
+  const [newInspectedQty, setNewInspectedQty] = useState<number>(1000);
 
   // STEP 4 STATE: PO Sheet & Sample Carton Photos
   const [poSheetPhotos, setPoSheetPhotos] = useState<InspectionPhotoEvidence[]>(
@@ -452,6 +599,7 @@ export function MobileInspectionEntryPage({
   const [newDefectLocation, setNewDefectLocation] = useState<string>('Front Placket');
   const [newDefectRemark, setNewDefectRemark] = useState<string>('');
   const [newDefectPhoto, setNewDefectPhoto] = useState<string>('');
+  const [newDefectSize, setNewDefectSize] = useState<string>('');
 
   // STEP 9 STATE: Garment Measurement Sheet
   const [measurementSheetPhotos, setMeasurementSheetPhotos] = useState<InspectionPhotoEvidence[]>(
@@ -519,13 +667,18 @@ export function MobileInspectionEntryPage({
     return calculateAqlInspection(lotQuantity, '2.5', '4.0');
   }, [lotQuantity]);
 
-  // Recalculate size sample pickups whenever sample size or breakdown changes
+  // Recalculate size sample pickups whenever sample size changes
   useEffect(() => {
     if (aqlData.sampleSize > 0 && sizeBreakdown.length > 0) {
       const updated = calculateSizeSamplePickups(sizeBreakdown, aqlData.sampleSize);
       setSizeBreakdown(updated);
     }
   }, [aqlData.sampleSize]);
+
+  // Size Breakdown Summary stats
+  const sizeSummary = useMemo(() => {
+    return summarizeInspectionSizeBreakdown(sizeBreakdown);
+  }, [sizeBreakdown]);
 
   // Quantity Variance Calculation
   const varianceData = useMemo(() => {
@@ -555,24 +708,153 @@ export function MobileInspectionEntryPage({
     return evaluated;
   }, [hasZeroToleranceFail, criticalDefectsCount, majorDefectsCount, minorDefectsCount, aqlData]);
 
-  // Helper for mobile camera / photo upload
+  // Helper for mobile camera / photo upload with canvas downscaling for performance
   const handleUploadPhoto = (
     file: File,
     onSuccess: (photo: InspectionPhotoEvidence) => void
   ) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const url = e.target?.result as string;
-      const photo: InspectionPhotoEvidence = {
-        id: `p-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        url,
-        caption: file.name,
-        remark: '',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      const rawDataUrl = e.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const maxDim = 1600;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const photo: InspectionPhotoEvidence = {
+            id: `p-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            url: compressedUrl,
+            caption: file.name,
+            remark: '',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          onSuccess(photo);
+        } else {
+          onSuccess({
+            id: `p-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            url: rawDataUrl,
+            caption: file.name,
+            remark: '',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+        }
       };
-      onSuccess(photo);
+      img.onerror = () => {
+        onSuccess({
+          id: `p-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          url: rawDataUrl,
+          caption: file.name,
+          remark: '',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+      };
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
+  };
+
+  // ─── SIZE MATRIX HANDLERS ──────────────────────────────────────────────
+  const handleUpdateSizeItem = (
+    index: number,
+    field: keyof InspectionSizeBreakdownItem,
+    value: any
+  ) => {
+    const updated = sizeBreakdown.map((item, idx) => {
+      if (idx !== index) return item;
+      return { ...item, [field]: value };
+    });
+
+    if (field === 'inspectedQuantity') {
+      const recalculated = calculateSizeSamplePickups(updated, aqlData.sampleSize);
+      setSizeBreakdown(recalculated);
+    } else {
+      setSizeBreakdown(updated);
+    }
+  };
+
+  const handleAdjustInspectedQty = (index: number, delta: number) => {
+    const updated = sizeBreakdown.map((item, idx) => {
+      if (idx !== index) return item;
+      const nextQty = Math.max(0, (item.inspectedQuantity || 0) + delta);
+      return { ...item, inspectedQuantity: nextQty };
+    });
+    const recalculated = calculateSizeSamplePickups(updated, aqlData.sampleSize);
+    setSizeBreakdown(recalculated);
+  };
+
+  const handleSyncLotFromSizes = () => {
+    const totalSizesSum = sizeBreakdown.reduce(
+      (sum, item) => sum + (Number(item.inspectedQuantity) || 0),
+      0
+    );
+    setLotQuantity(totalSizesSum);
+    setCartonCount(Math.ceil(totalSizesSum / 24));
+    showToast(`Synchronized Offered Lot to ${totalSizesSum.toLocaleString()} pcs from Size Matrix.`);
+  };
+
+  const handleMatchOrderQuantities = () => {
+    const reset = sizeBreakdown.map((s) => ({
+      ...s,
+      inspectedQuantity: s.orderQuantity,
+    }));
+    const recalculated = calculateSizeSamplePickups(reset, aqlData.sampleSize);
+    setSizeBreakdown(recalculated);
+    setLotQuantity(orderQuantity);
+    showToast('Reset inspected quantities to match contracted PO quantities.');
+  };
+
+  const handleAutoRecalculatePickups = () => {
+    const recalculated = calculateSizeSamplePickups(sizeBreakdown, aqlData.sampleSize);
+    setSizeBreakdown(recalculated);
+    showToast(`Auto-balanced sample pickups across ${sizeBreakdown.length} sizes.`);
+  };
+
+  const handleAddCustomSizeRow = () => {
+    const trimmedSize = newSizeName.trim().toUpperCase() || 'M';
+    const trimmedColor = newColorName.trim() || 'Main Color';
+
+    const newItem: InspectionSizeBreakdownItem = {
+      id: `sz-${Date.now()}-${trimmedSize.toLowerCase()}`,
+      size: trimmedSize,
+      colorName: trimmedColor,
+      orderQuantity: Math.max(0, newOrderQty || 0),
+      inspectedQuantity: Math.max(0, newInspectedQty || 0),
+      samplePickupQuantity: 0,
+      defectCount: 0,
+      status: 'PASS',
+    };
+
+    const updated = [...sizeBreakdown, newItem];
+    const withPickups = calculateSizeSamplePickups(updated, aqlData.sampleSize);
+    setSizeBreakdown(withPickups);
+    setShowAddSizeRow(false);
+    showToast(`Added ${trimmedSize} (${trimmedColor}) to Size Breakdown Matrix.`);
+  };
+
+  const handleRemoveSizeRow = (index: number) => {
+    if (sizeBreakdown.length <= 1) {
+      showToast('At least one size row is required.');
+      return;
+    }
+    const updated = sizeBreakdown.filter((_, idx) => idx !== index);
+    const withPickups = calculateSizeSamplePickups(updated, aqlData.sampleSize);
+    setSizeBreakdown(withPickups);
   };
 
   // Defect Creation Handler
@@ -584,13 +866,15 @@ export function MobileInspectionEntryPage({
       severity: newDefectSeverity,
       count: newDefectCount,
       location: newDefectLocation,
+      size: newDefectSize || undefined,
       photoUrl: newDefectPhoto || undefined,
       remark: newDefectRemark || undefined,
     };
     setDefectsList((prev) => [item, ...prev]);
     setNewDefectRemark('');
     setNewDefectPhoto('');
-    showToast(`Logged ${newDefectCount}x ${newDefectType} (${newDefectSeverity})`);
+    setNewDefectSize('');
+    showToast(`Logged ${newDefectCount}x ${newDefectType} (${newDefectSeverity}${newDefectSize ? ` - Size ${newDefectSize}` : ''})`);
   };
 
   const handleRemoveDefect = (id: string) => {
@@ -681,40 +965,40 @@ export function MobileInspectionEntryPage({
     'Signatures & Submit',
   ];
 
-  // ─── TERMINAL INNER COMPONENT ──────────────────────────────────────────
+  // ─── TERMINAL INNER COMPONENT (CLEAN, LIGHT, MODERN UI) ────────────────
   const terminalInner = (
-    <div className="flex flex-col h-full w-full bg-slate-100 text-slate-800 overflow-hidden select-none">
-      {/* ─── 1. TOP STICKY MOBILE HEADER ─── */}
-      <div className="shrink-0 bg-slate-900 text-white shadow-md border-b border-slate-800 z-40">
-        <div className="px-3 py-2 sm:px-4 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+    <div className="flex flex-col h-full w-full bg-slate-50 text-slate-800 overflow-hidden select-none">
+      {/* ─── 1. TOP STICKY MOBILE LIGHT HEADER ─── */}
+      <div className="shrink-0 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-2xs z-40">
+        <div className="px-3.5 py-2.5 sm:px-5 flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
               onClick={triggerBack}
-              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer shrink-0"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer shrink-0"
               title="Back"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white tracking-tight truncate">
-                  Mobile Inspection Entry
+                <span className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight truncate">
+                  Mobile Inspection Terminal
                 </span>
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
               </div>
-              <p className="text-[10px] text-slate-400 font-mono truncate">
-                Step {currentStep} of 10: {STEP_TITLES[currentStep - 1]}
+              <p className="text-[10px] text-slate-500 font-mono truncate">
+                Step {currentStep} of 10 &bull; {STEP_TITLES[currentStep - 1]}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <span
-              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg border ${
+              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border shadow-2xs ${
                 aqlVerdict.verdict === 'PASSED'
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
-                  : 'bg-rose-500/20 text-rose-300 border-rose-400/30'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                  : 'bg-rose-50 text-rose-700 border-rose-300'
               }`}
             >
               {aqlVerdict.verdict}
@@ -724,7 +1008,7 @@ export function MobileInspectionEntryPage({
               <button
                 type="button"
                 onClick={() => setForceDesktopFullscreen(false)}
-                className="text-[10px] font-semibold text-slate-300 hover:text-white px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 cursor-pointer"
+                className="text-[10px] font-semibold text-slate-600 hover:text-slate-900 px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 cursor-pointer"
                 title="Phone Frame Preview"
               >
                 Frame
@@ -734,7 +1018,7 @@ export function MobileInspectionEntryPage({
             <button
               type="button"
               onClick={triggerBack}
-              className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               title="Close"
             >
               <X className="w-4 h-4" />
@@ -742,16 +1026,16 @@ export function MobileInspectionEntryPage({
           </div>
         </div>
 
-        {/* Step Progress Bar */}
-        <div className="w-full bg-slate-800 h-1">
+        {/* Step Progress Bar with Smooth Gradient */}
+        <div className="w-full bg-slate-100 h-1">
           <div
-            className="bg-emerald-500 h-1 transition-all duration-300"
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 h-1 transition-all duration-300"
             style={{ width: `${(currentStep / 10) * 100}%` }}
           />
         </div>
 
         {/* Step Navigation Ribbon */}
-        <div className="px-2 py-1 flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-950/80 border-t border-slate-800/60 text-[10px] font-mono">
+        <div className="px-2 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-slate-50/90 border-t border-slate-200/80 text-[11px] font-mono">
           {STEP_TITLES.map((title, i) => {
             const stepNum = i + 1;
             const isCompleted = stepNum < currentStep;
@@ -761,16 +1045,16 @@ export function MobileInspectionEntryPage({
                 key={title}
                 type="button"
                 onClick={() => setCurrentStep(stepNum)}
-                className={`px-2 py-0.5 rounded-md transition-all whitespace-nowrap flex items-center gap-1 shrink-0 cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   isCurrent
                     ? 'bg-blue-600 text-white font-bold shadow-xs'
                     : isCompleted
-                    ? 'text-emerald-400 hover:bg-slate-800'
-                    : 'text-slate-500 hover:text-slate-300'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
                 }`}
               >
-                <span>{stepNum}</span>
-                <span className="hidden xs:inline">{title.split(' ')[0]}</span>
+                <span>{stepNum}.</span>
+                <span>{title}</span>
               </button>
             );
           })}
@@ -781,9 +1065,9 @@ export function MobileInspectionEntryPage({
       <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4 sm:py-4 space-y-3.5 w-full max-w-lg mx-auto">
         {/* Active Audit Target Header Card */}
         {poNumber && (
-          <div className="p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between text-xs">
+          <div className="p-3 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white rounded-2xl border border-blue-200/70 shadow-2xs flex items-center justify-between text-xs">
             <div className="min-w-0">
-              <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider block">
+              <span className="text-[9px] text-blue-600 font-bold uppercase tracking-wider block">
                 Target Audit Order
               </span>
               <div className="font-bold font-mono text-slate-900 truncate text-[11px] sm:text-xs">
@@ -794,8 +1078,8 @@ export function MobileInspectionEntryPage({
               </div>
             </div>
             <div className="text-right shrink-0">
-              <span className="text-[9px] text-slate-400 block font-mono">Sample Qty</span>
-              <span className="text-xs sm:text-sm font-bold font-mono text-emerald-700">
+              <span className="text-[9px] text-slate-400 block font-mono">AQL Sample</span>
+              <span className="text-xs sm:text-sm font-black font-mono text-emerald-700">
                 {aqlData.sampleSize} pcs
               </span>
             </div>
@@ -806,7 +1090,7 @@ export function MobileInspectionEntryPage({
             STEP 1: PO SELECTION & AUDIT ORDER
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 1 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
             <div className="border-b border-slate-100 pb-2.5">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Search className="w-4 h-4 text-blue-600" />
@@ -947,143 +1231,449 @@ export function MobileInspectionEntryPage({
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            STEP 2: INSPECTION QUANTITY ENTRY (OFFERED QTY & PLUS/SHORT)
+            STEP 2: INSPECTION QUANTITY & SIZEWISE / COLORWISE MATRIX ENTRY
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 2 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
-            <div className="border-b border-slate-100 pb-2.5">
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Scale className="w-4 h-4 text-blue-600" />
-                <span>2. Inspection Quantity &amp; Variance</span>
-              </h2>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Enter offered lot quantity to calculate plus (+) or shortage (-) tolerance.
-              </p>
-            </div>
-
-            {/* Contracted vs Offered Input */}
-            <div className="space-y-2">
-              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                <span className="text-xs text-slate-500 font-medium">Contracted PO Qty:</span>
-                <span className="text-sm font-bold font-mono text-slate-800">{orderQuantity.toLocaleString()} pcs</span>
+          <div className="space-y-3.5 animate-in fade-in">
+            {/* Top Overview Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-3.5">
+              <div className="border-b border-slate-100 pb-2.5 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-blue-600" />
+                    <span>2. Inspection Quantity &amp; Variance</span>
+                  </h2>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Contracted PO vs Offered Lot quantity and plus/short variance.
+                  </p>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                  ISO 2859-1
+                </span>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-800">Offered / Presented Inspection Qty (pcs):</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = Math.max(0, lotQuantity - 100);
-                      setLotQuantity(next);
-                      setCartonCount(Math.ceil(next / 24));
-                    }}
-                    className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-sm cursor-pointer shrink-0"
-                  >
-                    -100
-                  </button>
+              {/* Contracted vs Offered Input */}
+              <div className="space-y-2">
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                  <span className="text-xs text-slate-500 font-medium">Contracted PO Qty:</span>
+                  <span className="text-sm font-bold font-mono text-slate-800">{orderQuantity.toLocaleString()} pcs</span>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-bold text-slate-800">Total Offered Lot Qty (pcs):</label>
+                    <span className="text-[10px] font-mono text-slate-400">Can sync from sizes</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = Math.max(0, lotQuantity - 100);
+                        setLotQuantity(next);
+                        setCartonCount(Math.ceil(next / 24));
+                      }}
+                      className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-xs active:scale-90 transition-transform cursor-pointer shrink-0"
+                    >
+                      -100
+                    </button>
+                    <input
+                      type="number"
+                      value={lotQuantity}
+                      onChange={(e) => {
+                        const val = Number(e.target.value) || 0;
+                        setLotQuantity(val);
+                        setCartonCount(Math.ceil(val / 24));
+                      }}
+                      className="flex-1 px-3 py-2 text-base text-center bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono font-black text-blue-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = lotQuantity + 100;
+                        setLotQuantity(next);
+                        setCartonCount(Math.ceil(next / 24));
+                      }}
+                      className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-xs active:scale-90 transition-transform cursor-pointer shrink-0"
+                    >
+                      +100
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Plus / Short Variance Alert Card */}
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 ${
+                  varianceData.isExcess
+                    ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                    : varianceData.isShort
+                    ? 'bg-amber-50/80 border-amber-200 text-amber-950'
+                    : 'bg-blue-50/80 border-blue-200 text-blue-950'
+                }`}
+              >
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-1.5 font-bold text-xs">
+                    {varianceData.isExcess ? (
+                      <>
+                        <TrendingUp className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="text-emerald-800 truncate">Excess Lot (+{varianceData.percentage}%)</span>
+                      </>
+                    ) : varianceData.isShort ? (
+                      <>
+                        <TrendingDown className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span className="text-amber-800 truncate">Short Lot ({varianceData.percentage}%)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span className="text-blue-800 truncate">100% Matched with PO</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-600 truncate">
+                    {varianceData.isExcess
+                      ? `Over PO by +${varianceData.diff.toLocaleString()} pcs (permitted excess)`
+                      : varianceData.isShort
+                      ? `Short by ${Math.abs(varianceData.diff).toLocaleString()} pcs (split shipment)`
+                      : 'Presented lot matches contracted order quantity exactly.'}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-sm font-black font-mono block">
+                    {varianceData.diff > 0 ? `+${varianceData.diff.toLocaleString()}` : varianceData.diff.toLocaleString()} pcs
+                  </span>
+                  <span className="text-[9px] font-mono text-slate-500">Variance</span>
+                </div>
+              </div>
+
+              {/* Cartons & Packing Percentage */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Total Cartons:</label>
                   <input
                     type="number"
-                    value={lotQuantity}
-                    onChange={(e) => {
-                      const val = Number(e.target.value) || 0;
-                      setLotQuantity(val);
-                      setCartonCount(Math.ceil(val / 24));
-                    }}
-                    className="flex-1 px-3 py-2 text-base text-center bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono font-bold text-blue-700"
+                    value={cartonCount}
+                    onChange={(e) => setCartonCount(Number(e.target.value) || 0)}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-800"
                   />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Packed %:</label>
+                  <input
+                    type="number"
+                    value={packedPercent}
+                    onChange={(e) => setPackedPercent(Number(e.target.value) || 0)}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ─── SIZEWISE & COLORWISE INSPECTION QUANTITY MATRIX ─── */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-3.5">
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                      <span>Sizewise &amp; Colorwise Entry</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 font-mono font-bold">
+                        {sizeBreakdown.length} items
+                      </span>
+                    </h3>
+                    <p className="text-[10px] text-slate-500">
+                      Enter offered inspection lot quantity per size &amp; color.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAddSizeRow(!showAddSizeRow)}
+                  className="px-2.5 py-1 text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Size</span>
+                </button>
+              </div>
+
+              {/* Quick Action Matrix Toolbar */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleSyncLotFromSizes}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[10px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-2xs"
+                  title="Update Offered Lot Qty to match the sum of all size inspected quantities"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Sync Total Lot ({sizeSummary.totalInspectedQuantity.toLocaleString()} pcs)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleMatchOrderQuantities}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[10px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                  title="Copy contracted order quantities into inspected quantities for all sizes"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Match PO Qty</span>
+                </button>
+              </div>
+
+              {/* Add Custom Color / Size Inline Form */}
+              {showAddSizeRow && (
+                <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 space-y-2.5 text-xs animate-in slide-in-from-top-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-blue-900 flex items-center gap-1.5">
+                      <Plus className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Add New Color / Size Row:</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSizeRow(false)}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Standard Size Selector Pills */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-600 uppercase">Preset Size:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'].map((sz) => (
+                        <button
+                          key={sz}
+                          type="button"
+                          onClick={() => setNewSizeName(sz)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer transition-colors ${
+                            newSizeName === sz
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {sz}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block">Garment Size:</label>
+                      <input
+                        type="text"
+                        value={newSizeName}
+                        onChange={(e) => setNewSizeName(e.target.value.toUpperCase())}
+                        placeholder="Size (e.g. M, 32/34)..."
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block">Color Name:</label>
+                      <input
+                        type="text"
+                        value={newColorName}
+                        onChange={(e) => setNewColorName(e.target.value)}
+                        placeholder="Color (e.g. Navy, Black)..."
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block">Contracted PO Qty:</label>
+                      <input
+                        type="number"
+                        value={newOrderQty}
+                        onChange={(e) => setNewOrderQty(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block">Offered Lot Qty:</label>
+                      <input
+                        type="number"
+                        value={newInspectedQty}
+                        onChange={(e) => setNewInspectedQty(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-blue-700"
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => {
-                      const next = lotQuantity + 100;
-                      setLotQuantity(next);
-                      setCartonCount(Math.ceil(next / 24));
-                    }}
-                    className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-sm cursor-pointer shrink-0"
+                    onClick={handleAddCustomSizeRow}
+                    className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer active:scale-95"
                   >
-                    +100
+                    + Add to Size Matrix
                   </button>
                 </div>
-              </div>
-            </div>
+              )}
 
-            {/* Live Plus / Short Variance Alert Card */}
-            <div
-              className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 ${
-                varianceData.isExcess
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                  : varianceData.isShort
-                  ? 'bg-amber-50 border-amber-200 text-amber-950'
-                  : 'bg-blue-50 border-blue-200 text-blue-950'
-              }`}
-            >
-              <div className="space-y-0.5 min-w-0">
-                <div className="flex items-center gap-1.5 font-bold text-xs">
-                  {varianceData.isExcess ? (
-                    <>
-                      <TrendingUp className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="text-emerald-800 truncate">Excess Lot (+{varianceData.percentage}%)</span>
-                    </>
-                  ) : varianceData.isShort ? (
-                    <>
-                      <TrendingDown className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span className="text-amber-800 truncate">Short Lot ({varianceData.percentage}%)</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span className="text-blue-800 truncate">100% Matched</span>
-                    </>
-                  )}
+              {/* Size & Color Matrix Cards List */}
+              <div className="space-y-2.5">
+                {sizeBreakdown.map((item, idx) => {
+                  const sizeVariance = (item.inspectedQuantity || 0) - (item.orderQuantity || 0);
+                  const isSizeExcess = sizeVariance > 0;
+                  const isSizeShort = sizeVariance < 0;
+                  const variancePct =
+                    item.orderQuantity > 0 ? (sizeVariance / item.orderQuantity) * 100 : 0;
+
+                  return (
+                    <div
+                      key={item.id || idx}
+                      className="p-3 rounded-xl border border-slate-200/90 bg-slate-50/60 shadow-2xs space-y-2 text-xs"
+                    >
+                      {/* Size & Color Header */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-8 h-8 rounded-lg bg-slate-900 text-white font-mono font-black flex items-center justify-center text-xs shrink-0 shadow-2xs">
+                            {item.size}
+                          </span>
+                          <div className="min-w-0">
+                            <input
+                              type="text"
+                              value={item.colorName || ''}
+                              onChange={(e) => handleUpdateSizeItem(idx, 'colorName', e.target.value)}
+                              placeholder="Color name..."
+                              className="font-bold text-slate-800 bg-transparent border-0 border-b border-transparent focus:border-blue-400 focus:outline-none text-xs truncate max-w-[140px]"
+                            />
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              PO: <span className="font-semibold text-slate-600">{item.orderQuantity.toLocaleString()} pcs</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Live Variance Pill */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                              isSizeExcess
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                : isSizeShort
+                                ? 'bg-amber-50 text-amber-700 border-amber-300'
+                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}
+                          >
+                            {isSizeExcess ? `+${sizeVariance} (+${variancePct.toFixed(1)}%)` : isSizeShort ? `${sizeVariance} (${variancePct.toFixed(1)}%)` : 'Matched'}
+                          </span>
+
+                          {sizeBreakdown.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSizeRow(idx)}
+                              className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                              title="Delete size row"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Inspected Quantity Entry Input + Touch Adjusters */}
+                      <div className="space-y-1 bg-white p-2.5 rounded-xl border border-slate-200">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <label className="font-bold text-slate-700">
+                            Offered Inspection Qty (pcs):
+                          </label>
+                          <span className="text-[10px] font-mono text-indigo-700 font-bold">
+                            Sample Pickup: {item.samplePickupQuantity} pcs
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustInspectedQty(idx, -50)}
+                            className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] active:scale-90 transition-transform cursor-pointer shrink-0"
+                          >
+                            -50
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustInspectedQty(idx, -10)}
+                            className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] active:scale-90 transition-transform cursor-pointer shrink-0"
+                          >
+                            -10
+                          </button>
+
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.inspectedQuantity}
+                            onChange={(e) =>
+                              handleUpdateSizeItem(
+                                idx,
+                                'inspectedQuantity',
+                                Math.max(0, parseInt(e.target.value, 10) || 0)
+                              )
+                            }
+                            className="flex-1 px-2 py-1 text-center bg-slate-50 border border-slate-200 rounded-lg font-mono font-black text-sm text-blue-700 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustInspectedQty(idx, 10)}
+                            className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] active:scale-90 transition-transform cursor-pointer shrink-0"
+                          >
+                            +10
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustInspectedQty(idx, 50)}
+                            className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] active:scale-90 transition-transform cursor-pointer shrink-0"
+                          >
+                            +50
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Total Matrix Summary Bar */}
+              <div className="p-3 bg-slate-900 text-white rounded-xl shadow-xs space-y-1.5 font-mono text-xs">
+                <div className="flex items-center justify-between text-slate-300 text-[11px]">
+                  <span>Total Matrix Inspected Sum:</span>
+                  <span className="font-bold text-white text-sm">
+                    {sizeSummary.totalInspectedQuantity.toLocaleString()} pcs
+                  </span>
                 </div>
-                <p className="text-[10px] text-slate-600 truncate">
-                  {varianceData.isExcess
-                    ? `Over PO by +${varianceData.diff.toLocaleString()} pcs (permitted)`
-                    : varianceData.isShort
-                    ? `Short by ${Math.abs(varianceData.diff).toLocaleString()} pcs (split shipment)`
-                    : 'Lot matches contracted order quantity.'}
-                </p>
+                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                  <span>PO Order Total: {sizeSummary.totalOrderQuantity.toLocaleString()} pcs</span>
+                  <span>
+                    Variance:{' '}
+                    <strong className={sizeSummary.isPlus ? 'text-emerald-400' : sizeSummary.isShort ? 'text-amber-400' : 'text-blue-300'}>
+                      {sizeSummary.variance > 0 ? `+${sizeSummary.variance}` : sizeSummary.variance} pcs
+                    </strong>
+                  </span>
+                </div>
               </div>
-              <div className="text-right shrink-0">
-                <span className="text-sm font-black font-mono block">
-                  {varianceData.diff > 0 ? `+${varianceData.diff.toLocaleString()}` : varianceData.diff.toLocaleString()} pcs
-                </span>
-                <span className="text-[9px] font-mono text-slate-500">Variance</span>
-              </div>
-            </div>
 
-            {/* Cartons & Packing Percentage */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Carton Count:</label>
-                <input
-                  type="number"
-                  value={cartonCount}
-                  onChange={(e) => setCartonCount(Number(e.target.value) || 0)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-800"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Packed %:</label>
-                <input
-                  type="number"
-                  value={packedPercent}
-                  onChange={(e) => setPackedPercent(Number(e.target.value) || 0)}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-800"
-                />
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Quantity / Shipment Notes:</label>
-              <textarea
-                rows={2}
-                value={quantityVarianceNotes}
-                onChange={(e) => setQuantityVarianceNotes(e.target.value)}
-                placeholder="Optional notes regarding carton count or short shipment approval..."
-                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white"
-              />
+              {/* Warning if matrix sum doesn't match offered lot */}
+              {sizeSummary.totalInspectedQuantity !== lotQuantity && (
+                <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-xl flex items-center justify-between gap-2 text-xs text-amber-950">
+                  <div className="min-w-0">
+                    <span className="font-bold block">Lot Quantity Discrepancy:</span>
+                    <span className="text-[10px] text-amber-800">
+                      Matrix sum ({sizeSummary.totalInspectedQuantity.toLocaleString()}) &ne; Total offered ({lotQuantity.toLocaleString()})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSyncLotFromSizes}
+                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[10px] shrink-0 active:scale-95 cursor-pointer"
+                  >
+                    Sync Now
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1092,19 +1682,29 @@ export function MobileInspectionEntryPage({
             STEP 3: SAMPLE PICKUP PAGE (AUTO BREAKDOWN BY COLOR & SIZE)
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 3 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
-            <div className="border-b border-slate-100 pb-2.5">
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-blue-600" />
-                <span>3. Sample Pickup &amp; Size Breakdown</span>
-              </h2>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Auto-calculated MIL-STD-105E / ISO 2859-1 Level II sampling plan.
-              </p>
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
+            <div className="border-b border-slate-100 pb-2.5 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-blue-600" />
+                  <span>3. Sample Pickup &amp; Size Breakdown</span>
+                </h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Auto-calculated MIL-STD-105E / ISO 2859-1 Level II sampling plan.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutoRecalculatePickups}
+                className="px-2.5 py-1 text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Rebalance</span>
+              </button>
             </div>
 
             {/* AQL Banner Hero */}
-            <div className="p-3 bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-xl shadow-xs flex items-center justify-between gap-2">
+            <div className="p-3.5 bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-xl shadow-xs flex items-center justify-between gap-2">
               <div>
                 <span className="text-[9px] font-mono uppercase tracking-wider text-blue-300 block">
                   AQL Level II Normal &bull; Code {aqlData.codeLetter}
@@ -1113,7 +1713,7 @@ export function MobileInspectionEntryPage({
                   Sample: {aqlData.sampleSize} Pcs
                 </div>
                 <div className="text-[10px] text-blue-200">
-                  Cartons: ~{Math.ceil(Math.sqrt(cartonCount) + 1)} boxes
+                  Cartons to pull: ~{Math.ceil(Math.sqrt(cartonCount) + 1)} boxes
                 </div>
               </div>
               <div className="text-right font-mono text-[10px] space-y-1 shrink-0">
@@ -1126,32 +1726,66 @@ export function MobileInspectionEntryPage({
               </div>
             </div>
 
+            {/* Proportional Distribution Visual Bar */}
+            {sizeBreakdown.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] text-slate-600 font-semibold">
+                  <span>Proportional Sample Distribution:</span>
+                  <span className="font-mono text-blue-700">
+                    {sizeBreakdown.reduce((s, b) => s + (b.samplePickupQuantity || 0), 0)} / {aqlData.sampleSize} pcs
+                  </span>
+                </div>
+                <div className="h-2.5 w-full bg-slate-200 rounded-full overflow-hidden flex shadow-inner">
+                  {sizeBreakdown.map((item, idx) => {
+                    const totalPickup = sizeBreakdown.reduce((s, b) => s + (b.samplePickupQuantity || 0), 0) || 1;
+                    const share = ((item.samplePickupQuantity || 0) / totalPickup) * 100;
+                    const colors = [
+                      'bg-blue-500',
+                      'bg-indigo-500',
+                      'bg-purple-500',
+                      'bg-emerald-500',
+                      'bg-amber-500',
+                      'bg-cyan-500',
+                      'bg-rose-500',
+                      'bg-teal-500',
+                    ];
+                    return (
+                      <div
+                        key={item.id || idx}
+                        style={{ width: `${share}%` }}
+                        className={`${colors[idx % colors.length]} transition-all duration-300`}
+                        title={`${item.size} (${item.colorName}): ${item.samplePickupQuantity} pcs`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Size Breakdown Pickup Cards */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <h4 className="font-bold text-slate-800">Color &amp; Size Pickups:</h4>
-                <span className="text-[11px] font-mono text-blue-700 font-semibold">
-                  {sizeBreakdown.reduce((s, b) => s + (b.samplePickupQuantity || 0), 0)} / {aqlData.sampleSize} pcs
-                </span>
+                <h4 className="font-bold text-slate-800">Color &amp; Size Pickup Allocation:</h4>
+                <span className="text-[10px] text-slate-400">Tap +/- to adjust units</span>
               </div>
 
               <div className="space-y-2">
                 {sizeBreakdown.map((item, idx) => (
                   <div
-                    key={item.size || idx}
+                    key={item.id || idx}
                     className="p-2.5 rounded-xl border border-slate-200 bg-white shadow-2xs flex items-center justify-between gap-2 text-xs"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="w-7 h-7 rounded-lg bg-blue-100 text-blue-800 font-mono font-bold flex items-center justify-center text-xs shrink-0">
+                        <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 font-mono font-bold flex items-center justify-center text-xs shrink-0">
                           {item.size}
                         </span>
                         <div className="min-w-0">
-                          <span className="font-semibold text-slate-800 truncate block">
+                          <span className="font-bold text-slate-800 truncate block">
                             {item.colorName || 'Default Color'}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
-                            Order: {item.orderQuantity.toLocaleString()} &bull; Lot: {item.inspectedQuantity.toLocaleString()}
+                            Offered Lot: {item.inspectedQuantity.toLocaleString()} pcs
                           </span>
                         </div>
                       </div>
@@ -1168,7 +1802,7 @@ export function MobileInspectionEntryPage({
                       >
                         -
                       </button>
-                      <span className="w-8 text-center font-mono font-bold text-blue-700 text-xs">
+                      <span className="w-8 text-center font-mono font-black text-blue-700 text-xs">
                         {item.samplePickupQuantity}
                       </span>
                       <button
@@ -1194,7 +1828,7 @@ export function MobileInspectionEntryPage({
             STEP 4: PO SHEET & SAMPLE CARTON PHOTO CAPTURE
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 4 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
             <div className="border-b border-slate-100 pb-2.5">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Camera className="w-4 h-4 text-blue-600" />
@@ -1206,29 +1840,25 @@ export function MobileInspectionEntryPage({
             </div>
 
             {/* Section A: PO Sheet Photos */}
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-800">A. Purchase Order (PO) Sheet:</span>
-                <span className="text-[10px] font-mono text-slate-400">{poSheetPhotos.length} Captured</span>
+                <span className="font-bold text-slate-800">A. Purchase Order (PO) Sheet Evidence:</span>
+                <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                  {poSheetPhotos.length} Captured
+                </span>
               </div>
 
-              <label className="flex items-center justify-center gap-2 p-3 bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl text-blue-700 hover:bg-blue-100 cursor-pointer active:scale-98 transition-transform">
-                <Camera className="w-4 h-4" />
-                <span className="text-xs font-bold">Capture / Upload PO Sheet</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleUploadPhoto(f, (p) => setPoSheetPhotos((prev) => [...prev, p]));
-                  }}
-                />
-              </label>
+              {/* Dual Action: Direct Camera + Gallery Upload */}
+              <MobilePhotoActionButtons
+                cameraLabel="Take PO Photo"
+                uploadLabel="Upload PO File"
+                onPhotoSelected={(file) =>
+                  handleUploadPhoto(file, (p) => setPoSheetPhotos((prev) => [...prev, p]))
+                }
+              />
 
               {poSheetPhotos.length > 0 && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 pt-1">
                   {poSheetPhotos.map((photo, idx) => (
                     <div key={photo.id || idx} className="p-2 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5 text-xs">
                       <div className="relative aspect-4/3 rounded-lg overflow-hidden bg-slate-900">
@@ -1266,29 +1896,25 @@ export function MobileInspectionEntryPage({
             </div>
 
             {/* Section B: Sample Carton Photos */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
+            <div className="space-y-2.5 pt-3 border-t border-slate-100">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-800">B. Picked Sample Cartons:</span>
-                <span className="text-[10px] font-mono text-slate-400">{sampleCartonPhotos.length} Captured</span>
+                <span className="font-bold text-slate-800">B. Picked Sample Carton Photos:</span>
+                <span className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                  {sampleCartonPhotos.length} Captured
+                </span>
               </div>
 
-              <label className="flex items-center justify-center gap-2 p-3 bg-emerald-50 border-2 border-dashed border-emerald-300 rounded-xl text-emerald-700 hover:bg-emerald-100 cursor-pointer active:scale-98 transition-transform">
-                <Camera className="w-4 h-4" />
-                <span className="text-xs font-bold">Capture / Upload Carton Photo</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleUploadPhoto(f, (p) => setSampleCartonPhotos((prev) => [...prev, p]));
-                  }}
-                />
-              </label>
+              {/* Dual Action: Direct Camera + Gallery Upload */}
+              <MobilePhotoActionButtons
+                cameraLabel="Take Carton Photo"
+                uploadLabel="Upload Carton Photo"
+                onPhotoSelected={(file) =>
+                  handleUploadPhoto(file, (p) => setSampleCartonPhotos((prev) => [...prev, p]))
+                }
+              />
 
               {sampleCartonPhotos.length > 0 && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 pt-1">
                   {sampleCartonPhotos.map((photo, idx) => (
                     <div key={photo.id || idx} className="p-2 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5 text-xs">
                       <div className="relative aspect-4/3 rounded-lg overflow-hidden bg-slate-900">
@@ -1331,14 +1957,14 @@ export function MobileInspectionEntryPage({
             STEP 5: ON-SITE PHYSICAL TESTS & TEST RECORDS
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 5 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
             <div className="border-b border-slate-100 pb-2.5">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <FileCheck2 className="w-4 h-4 text-blue-600" />
                 <span>5. On-Site Physical Test Records</span>
               </h2>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Pass/Fail verification for standard apparel physical performance tests.
+                Pass/Fail verification with camera &amp; gallery photo attachment.
               </p>
             </div>
 
@@ -1389,28 +2015,18 @@ export function MobileInspectionEntryPage({
                       </button>
                     </div>
 
-                    {/* Camera Capture and Remark */}
+                    {/* Compact Dual Photo Buttons & Remark */}
                     <div className="flex items-center gap-2">
-                      <label className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-blue-600 cursor-pointer flex items-center gap-1 shrink-0">
-                        <Camera className="w-4 h-4" />
-                        <span className="text-[10px] font-semibold">{t.photoUrl ? 'Change' : '+ Photo'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) {
-                              handleUploadPhoto(f, (p) => {
-                                const copy = [...testRecords];
-                                copy[idx].photoUrl = p.url;
-                                setTestRecords(copy);
-                              });
-                            }
-                          }}
-                        />
-                      </label>
+                      <MobilePhotoActionButtons
+                        compact
+                        onPhotoSelected={(file) =>
+                          handleUploadPhoto(file, (p) => {
+                            const copy = [...testRecords];
+                            copy[idx].photoUrl = p.url;
+                            setTestRecords(copy);
+                          })
+                        }
+                      />
                       <input
                         type="text"
                         value={t.remark || ''}
@@ -1447,7 +2063,7 @@ export function MobileInspectionEntryPage({
             STEP 6: VISUAL & COMPLIANCE IMAGE REGISTER
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 6 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
             <div className="border-b border-slate-100 pb-2.5">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Camera className="w-4 h-4 text-blue-600" />
@@ -1503,32 +2119,24 @@ export function MobileInspectionEntryPage({
                     </span>
                   </div>
 
-                  <label className="flex items-center justify-center gap-2 p-3 bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl text-blue-700 hover:bg-blue-100 cursor-pointer active:scale-98 transition-transform">
-                    <Camera className="w-5 h-5" />
-                    <span className="text-xs font-bold">Take / Upload Photo for {currentCatInfo?.label}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) {
-                          handleUploadPhoto(f, (p) => {
-                            const compliancePhoto: InspectionCompliancePhoto = {
-                              id: `cp-${Date.now()}`,
-                              category: activeComplianceTab,
-                              categoryTitle: currentCatInfo?.label || activeComplianceTab,
-                              photoUrl: p.url || '',
-                              remark: '',
-                              timestamp: p.timestamp,
-                            };
-                            setCompliancePhotos((prev) => [...prev, compliancePhoto]);
-                          });
-                        }
-                      }}
-                    />
-                  </label>
+                  {/* Dual Action: Direct Camera + Gallery Upload */}
+                  <MobilePhotoActionButtons
+                    cameraLabel={`Take ${currentCatInfo?.label} Photo`}
+                    uploadLabel={`Upload ${currentCatInfo?.label}`}
+                    onPhotoSelected={(file) =>
+                      handleUploadPhoto(file, (p) => {
+                        const compliancePhoto: InspectionCompliancePhoto = {
+                          id: `cp-${Date.now()}`,
+                          category: activeComplianceTab,
+                          categoryTitle: currentCatInfo?.label || activeComplianceTab,
+                          photoUrl: p.url || '',
+                          remark: '',
+                          timestamp: p.timestamp,
+                        };
+                        setCompliancePhotos((prev) => [...prev, compliancePhoto]);
+                      })
+                    }
+                  />
 
                   {currentCatPhotos.length > 0 && (
                     <div className="grid grid-cols-2 gap-2">
@@ -1577,7 +2185,7 @@ export function MobileInspectionEntryPage({
             STEP 7: PACKING CHECK WITH 0-TOLERANCE CRITICAL VERIFICATION
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 7 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
             <div className="border-b border-slate-100 pb-2.5">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <BadgeAlert className="w-4 h-4 text-rose-600" />
@@ -1664,29 +2272,20 @@ export function MobileInspectionEntryPage({
                       </button>
                     </div>
 
-                    {/* If failed, show camera capture for critical evidence */}
+                    {/* If failed, show camera + gallery capture for critical evidence */}
                     {isFail && (
-                      <div className="pt-1.5 border-t border-rose-200/60 flex items-center gap-2">
-                        <label className="p-1.5 rounded-lg bg-rose-100 text-rose-800 text-[10px] font-bold cursor-pointer flex items-center gap-1 shrink-0">
-                          <Camera className="w-3.5 h-3.5" />
-                          <span>Defect Photo</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="hidden"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) {
-                                handleUploadPhoto(f, (p) => {
-                                  const copy = [...packingZeroToleranceChecks];
-                                  copy[idx].defectPhoto = p.url;
-                                  setPackingZeroToleranceChecks(copy);
-                                });
-                              }
-                            }}
-                          />
-                        </label>
+                      <div className="pt-2 border-t border-rose-200/60 space-y-1.5">
+                        <MobilePhotoActionButtons
+                          cameraLabel="Capture Evidence"
+                          uploadLabel="Upload Evidence"
+                          onPhotoSelected={(file) =>
+                            handleUploadPhoto(file, (p) => {
+                              const copy = [...packingZeroToleranceChecks];
+                              copy[idx].defectPhoto = p.url;
+                              setPackingZeroToleranceChecks(copy);
+                            })
+                          }
+                        />
                         <input
                           type="text"
                           value={item.notes || ''}
@@ -1696,7 +2295,7 @@ export function MobileInspectionEntryPage({
                             setPackingZeroToleranceChecks(copy);
                           }}
                           placeholder="Evidence notes..."
-                          className="flex-1 text-xs px-2 py-1 bg-white border border-rose-200 rounded-lg focus:outline-none"
+                          className="w-full text-xs px-2 py-1.5 bg-white border border-rose-200 rounded-lg focus:outline-none"
                         />
                       </div>
                     )}
@@ -1711,7 +2310,7 @@ export function MobileInspectionEntryPage({
             STEP 8: DEFECT ENTRY WITH IMAGE UPLOAD & AQL AUTO-FAIL
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 8 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
             <div className="border-b border-slate-100 pb-2.5">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600" />
@@ -1834,30 +2433,102 @@ export function MobileInspectionEntryPage({
                 </div>
               </div>
 
-              {/* Camera Capture and Add Button */}
-              <div className="flex items-center gap-2 pt-1">
-                <label className="p-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-blue-600 cursor-pointer flex items-center gap-1 shrink-0">
-                  <Camera className="w-4 h-4" />
-                  <span className="text-[10px] font-semibold">{newDefectPhoto ? '✓ Photo' : '+ Photo'}</span>
+              {/* Garment Location & Optional Size Selection */}
+              <div className="space-y-1.5">
+                <div>
+                  <label className="text-[10px] text-slate-500 block">Garment Location:</label>
                   <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) handleUploadPhoto(f, (p) => setNewDefectPhoto(p.url || ''));
-                    }}
+                    type="text"
+                    value={newDefectLocation}
+                    onChange={(e) => setNewDefectLocation(e.target.value)}
+                    placeholder="e.g. Front Placket, Collar, Sleeve..."
+                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs"
                   />
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddDefect}
-                  className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs active:scale-95"
-                >
-                  + Add Defect Log
-                </button>
+                </div>
+
+                {/* Optional Size Selection */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase flex items-center gap-1">
+                      <span>Garment Size (Optional):</span>
+                      {newDefectSize && (
+                        <span className="font-mono text-blue-600 font-bold lowercase">({newDefectSize})</span>
+                      )}
+                    </label>
+                    {newDefectSize && (
+                      <button
+                        type="button"
+                        onClick={() => setNewDefectSize('')}
+                        className="text-[10px] text-rose-600 hover:text-rose-700 font-semibold cursor-pointer"
+                      >
+                        Clear Size
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setNewDefectSize('')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer transition-colors ${
+                        !newDefectSize
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      All / General
+                    </button>
+                    {Array.from(
+                      new Set([...(sizeBreakdown || []).map((s) => s.size), ...STANDARD_INSPECTION_SIZES])
+                    ).map((sz) => (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => setNewDefectSize(sz)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer transition-colors ${
+                          newDefectSize === sz
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {sz}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+              {/* Dual Photo Buttons (Camera + Gallery) */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Defect Evidence Photo:</label>
+                <MobilePhotoActionButtons
+                  cameraLabel="Take Defect Photo"
+                  uploadLabel="Upload Defect Photo"
+                  onPhotoSelected={(file) =>
+                    handleUploadPhoto(file, (p) => setNewDefectPhoto(p.url || ''))
+                  }
+                />
+                {newDefectPhoto && (
+                  <div className="flex items-center gap-2 p-1.5 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-800 text-[10px] font-semibold">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Evidence photo attached</span>
+                    <button
+                      type="button"
+                      onClick={() => setNewDefectPhoto('')}
+                      className="ml-auto text-rose-600 hover:text-rose-700"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddDefect}
+                className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs active:scale-95"
+              >
+                + Add Defect Log
+              </button>
             </div>
 
             {/* List of Logged Defects */}
@@ -1889,7 +2560,13 @@ export function MobileInspectionEntryPage({
                           >
                             {d.severity}
                           </span>
+                          {d.size && (
+                            <span className="font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              Size: {d.size}
+                            </span>
+                          )}
                           <span>&bull; {d.count} pcs</span>
+                          {d.location && <span>&bull; {d.location}</span>}
                         </div>
                       </div>
                     </div>
@@ -1911,7 +2588,7 @@ export function MobileInspectionEntryPage({
             STEP 9: GARMENT MEASUREMENT SHEET UPLOAD
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 9 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
             <div className="border-b border-slate-100 pb-2.5">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-600" />
@@ -1922,23 +2599,17 @@ export function MobileInspectionEntryPage({
               </p>
             </div>
 
-            <label className="flex items-center justify-center gap-2 p-3.5 bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl text-blue-700 hover:bg-blue-100 cursor-pointer active:scale-98 transition-transform">
-              <Camera className="w-5 h-5" />
-              <span className="text-xs font-bold">Capture / Upload Measurement Spec Sheet</span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleUploadPhoto(f, (p) => setMeasurementSheetPhotos((prev) => [...prev, p]));
-                }}
-              />
-            </label>
+            {/* Dual Action: Direct Camera + Gallery Upload */}
+            <MobilePhotoActionButtons
+              cameraLabel="Capture Spec Sheet"
+              uploadLabel="Upload POM Document"
+              onPhotoSelected={(file) =>
+                handleUploadPhoto(file, (p) => setMeasurementSheetPhotos((prev) => [...prev, p]))
+              }
+            />
 
             {measurementSheetPhotos.length > 0 && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 pt-1">
                 {measurementSheetPhotos.map((photo, idx) => (
                   <div key={photo.id || idx} className="p-2 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5 text-xs">
                     <div className="relative aspect-4/3 rounded-lg overflow-hidden bg-slate-900">
@@ -1991,7 +2662,7 @@ export function MobileInspectionEntryPage({
             STEP 10: DUAL SIGNATURE PADS & FINAL UPLOAD
         ══════════════════════════════════════════════════════════════════════ */}
         {currentStep === 10 && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-5 space-y-4 animate-in fade-in">
             <div className="border-b border-slate-100 pb-2.5">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <PenTool className="w-4 h-4 text-blue-600" />
@@ -2003,7 +2674,7 @@ export function MobileInspectionEntryPage({
             </div>
 
             {/* Final Status Summary Card */}
-            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2 text-xs">
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800">Audit Final Verdict:</span>
                 <span
@@ -2016,7 +2687,7 @@ export function MobileInspectionEntryPage({
                   {aqlVerdict.verdict}
                 </span>
               </div>
-              <div className="text-[11px] text-slate-500 space-y-0.5">
+              <div className="text-[11px] text-slate-500 space-y-0.5 font-mono">
                 <div>PO: <strong>{poNumber}</strong> &bull; Sample: <strong>{aqlData.sampleSize} pcs</strong></div>
                 <div>0-Tolerance: <strong>{hasZeroToleranceFail ? 'FAILED' : 'CLEARED'}</strong></div>
                 <div>Total Defects: <strong>{totalDefectsCount} pcs</strong> (Major: {majorDefectsCount}, Minor: {minorDefectsCount})</div>
@@ -2067,12 +2738,12 @@ export function MobileInspectionEntryPage({
       </div>
 
       {/* ─── 3. BOTTOM STICKY ACTION BAR (ALWAYS ACCESSIBLE ON MOBILE) ─── */}
-      <div className="shrink-0 p-3 sm:px-4 bg-white border-t border-slate-200 shadow-lg flex items-center justify-between gap-2.5 z-30 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="shrink-0 p-3 sm:px-5 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg flex items-center justify-between gap-2.5 z-30 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {currentStep > 1 ? (
           <button
             type="button"
             onClick={() => setCurrentStep((s) => Math.max(1, s - 1))}
-            className="px-3.5 py-2.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shrink-0"
+            className="px-4 py-2.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shrink-0"
           >
             <ChevronLeft className="w-4 h-4" />
             <span>Back</span>
@@ -2081,7 +2752,7 @@ export function MobileInspectionEntryPage({
           <button
             type="button"
             onClick={triggerBack}
-            className="px-3.5 py-2.5 text-xs font-semibold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 cursor-pointer shrink-0"
+            className="px-4 py-2.5 text-xs font-semibold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 cursor-pointer shrink-0"
           >
             Exit
           </button>
@@ -2159,7 +2830,7 @@ export function MobileInspectionEntryPage({
   // 100% Full Page on Mobile Browser (Edge-to-Edge)
   if (isMobileBrowser || forceDesktopFullscreen) {
     return createPortal(
-      <div className="fixed inset-0 z-[999999] w-screen h-[100dvh] bg-slate-100 text-slate-800 flex flex-col overflow-hidden select-none touch-manipulation pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="fixed inset-0 z-[999999] w-screen h-[100dvh] bg-slate-50 text-slate-800 flex flex-col overflow-hidden select-none touch-manipulation pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]">
         {terminalInner}
       </div>,
       document.body

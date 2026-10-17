@@ -43,6 +43,7 @@ import { BuyerOrder } from '@/lib/types/modules';
 import {
   deriveSizeBreakdownFromBuyerOrder,
   calculateSizeSamplePickups,
+  STANDARD_INSPECTION_SIZES,
 } from './inspection-size-utils';
 import { InspectionSizeBreakdownSection } from './InspectionSizeBreakdownSection';
 import {
@@ -1651,7 +1652,7 @@ export function InspectionEntryPage({
               key={d.id}
               className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
             >
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-2 w-full">
                 <div>
                   <label className="block text-[10px] text-slate-400 font-semibold mb-0.5">Defect Type</label>
                   <input
@@ -1699,6 +1700,25 @@ export function InspectionEntryPage({
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs"
                     placeholder="e.g. Front Placket"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-400 font-semibold mb-0.5">Size (Optional)</label>
+                  <select
+                    value={d.size || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDefects(defects.map((item) => (item.id === d.id ? { ...item, size: val || undefined } : item)));
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800"
+                  >
+                    <option value="">All Sizes / Unspecified</option>
+                    {Array.from(new Set([...(sizeBreakdown || []).map((s) => s.size), ...STANDARD_INSPECTION_SIZES])).map((sz) => (
+                      <option key={sz} value={sz}>
+                        Size {sz}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

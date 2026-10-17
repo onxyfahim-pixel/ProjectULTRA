@@ -180,6 +180,8 @@ export interface DefectItem {
   location: string;
   photoUrl?: string;
   remark?: string;
+  size?: string; // Optional garment size e.g. 'M', 'L', 'XL'
+  colorName?: string; // Optional color e.g. 'Navy'
 }
 
 export interface InspectionPhotoEvidence {

@@ -23,7 +23,7 @@ export function computeInspectionKpis(records: InspectionRecord[]) {
   const totalInspections = records.length;
   const passedCount = records.filter((r) => r.status === 'PASSED').length;
   const conditionalCount = records.filter((r) => r.status === 'CONDITIONAL_PASS').length;
-  const rejectedCount = records.filter((r) => r.status === 'REJECTED').length;
+  const rejectedCount = records.filter((r) => r.status === 'REJECTED' || (r.status as string) === 'FAILED').length;
   const passRate = totalInspections > 0 ? Math.round((passedCount / totalInspections) * 100) : 0;
   
   const totalSamples = records.reduce((sum, r) => sum + (r.sampleSize || 0), 0);
@@ -33,6 +33,45 @@ export function computeInspectionKpis(records: InspectionRecord[]) {
   const totalDefects = criticalDefects + majorDefects + minorDefects;
 
   const uniqueBuyers = new Set(records.map((r) => r.buyer).filter(Boolean)).size;
+
+  // Real quantity aggregations
+  let totalInspectedQty = 0;
+  let totalOrderQty = 0;
+  let totalExcessQty = 0;
+  let totalShortQty = 0;
+  let totalFailedQty = 0;
+  let totalPassedQty = 0;
+
+  records.forEach((r) => {
+    const lot = Number(r.lotQuantity) || Number((r as any).inspectedQuantity) || 0;
+    const ord = Number(r.orderQuantity) || 0;
+    const diff = lot - ord;
+
+    totalInspectedQty += lot;
+    totalOrderQty += ord;
+
+    const excess =
+      r.excessQuantity !== undefined && r.excessQuantity !== null && Number(r.excessQuantity) > 0
+        ? Number(r.excessQuantity)
+        : (diff > 0 ? diff : 0);
+    const short =
+      r.shortQuantity !== undefined && r.shortQuantity !== null && Number(r.shortQuantity) > 0
+        ? Number(r.shortQuantity)
+        : (diff < 0 ? Math.abs(diff) : 0);
+
+    totalExcessQty += excess;
+    totalShortQty += short;
+
+    const isFail = r.status === 'REJECTED' || (r.status as string) === 'FAILED';
+    if (isFail) {
+      totalFailedQty += lot;
+    } else if (r.status === 'PASSED') {
+      totalPassedQty += lot;
+    }
+  });
+
+  const failedLotsCount = rejectedCount;
+  const failedQtyPct = totalInspectedQty > 0 ? ((totalFailedQty / totalInspectedQty) * 100).toFixed(1) : '0.0';
 
   return {
     totalInspections,
@@ -46,6 +85,14 @@ export function computeInspectionKpis(records: InspectionRecord[]) {
     minorDefects,
     totalDefects,
     uniqueBuyers,
+    totalInspectedQty,
+    totalOrderQty,
+    totalExcessQty,
+    totalShortQty,
+    totalFailedQty,
+    failedLotsCount,
+    failedQtyPct,
+    totalPassedQty,
   };
 }
 

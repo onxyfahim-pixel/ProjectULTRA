@@ -343,7 +343,7 @@ export function JobDescriptionEntryPage({
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
-          3. Qualifications, Skills &amp; KPIs
+          3. Competencies &amp; KPIs
         </button>
 
         <button
@@ -699,7 +699,7 @@ export function JobDescriptionEntryPage({
                 onClick={() => setActiveTab('qualifications_kpis')}
                 className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer"
               >
-                Next: Qualifications &amp; KPIs &rarr;
+                Next: Competencies &amp; KPIs &rarr;
               </button>
             </div>
           </div>
@@ -713,46 +713,18 @@ export function JobDescriptionEntryPage({
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
             <div className="border-b border-slate-100 pb-3">
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                Education, Experience &amp; Technical Competencies
+                Technical Competencies &amp; Mandatory Certifications
               </h2>
               <p className="text-xs text-slate-500">
-                Minimum hiring standards and competencies required per ISO 9001 Clause 7.2.
+                Functional competencies, technical skills, and certifications required per ISO 9001 Clause 7.2.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Required Educational Degree
-                </label>
-                <input
-                  type="text"
-                  value={formData.educationRequirement}
-                  onChange={(e) => setFormData({ ...formData, educationRequirement: e.target.value })}
-                  placeholder="e.g. Diploma / B.Sc. in Textile Engineering"
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Minimum Experience (Years)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="40"
-                  value={formData.experienceYears}
-                  onChange={(e) => setFormData({ ...formData, experienceYears: Number(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 font-mono"
-                />
-              </div>
-
-              {/* Skills Builder */}
-              <div className="md:col-span-2 space-y-2 pt-2 border-t border-slate-100">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Technical Skills &amp; Competencies:
-                </label>
+            {/* Skills Builder */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-700">
+                Technical Skills &amp; Competencies:
+              </label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -829,7 +801,6 @@ export function JobDescriptionEntryPage({
                 </div>
               </div>
             </div>
-          </div>
 
           {/* KPI Metrics Builder */}
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">

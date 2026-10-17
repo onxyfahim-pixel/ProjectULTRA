@@ -1456,6 +1456,11 @@ export function InspectionDetailsPage({
                             >
                               {d.severity}
                             </span>
+                            {d.size && (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+                                Size: {d.size}
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-slate-500 mt-0.5">
                             Location: <span className="font-semibold text-slate-700">{d.location || 'Main body'}</span>

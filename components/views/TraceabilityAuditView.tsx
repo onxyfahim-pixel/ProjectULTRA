@@ -456,16 +456,32 @@ export function TraceabilityAuditView() {
           },
         ]}
         actions={
-          canCreate ? (
-            <button
-              type="button"
-              onClick={() => setSubView({ type: 'add' })}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Traceability Entry</span>
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedForExport([]);
+                  setIsExportModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all shadow-2xs hover:border-slate-300 cursor-pointer"
+                title="Export Traceability Register"
+              >
+                <FileDown className="w-4 h-4 text-blue-600" />
+                <span>Export Register</span>
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => setSubView({ type: 'add' })}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs hover:shadow cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Traceability Entry</span>
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -726,6 +742,10 @@ export function TraceabilityAuditView() {
             moduleKey="traceability"
             canExport={canExport}
             canDelete={canDelete}
+            onExport={(items) => {
+              setSelectedForExport(items);
+              setIsExportModalOpen(true);
+            }}
           />
         </div>
       )}
@@ -737,6 +757,25 @@ export function TraceabilityAuditView() {
           records={deleteModal.records}
           onConfirm={confirmDelete}
           onCancel={() => setDeleteModal(null)}
+        />
+      )}
+
+      {/* Single Record Dossier Export Modal */}
+      {singleExportRecord && (
+        <TraceabilitySingleExportModal
+          isOpen={!!singleExportRecord}
+          record={singleExportRecord}
+          onClose={() => setSingleExportRecord(null)}
+        />
+      )}
+
+      {/* Batch / Master Register Export Modal */}
+      {isExportModalOpen && (
+        <TraceabilityExportModal
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          allRecords={records}
+          selectedRecords={selectedForExport}
         />
       )}
     </div>

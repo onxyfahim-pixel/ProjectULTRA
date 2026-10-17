@@ -22,10 +22,13 @@ import {
   FileText,
   UserCheck,
   Check,
+  Network,
+  ListOrdered,
 } from 'lucide-react';
 import { ProcessFlowChart, ProcessFlowStep } from '@/lib/types/modules';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
+import { ProcessFlowVisualTree } from './ProcessFlowVisualTree';
 
 interface ProcessFlowDetailsPageProps {
   flow: ProcessFlowChart;
@@ -47,7 +50,24 @@ export function ProcessFlowDetailsPage({
   showToast,
 }: ProcessFlowDetailsPageProps) {
   const { canCreate, canEdit, canDelete } = useModulePermission('process_flow');
+
+  if (!flow) {
+    return (
+      <div className="p-8 text-center bg-white rounded-2xl border border-slate-200">
+        <p className="text-slate-600 mb-4">No process flow chart found.</p>
+        <button
+          type="button"
+          onClick={onBack}
+          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold"
+        >
+          Back to Register
+        </button>
+      </div>
+    );
+  }
+
   const steps = flow.steps || [];
+  const [diagramMode, setDiagramMode] = useState<'visual_tree' | 'pipeline'>('visual_tree');
   const [selectedStepIndex, setSelectedStepIndex] = useState<number>(0);
   const activeStep = steps[selectedStepIndex] || steps[0];
 
@@ -216,79 +236,133 @@ export function ProcessFlowDetailsPage({
         </div>
       </div>
 
-      {/* VISUAL FLOWCHART DIAGRAM (INTERACTIVE PIPELINE) */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+      {/* VISUAL FLOWCHART DIAGRAM SECTION */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center gap-2">
             <GitCommit className="w-5 h-5 text-blue-600" />
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-              Interactive Manufacturing Flowchart Diagram
-            </h3>
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                Manufacturing Process Flowchart Architecture
+              </h3>
+              <p className="text-xs text-slate-500">
+                Interactive industrial decision tree, quality gates, and process transformation sequence.
+              </p>
+            </div>
           </div>
-          <span className="text-xs text-slate-500 font-mono">
-            Click any node along the pipeline to inspect quality gates &amp; tooling
-          </span>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setDiagramMode('visual_tree')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  diagramMode === 'visual_tree'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Network className="w-3.5 h-3.5" />
+                <span>Visual Flow Tree</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiagramMode('pipeline')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  diagramMode === 'pipeline'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ListOrdered className="w-3.5 h-3.5" />
+                <span>Sequential Ribbon</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Horizontal Scrollable Flow Ribbon */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-3 pt-1">
-          {steps.map((st, idx) => {
-            const isSelected = selectedStepIndex === idx;
-            return (
-              <React.Fragment key={st.id || idx}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedStepIndex(idx)}
-                  className={`p-3 rounded-xl border text-left shrink-0 transition-all cursor-pointer min-w-[190px] max-w-[210px] ${
-                    isSelected
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-500/20'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span
-                      className={`w-5 h-5 rounded-full flex items-center justify-center font-mono font-bold text-[10px] ${
-                        isSelected ? 'bg-white text-blue-700' : 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {st.stepNumber}
-                    </span>
-                    <span
-                      className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${
-                        isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-200/70 text-slate-600'
-                      }`}
-                    >
-                      {st.leadTimeHours}h
-                    </span>
-                  </div>
-                  <div className="font-semibold text-xs truncate" title={st.stageName}>
-                    {st.stageName}
-                  </div>
-                  <div
-                    className={`text-[10px] font-mono truncate mt-0.5 ${
-                      isSelected ? 'text-blue-100' : 'text-slate-500'
-                    }`}
-                  >
-                    {st.department}
-                  </div>
-                  {st.criticalGate && (
-                    <span
-                      className={`inline-block text-[9px] font-bold uppercase px-1.5 py-0.2 rounded mt-1.5 ${
-                        isSelected ? 'bg-emerald-400 text-slate-900' : 'bg-emerald-100 text-emerald-800'
-                      }`}
-                    >
-                      ★ Critical Gate
-                    </span>
-                  )}
-                </button>
+        {/* Display either Visual Tree or Pipeline Ribbon */}
+        {diagramMode === 'visual_tree' ? (
+          <ProcessFlowVisualTree
+            flow={flow}
+            onSelectStep={(st) => {
+              const idx = steps.findIndex((s) => s.id === st.id || s.stepNumber === st.stepNumber);
+              if (idx !== -1) setSelectedStepIndex(idx);
+            }}
+            onUpdateFlow={onUpdateStatus}
+          />
+        ) : (
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Horizontal Sequence Pipeline
+              </h3>
+              <span className="text-xs text-slate-500 font-mono">
+                Click any node along the pipeline to inspect quality gates &amp; tooling
+              </span>
+            </div>
 
-                {idx < steps.length - 1 && (
-                  <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-                )}
-              </React.Fragment>
-            );
-          })}
-        </div>
+            {/* Horizontal Scrollable Flow Ribbon */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-3 pt-1">
+              {steps.map((st, idx) => {
+                const isSelected = selectedStepIndex === idx;
+                return (
+                  <React.Fragment key={st.id || idx}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStepIndex(idx)}
+                      className={`p-3 rounded-xl border text-left shrink-0 transition-all cursor-pointer min-w-[190px] max-w-[210px] ${
+                        isSelected
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-500/20'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span
+                          className={`w-5 h-5 rounded-full flex items-center justify-center font-mono font-bold text-[10px] ${
+                            isSelected ? 'bg-white text-blue-700' : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {st.stepNumber}
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${
+                            isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-200/70 text-slate-600'
+                          }`}
+                        >
+                          {st.leadTimeHours}h
+                        </span>
+                      </div>
+                      <div className="font-semibold text-xs truncate" title={st.stageName}>
+                        {st.stageName}
+                      </div>
+                      <div
+                        className={`text-[10px] font-mono truncate mt-0.5 ${
+                          isSelected ? 'text-blue-100' : 'text-slate-500'
+                        }`}
+                      >
+                        {st.department}
+                      </div>
+                      {st.criticalGate && (
+                        <span
+                          className={`inline-block text-[9px] font-bold uppercase px-1.5 py-0.2 rounded mt-1.5 ${
+                            isSelected ? 'bg-emerald-400 text-slate-900' : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          ★ Critical Gate
+                        </span>
+                      )}
+                    </button>
+
+                    {idx < steps.length - 1 && (
+                      <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Selected Stage Detail Inspector */}
         {activeStep && (

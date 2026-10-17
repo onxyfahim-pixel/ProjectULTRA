@@ -42,18 +42,7 @@ class ErpDataStore {
     const mergedInspections = [
       ...(central.inspections || []),
       ...INITIAL_INSPECTIONS.filter((init) => !existingInspIds.has(init.id)),
-    ].map((r) => {
-      if (r.excessQuantity !== undefined && r.shortQuantity !== undefined) return r;
-      const lot = Number(r.lotQuantity) || 0;
-      const ord = Number(r.orderQuantity) || 0;
-      const diff = lot - ord;
-      return {
-        ...r,
-        excessQuantity: diff > 0 ? diff : 0,
-        shortQuantity: diff < 0 ? Math.abs(diff) : 0,
-        quantityVariance: diff,
-      };
-    });
+    ];
     this.inspections = mergedInspections;
     const existingPoIds = new Set((central.productionOrders || []).map((p) => p.id));
     this.productionOrders = [

@@ -16,10 +16,11 @@ interface NewReportModalProps {
 }
 
 export function NewReportModal({ isOpen, onClose, onSave }: NewReportModalProps) {
+  const currentMonthYear = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<ReportCategory>('QUALITY_SUMMARY');
+  const [category, setCategory] = useState<ReportCategory>('QUALITY');
   const [department, setDepartment] = useState('Quality Assurance & Technical');
-  const [period, setPeriod] = useState('September 2026');
+  const [period, setPeriod] = useState(currentMonthYear);
   const [format, setFormat] = useState<ReportFormat>('INTERACTIVE');
   const [summary, setSummary] = useState('');
   const [author, setAuthor] = useState('Quality Admin');
@@ -36,10 +37,10 @@ export function NewReportModal({ isOpen, onClose, onSave }: NewReportModalProps)
 
     const randomSuffix = Math.floor(100 + Math.random() * 900);
     const newReport: ReportRecord = {
-      id: `RPT-2026-${randomSuffix}`,
+      id: `RPT-CUSTOM-${new Date().getFullYear()}-${randomSuffix}`,
       title: title.trim(),
       category,
-      period: period.trim() || 'Current Period',
+      period: period.trim() || currentMonthYear,
       department: department.trim() || 'Quality Operations',
       generatedDate: new Date().toISOString().split('T')[0],
       generatedBy: author.trim() || 'Quality Specialist',
@@ -72,8 +73,8 @@ export function NewReportModal({ isOpen, onClose, onSave }: NewReportModalProps)
       ],
       signOff: {
         preparedBy: author.trim() || 'QA Inspector',
-        reviewedBy: 'Tariqul Alam (Technical QA Manager)',
-        approvedBy: 'Fahim Rahman (VP of Quality)',
+        reviewedBy: 'Technical IE Lead',
+        approvedBy: 'Head of Quality & Operations',
         date: new Date().toISOString().split('T')[0],
       },
     };
@@ -154,7 +155,7 @@ export function NewReportModal({ isOpen, onClose, onSave }: NewReportModalProps)
                 type="text"
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                placeholder="e.g. September 2026 or Q3 2026"
+                placeholder="e.g. Current Month or Q4 2026"
                 className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               />
             </div>

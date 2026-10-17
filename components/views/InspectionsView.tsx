@@ -116,6 +116,109 @@ function InspectionStatusChip({ status }: { status: InspectionStatus }) {
   return <span className={`inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full ${cls}`}>{label}</span>;
 }
 
+export function extractInspectionQuantities(
+  r: InspectionRecord | Partial<InspectionRecord>,
+  syncedOrders: BuyerOrder[] = []
+) {
+  const init = INITIAL_INSPECTIONS.find((i) => i.id === r.id);
+
+  // 1. Order Quantity
+  let orderQty = Number(r.orderQuantity) || 0;
+  if (!orderQty && r.sizeBreakdown && r.sizeBreakdown.length > 0) {
+    orderQty = r.sizeBreakdown.reduce((s, b) => s + (Number(b.orderQuantity) || 0), 0);
+  }
+  if (!orderQty && r.combinedOrders && r.combinedOrders.length > 0) {
+    orderQty = r.combinedOrders.reduce((s, c) => s + (Number(c.orderQuantity) || 0), 0);
+  }
+  if (!orderQty && init && init.orderQuantity) {
+    orderQty = Number(init.orderQuantity);
+  }
+  if (!orderQty) {
+    const rawPo = r.orderNumber || (r as any).poNumber || (r.poNumbers && r.poNumbers[0]) || '';
+    const matched = (syncedOrders || []).find((o) =>
+      o.orderNumber === rawPo ||
+      (rawPo && rawPo.includes(o.orderNumber)) ||
+      (r.poNumbers && r.poNumbers.includes(o.orderNumber)) ||
+      (r.buyerOrderId && r.buyerOrderId === o.id)
+    );
+    if (matched) {
+      orderQty = Number(matched.orderQuantity) || 0;
+    }
+  }
+  if (!orderQty) {
+    const po = r.orderNumber || (r as any).poNumber || '';
+    if (po === 'PO-HM-99201') orderQty = 45000;
+    else if (po === 'PO-ZARA-4482' || po.includes('PO-ZR')) orderQty = 28000;
+    else if (po === 'PO-PVH-7729' || po === 'PO-TH-1190') orderQty = 32000;
+    else if (po === 'PO-LEV-1109' || po === 'PO-LS-5519') orderQty = 15000;
+    else if (po === 'PO-DEC-3310') orderQty = 60000;
+    else if (po === 'PO-GAP-9902') orderQty = 15000;
+    else if (po === 'PO-UQ-3310') orderQty = 20000;
+    else if (po === 'PO-MNG-6012') orderQty = 8000;
+    else orderQty = 10000;
+  }
+
+  // 2. Inspected / Lot Quantity
+  let lotQty = Number(r.lotQuantity) || Number((r as any).inspectedQuantity) || 0;
+  if (!lotQty && r.sizeBreakdown && r.sizeBreakdown.length > 0) {
+    lotQty = r.sizeBreakdown.reduce((s, b) => s + (Number(b.inspectedQuantity) || 0), 0);
+  }
+  if (!lotQty && init && init.lotQuantity) {
+    lotQty = Number(init.lotQuantity);
+  }
+  if (!lotQty) {
+    const stageType = r.inspectionType || (r.stage === 'FINISHING_PACKING' ? 'FINAL' : 'INLINE');
+    if (stageType === 'FINAL') {
+      lotQty = orderQty;
+    } else if (stageType === 'PRE_FINAL') {
+      lotQty = Math.round(orderQty * 0.7);
+    } else {
+      lotQty = Math.round(orderQty * 0.3);
+    }
+  }
+
+  // 3. Excess & Short Quantities
+  const diff = lotQty - orderQty;
+  const excessQty =
+    r.excessQuantity !== undefined && r.excessQuantity !== null && Number(r.excessQuantity) > 0
+      ? Number(r.excessQuantity)
+      : (diff > 0 ? diff : 0);
+  const shortQty =
+    r.shortQuantity !== undefined && r.shortQuantity !== null && Number(r.shortQuantity) > 0
+      ? Number(r.shortQuantity)
+      : (diff < 0 ? Math.abs(diff) : 0);
+
+  // 4. Failed Quantity Logic
+  const isFailed = r.status === 'REJECTED' || (r.status as string) === 'FAILED';
+  const failedQty = isFailed ? lotQty : 0;
+
+  return {
+    orderQty,
+    lotQty,
+    excessQty,
+    shortQty,
+    diff,
+    isFailed,
+    failedQty,
+  };
+}
+
+export function reconcileInspectionRecord(
+  r: any,
+  syncedOrders: BuyerOrder[] = []
+): InspectionRecord {
+  const q = extractInspectionQuantities(r, syncedOrders);
+  return {
+    ...r,
+    orderNumber: r.orderNumber || r.poNumber || (r.poNumbers && r.poNumbers[0]) || '',
+    orderQuantity: q.orderQty,
+    lotQuantity: q.lotQty,
+    excessQuantity: q.excessQty,
+    shortQuantity: q.shortQty,
+    quantityVariance: q.diff,
+  };
+}
+
 export function InspectionsView({
   records: propRecords,
   onUpdateRecords,
@@ -124,6 +227,7 @@ export function InspectionsView({
 }: InspectionsViewProps) {
   const [viewMode, setViewMode] = useState<ModuleViewMode>('summary');
   const [records, setRecords] = useState<InspectionRecord[]>(() => {
+    const seedOrders = orders && orders.length > 0 ? orders : MOCK_BUYER_ORDERS;
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem('erp_inspections_v1');
@@ -136,34 +240,41 @@ export function InspectionsView({
               if (existingIdx === -1) {
                 parsed.push(initInsp);
                 hasNew = true;
-              } else {
-                const existing = parsed[existingIdx];
-                if (existing.excessQuantity === undefined || existing.shortQuantity === undefined) {
-                  const lot = Number(existing.lotQuantity) || 0;
-                  const ord = Number(existing.orderQuantity) || 0;
-                  const diff = lot - ord;
-                  parsed[existingIdx] = {
-                    ...existing,
-                    excessQuantity: diff > 0 ? diff : 0,
-                    shortQuantity: diff < 0 ? Math.abs(diff) : 0,
-                    quantityVariance: diff,
-                  };
-                  hasNew = true;
-                }
               }
+            });
+            const reconciled = parsed.map((r: any) => {
+              const q = extractInspectionQuantities(r, seedOrders);
+              const needsRec =
+                r.orderQuantity === undefined ||
+                r.lotQuantity === undefined ||
+                r.excessQuantity === undefined ||
+                r.shortQuantity === undefined ||
+                !r.orderNumber;
+              if (needsRec) hasNew = true;
+              return {
+                ...r,
+                orderNumber: r.orderNumber || r.poNumber || (r.poNumbers && r.poNumbers[0]) || '',
+                orderQuantity: q.orderQty,
+                lotQuantity: q.lotQty,
+                excessQuantity: q.excessQty,
+                shortQuantity: q.shortQty,
+                quantityVariance: q.diff,
+              };
             });
             if (hasNew) {
               try {
-                localStorage.setItem('erp_inspections_v1', JSON.stringify(parsed));
+                localStorage.setItem('erp_inspections_v1', JSON.stringify(reconciled));
               } catch {}
             }
-            return parsed;
+            return reconciled;
           }
         }
       } catch {}
     }
-    if (propRecords && propRecords.length > 0) return propRecords;
-    return INITIAL_INSPECTIONS;
+    if (propRecords && propRecords.length > 0) {
+      return propRecords.map((r) => reconcileInspectionRecord(r, seedOrders));
+    }
+    return INITIAL_INSPECTIONS.map((r) => reconcileInspectionRecord(r, seedOrders));
   });
   const { user, permissions } = useErpAuth();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermission('inspections');
@@ -171,21 +282,11 @@ export function InspectionsView({
   // Sync prop records with quantity reconciliation
   useEffect(() => {
     if (propRecords && propRecords.length > 0) {
-      const reconciled = propRecords.map((r) => {
-        if (r.excessQuantity !== undefined && r.shortQuantity !== undefined) return r;
-        const lot = Number(r.lotQuantity) || 0;
-        const ord = Number(r.orderQuantity) || 0;
-        const diff = lot - ord;
-        return {
-          ...r,
-          excessQuantity: diff > 0 ? diff : 0,
-          shortQuantity: diff < 0 ? Math.abs(diff) : 0,
-          quantityVariance: diff,
-        };
-      });
+      const seedOrders = orders && orders.length > 0 ? orders : MOCK_BUYER_ORDERS;
+      const reconciled = propRecords.map((r) => reconcileInspectionRecord(r, seedOrders));
       setRecords(reconciled);
     }
-  }, [propRecords]);
+  }, [propRecords, orders]);
 
   // Dedicated Separate Sub-Pages Routing (matching BuyerOrderView pattern)
   const [subView, setSubView] = useState<InspectionSubView>({ type: 'none' });
@@ -306,15 +407,15 @@ export function InspectionsView({
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
             const reconciled = parsed.map((r: any) => {
-              if (r.excessQuantity !== undefined && r.shortQuantity !== undefined) return r;
-              const lot = Number(r.lotQuantity) || 0;
-              const ord = Number(r.orderQuantity) || 0;
-              const diff = lot - ord;
+              const q = extractInspectionQuantities(r, syncedOrders);
               return {
                 ...r,
-                excessQuantity: diff > 0 ? diff : 0,
-                shortQuantity: diff < 0 ? Math.abs(diff) : 0,
-                quantityVariance: diff,
+                orderNumber: r.orderNumber || r.poNumber || (r.poNumbers && r.poNumbers[0]) || '',
+                orderQuantity: q.orderQty,
+                lotQuantity: q.lotQty,
+                excessQuantity: q.excessQty,
+                shortQuantity: q.shortQty,
+                quantityVariance: q.diff,
               };
             });
             setRecords(reconciled);
@@ -334,7 +435,7 @@ export function InspectionsView({
       window.removeEventListener('erp_buyer_orders_updated', syncInspectionsFromStorage);
       window.removeEventListener('erp_production_orders_updated', syncInspectionsFromStorage);
     };
-  }, []);
+  }, [syncedOrders]);
 
   // Delivery table search & filter states
   const [deliverySearch, setDeliverySearch] = useState('');
@@ -347,7 +448,8 @@ export function InspectionsView({
   const [customEndDate, setCustomEndDate] = useState<string>('');
 
   // Reconciliation Breakdown filter & search state
-  const [reconciliationFilter, setReconciliationFilter] = useState<'ALL' | 'BALANCED' | 'EXCESS' | 'SHORT'>('ALL');
+  type ReconciliationFilterMode = 'ALL' | 'BALANCED' | 'EXCESS' | 'SHORT' | 'FAILED';
+  const [reconciliationFilter, setReconciliationFilter] = useState<ReconciliationFilterMode>('ALL');
   const [reconciliationSearch, setReconciliationSearch] = useState('');
   const [showReconciliationTable, setShowReconciliationTable] = useState(true);
 
@@ -586,39 +688,37 @@ export function InspectionsView({
     let totalOrderQty = 0;
     let totalExcessQty = 0;
     let totalShortQty = 0;
+    let totalFailedQty = 0;
+    let totalPassedQty = 0;
     let balancedCount = 0;
     let excessCount = 0;
     let shortCount = 0;
+    const failedRecordsList: { record: InspectionRecord; failedQty: number; orderQty: number; po: string; buyer: string; stage: string; style: string }[] = [];
 
     recs.forEach((r) => {
-      const lot = Number(r.lotQuantity) || 0;
-      let ord = Number(r.orderQuantity) || 0;
-      if (!ord && r.orderNumber) {
-        const matchedOrd = syncedOrders.find(
-          (o) => o.orderNumber === r.orderNumber || (r.poNumbers && r.poNumbers.includes(o.orderNumber))
-        );
-        if (matchedOrd) {
-          ord = Number(matchedOrd.orderQuantity) || 0;
-        }
+      const q = extractInspectionQuantities(r, syncedOrders);
+      totalInspectedQty += q.lotQty;
+      totalOrderQty += q.orderQty;
+      totalExcessQty += q.excessQty;
+      totalShortQty += q.shortQty;
+
+      if (q.isFailed) {
+        totalFailedQty += q.failedQty;
+        failedRecordsList.push({
+          record: r,
+          failedQty: q.failedQty,
+          orderQty: q.orderQty,
+          po: r.orderNumber || (r as any).poNumber || (r.poNumbers && r.poNumbers[0]) || 'PO-N/A',
+          buyer: r.buyer || 'Unknown',
+          stage: r.inspectionType || (r.stage === 'FINISHING_PACKING' ? 'FINAL' : 'INLINE'),
+          style: r.styleNumber || '—',
+        });
+      } else if (r.status === 'PASSED') {
+        totalPassedQty += q.lotQty;
       }
-      totalInspectedQty += lot;
-      totalOrderQty += ord;
-      const diff = lot - ord;
 
-      const excess =
-        r.excessQuantity !== undefined && r.excessQuantity !== null && Number(r.excessQuantity) > 0
-          ? Number(r.excessQuantity)
-          : (diff > 0 ? diff : 0);
-      const short =
-        r.shortQuantity !== undefined && r.shortQuantity !== null && Number(r.shortQuantity) > 0
-          ? Number(r.shortQuantity)
-          : (diff < 0 ? Math.abs(diff) : 0);
-
-      totalExcessQty += excess;
-      totalShortQty += short;
-
-      if (excess > 0) excessCount++;
-      else if (short > 0) shortCount++;
+      if (q.excessQty > 0) excessCount++;
+      else if (q.shortQty > 0) shortCount++;
       else balancedCount++;
     });
 
@@ -626,12 +726,15 @@ export function InspectionsView({
     const fulfillmentRate = totalOrderQty > 0 ? ((totalInspectedQty / totalOrderQty) * 100).toFixed(1) : '100.0';
 
     const passCount = recs.filter((r) => r.status === 'PASSED').length;
-    const failCount = recs.filter((r) => r.status === 'REJECTED').length;
+    const failCount = recs.filter((r) => r.status === 'REJECTED' || (r.status as string) === 'FAILED').length;
     const recheckCount = recs.filter((r) => r.status === 'CONDITIONAL_PASS').length;
     const total = recs.length || 1;
     const passRate = ((passCount / total) * 100).toFixed(1);
     const failRate = ((failCount / total) * 100).toFixed(1);
     const recheckRate = ((recheckCount / total) * 100).toFixed(1);
+
+    const failedLotsCount = failCount;
+    const failedQtyPct = totalInspectedQty > 0 ? ((totalFailedQty / totalInspectedQty) * 100).toFixed(1) : '0.0';
 
     const totalSampled = recs.reduce((s, r) => s + (r.sampleSize || 0), 0);
     const totalDefects = recs.reduce((s, r) => s + (r.defectCount || 0), 0);
@@ -662,21 +765,22 @@ export function InspectionsView({
     // Buyer performance
     const buyerMap = new Map<string, { buyer: string; totalQty: number; pass: number; fail: number; recheck: number; count: number }>();
     recs.forEach((r) => {
+      const q = extractInspectionQuantities(r, syncedOrders);
       const b = r.buyer || 'Unknown';
       const existing = buyerMap.get(b);
       if (existing) {
-        existing.totalQty += (r.lotQuantity || 0);
+        existing.totalQty += q.lotQty;
         existing.count++;
         if (r.status === 'PASSED') existing.pass++;
-        else if (r.status === 'REJECTED') existing.fail++;
+        else if (r.status === 'REJECTED' || (r.status as string) === 'FAILED') existing.fail++;
         else if (r.status === 'CONDITIONAL_PASS') existing.recheck++;
       } else {
         buyerMap.set(b, {
           buyer: b,
-          totalQty: r.lotQuantity || 0,
+          totalQty: q.lotQty,
           count: 1,
           pass: r.status === 'PASSED' ? 1 : 0,
-          fail: r.status === 'REJECTED' ? 1 : 0,
+          fail: (r.status === 'REJECTED' || (r.status as string) === 'FAILED') ? 1 : 0,
           recheck: r.status === 'CONDITIONAL_PASS' ? 1 : 0,
         });
       }
@@ -685,46 +789,39 @@ export function InspectionsView({
 
     // Per-record reconciliation data for charts & live reconciliation table
     const barChartData = recs.map((r) => {
-      let orderQty = Number(r.orderQuantity) || 0;
-      if (!orderQty && r.orderNumber) {
-        const matchedOrd = syncedOrders.find(
-          (o) => o.orderNumber === r.orderNumber || (r.poNumbers && r.poNumbers.includes(o.orderNumber))
-        );
-        if (matchedOrd) {
-          orderQty = Number(matchedOrd.orderQuantity) || 0;
-        }
-      }
-      const inspectedQty = Number(r.lotQuantity) || 0;
-      const diff = inspectedQty - orderQty;
-      const rawPo = r.orderNumber ? r.orderNumber.split(',')[0].trim().replace(/^PO-/, '') : r.inspectionCode.slice(-4);
+      const q = extractInspectionQuantities(r, syncedOrders);
+      const rawPo = r.orderNumber || (r as any).poNumber || (r.poNumbers && r.poNumbers[0]) || r.inspectionCode.slice(-4);
       const buyerShort = (r.buyer || 'QA').split(' ')[0].replace(/[^a-zA-Z]/g, '');
       const stage = r.inspectionType || (r.stage === 'FINISHING_PACKING' ? 'FINAL' : 'INLINE');
-      const variancePct = orderQty > 0 ? Number(((diff / orderQty) * 100).toFixed(1)) : 0;
+      const variancePct = q.orderQty > 0 ? Number(((q.diff / q.orderQty) * 100).toFixed(1)) : 0;
 
       return {
         id: r.id,
         inspectionCode: r.inspectionCode,
         buyer: r.buyer || 'Unknown',
-        poNumber: r.orderNumber || 'N/A',
+        poNumber: rawPo,
         style: r.styleNumber || 'N/A',
         styleDescription: r.styleDescription || '',
         stage,
         status: r.status,
-        label: `${buyerShort} (${rawPo})`,
-        shortLabel: rawPo,
-        orderQty,
-        inspectedQty,
-        diff,
+        label: `${buyerShort} (${rawPo.split(',')[0].trim().replace(/^PO-/, '')})`,
+        shortLabel: rawPo.split(',')[0].trim().replace(/^PO-/, ''),
+        orderQty: q.orderQty,
+        inspectedQty: q.lotQty,
+        diff: q.diff,
         variancePct,
-        isExcess: diff > 0,
-        isShort: diff < 0,
-        isBalanced: diff === 0,
+        isExcess: q.excessQty > 0,
+        isShort: q.shortQty > 0,
+        isBalanced: q.diff === 0,
+        isFailed: q.isFailed,
+        failedQty: q.failedQty,
         record: r,
       };
     });
 
     return {
       totalInspectedQty, totalOrderQty, totalExcessQty, totalShortQty,
+      totalFailedQty, failedLotsCount, failedQtyPct, totalPassedQty, failedRecordsList,
       netVariance, fulfillmentRate, balancedCount, excessCount, shortCount,
       passCount, failCount, recheckCount, passRate, failRate, recheckRate,
       totalSampled, totalDefects, criticalDefects, majorDefects, minorDefects,
@@ -1069,14 +1166,18 @@ export function InspectionsView({
       header: 'Order / Inspected (Variance)',
       accessorKey: 'lotQuantity',
       sortable: true,
-      accessor: (r) => r.lotQuantity || r.orderQuantity || 0,
+      accessor: (r) => {
+        const q = extractInspectionQuantities(r, syncedOrders);
+        return q.lotQty || q.orderQty || 0;
+      },
       cell: (r) => {
-        const ord = r.orderQuantity || 10000;
-        const insp = r.lotQuantity || ord;
-        const diff = insp - ord;
-        const pct = ((diff / ord) * 100).toFixed(1);
-        const isExcess = diff > 0;
-        const isShort = diff < 0;
+        const q = extractInspectionQuantities(r, syncedOrders);
+        const ord = q.orderQty;
+        const insp = q.lotQty;
+        const diff = q.diff;
+        const pct = ord > 0 ? ((diff / ord) * 100).toFixed(1) : '0.0';
+        const isExcess = q.excessQty > 0;
+        const isShort = q.shortQty > 0;
 
         return (
           <div className="text-xs">
@@ -1084,7 +1185,7 @@ export function InspectionsView({
               <span className="text-blue-700">{insp.toLocaleString()}</span>
               <span className="text-slate-400 font-normal">/ {ord.toLocaleString()} pcs</span>
             </div>
-            <div className="mt-0.5">
+            <div className="mt-0.5 flex flex-col gap-0.5">
               {isExcess && (
                 <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                   +{diff.toLocaleString()} pcs (+{pct}%) Excess
@@ -1092,12 +1193,18 @@ export function InspectionsView({
               )}
               {isShort && (
                 <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">
-                  {diff.toLocaleString()} pcs ({pct}%) Short
+                  -{Math.abs(diff).toLocaleString()} pcs ({pct}%) Short
                 </span>
               )}
               {!isExcess && !isShort && (
                 <span className="text-[10px] text-slate-500 font-medium">
                   100% matched
+                </span>
+              )}
+              {q.isFailed && (
+                <span className="inline-flex items-center gap-1 text-[9.5px] font-black px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300">
+                  <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                  Failed: {q.failedQty.toLocaleString()} pcs (Quarantine Hold)
                 </span>
               )}
             </div>
@@ -1357,6 +1464,7 @@ export function InspectionsView({
       ) : subView.type === 'mobile' ? (
         <MobileInspectionEntryPage
           orders={syncedOrders}
+          initialRecord={(subView as any).initialRecord || (subView as any).record}
           onSave={handleSaveInspection}
           onBack={() => setSubView({ type: 'none' })}
           onCancel={() => setSubView({ type: 'none' })}
@@ -1547,7 +1655,7 @@ export function InspectionsView({
               </div>
 
               {/* ── Primary KPI Cards ── */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
                 {/* Total Inspected Qty */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
@@ -1612,6 +1720,32 @@ export function InspectionsView({
                   </div>
                 </div>
 
+                {/* Total Failed Qty (Dedicated Quarantine Hold Card) */}
+                <div className="bg-rose-50/50 p-4 rounded-2xl border-2 border-rose-300 shadow-xs space-y-1 relative overflow-hidden">
+                  <div className="absolute top-1.5 right-2">
+                    {summaryAgg.totalFailedQty > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-600 text-white animate-pulse">
+                        HOLD
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">
+                        CLEAR
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-rose-700 uppercase tracking-wider">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                    Total Failed Qty
+                  </div>
+                  <div className="text-2xl font-black font-mono text-rose-700" title={`${summaryAgg.totalFailedQty.toLocaleString()} pcs rejected`}>
+                    {summaryAgg.totalFailedQty.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-rose-600 flex items-center justify-between">
+                    <span>{summaryAgg.failedLotsCount} lot{summaryAgg.failedLotsCount !== 1 ? 's' : ''} rejected</span>
+                    <span className="font-bold text-rose-700 font-mono">{summaryAgg.failedQtyPct}% rate</span>
+                  </div>
+                </div>
+
                 {/* Pass */}
                 <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-xs space-y-1">
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
@@ -1622,7 +1756,7 @@ export function InspectionsView({
                   <div className="text-[10px] text-emerald-500">{summaryAgg.passRate}% rate</div>
                 </div>
 
-                {/* Fail + Recheck combined mini card */}
+                {/* Fail / Recheck combined mini card */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     <XCircle className="w-3.5 h-3.5 text-rose-500" />
@@ -1636,6 +1770,55 @@ export function InspectionsView({
                   <div className="text-[10px] text-slate-400">{summaryAgg.failRate}% / {summaryAgg.recheckRate}%</div>
                 </div>
               </div>
+
+              {/* ── Inspection Failure Quarantine Alert Banner ── */}
+              {summaryAgg.totalFailedQty > 0 && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-50 via-red-50 to-amber-50 border border-rose-300 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-rose-600/30">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-black text-rose-950">
+                          Mandatory QA Quarantine Hold: {summaryAgg.totalFailedQty.toLocaleString()} Pcs Failed Inspection
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white tracking-wide uppercase">
+                          {summaryAgg.failedLotsCount} Rejected Lot{summaryAgg.failedLotsCount !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <p className="text-xs text-rose-800 mt-0.5 leading-relaxed">
+                        These production lots failed AQL acceptance and are placed under factory quarantine hold. 100% screening or corrective re-audit required before gate pass.
+                      </p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {summaryAgg.failedRecordsList.map((f, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold bg-white/95 text-rose-900 border border-rose-200 shadow-xs"
+                          >
+                            <XCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                            <span>{f.po} ({f.buyer}):</span>
+                            <span className="text-rose-700 underline font-black">{f.failedQty.toLocaleString()} pcs</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowReconciliationTable(true);
+                        setReconciliationFilter('FAILED');
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs hover:shadow transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Review Failed Lots</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* ── NEARBY DELIVERY ORDERS (SYNCED FROM BUYER ORDER MODULE) ── */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
@@ -2165,7 +2348,7 @@ export function InspectionsView({
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Filter:</span>
-                              {(['ALL', 'BALANCED', 'EXCESS', 'SHORT'] as const).map((mode) => (
+                              {(['ALL', 'BALANCED', 'EXCESS', 'SHORT', 'FAILED'] as const).map((mode) => (
                                 <button
                                   key={mode}
                                   type="button"
@@ -2173,6 +2356,8 @@ export function InspectionsView({
                                   className={`px-2 py-0.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                                     reconciliationFilter === mode
                                       ? 'bg-slate-900 text-white shadow-xs'
+                                      : mode === 'FAILED' && summaryAgg.failedLotsCount > 0
+                                      ? 'bg-rose-100 text-rose-800 hover:bg-rose-200 border border-rose-300 font-bold'
                                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                   }`}
                                 >
@@ -2182,7 +2367,9 @@ export function InspectionsView({
                                     ? `Balanced (${summaryAgg.balancedCount})`
                                     : mode === 'EXCESS'
                                     ? `Excess (${summaryAgg.excessCount})`
-                                    : `Short (${summaryAgg.shortCount})`}
+                                    : mode === 'SHORT'
+                                    ? `Short (${summaryAgg.shortCount})`
+                                    : `Failed / Hold (${summaryAgg.failedLotsCount})`}
                                 </button>
                               ))}
                             </div>
@@ -2219,6 +2406,7 @@ export function InspectionsView({
                                     if (reconciliationFilter === 'BALANCED' && !d.isBalanced) return false;
                                     if (reconciliationFilter === 'EXCESS' && !d.isExcess) return false;
                                     if (reconciliationFilter === 'SHORT' && !d.isShort) return false;
+                                    if (reconciliationFilter === 'FAILED' && !d.isFailed) return false;
                                     if (reconciliationSearch) {
                                       const q = reconciliationSearch.toLowerCase();
                                       const match =
@@ -2283,17 +2471,26 @@ export function InspectionsView({
                                           )}
                                         </td>
                                         <td className="py-2 px-3 text-center">
-                                          <span
-                                            className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                              d.status === 'PASSED'
-                                                ? 'bg-emerald-100 text-emerald-800'
-                                                : d.status === 'REJECTED'
-                                                ? 'bg-rose-100 text-rose-800'
-                                                : 'bg-amber-100 text-amber-800'
-                                            }`}
-                                          >
-                                            {d.status}
-                                          </span>
+                                          {d.isFailed ? (
+                                            <div className="flex flex-col items-center gap-0.5">
+                                              <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                                                ❌ REJECTED
+                                              </span>
+                                              <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 whitespace-nowrap">
+                                                Hold: {d.inspectedQty.toLocaleString()} pcs
+                                              </span>
+                                            </div>
+                                          ) : (
+                                            <span
+                                              className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                                d.status === 'PASSED'
+                                                  ? 'bg-emerald-100 text-emerald-800'
+                                                  : 'bg-amber-100 text-amber-800'
+                                              }`}
+                                            >
+                                              {d.status === 'CONDITIONAL_PASS' ? 'CONDITIONAL' : d.status}
+                                            </span>
+                                          )}
                                         </td>
                                         <td className="py-2 px-3 text-center">
                                           <button
@@ -2832,30 +3029,7 @@ export function InspectionsView({
                   'inspectionDate',
                   'stage',
                 ]}
-                primaryAction={
-                  canCreate ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSubView({ type: 'mobile' })}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors shadow-2xs active:scale-95 cursor-pointer shrink-0"
-                        title="Mobile Inspection Entry (Touch-optimized)"
-                      >
-                        <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="hidden sm:inline">Mobile Entry</span>
-                        <span className="sm:hidden">Mobile</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSubView({ type: 'add' })}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add Inspection</span>
-                      </button>
-                    </div>
-                  ) : null
-                }
+                primaryAction={undefined}
                 moduleKey="inspections"
                 onExport={(exportRecords) => {
                   setSelectedRecordsForExport(exportRecords.length < records.length ? exportRecords : []);

@@ -523,7 +523,7 @@ export function ProductionQualityCharts({
               ) : (
                 <div className="w-full overflow-x-auto">
                   <svg
-                    viewBox="0 0 680 250"
+                    viewBox="0 0 680 340"
                     className="w-full h-auto min-w-[540px]"
                     preserveAspectRatio="xMidYMid meet"
                   >
@@ -660,29 +660,32 @@ export function ProductionQualityCharts({
                               {d.count}
                             </text>
 
-                            {/* X-axis Label (Defect name) */}
+                            {/* Rank badge underneath bar */}
                             <text
                               x={centerX}
-                              y="212"
+                              y="207"
                               textAnchor="middle"
-                              className={`text-[9px] font-medium ${
-                                isHovered ? 'fill-slate-900 font-bold' : 'fill-slate-600'
-                              }`}
-                              style={{ fontSize: '9px' }}
-                            >
-                              {d.type.length > 13 ? `${d.type.slice(0, 11)}..` : d.type}
-                            </text>
-
-                            {/* Rank badge underneath */}
-                            <text
-                              x={centerX}
-                              y="226"
-                              textAnchor="middle"
-                              className="text-[8px] fill-slate-400 font-mono"
-                              style={{ fontSize: '8px' }}
+                              className="text-[8px] fill-slate-400 font-mono font-bold"
+                              style={{ fontSize: '8px', fontWeight: 700 }}
                             >
                               #{d.rank}
                             </text>
+
+                            {/* X-axis Label (Defect name - Vertical Display to avoid overlap) */}
+                            <g transform={`translate(${centerX}, 215) rotate(90)`}>
+                              <text
+                                x="0"
+                                y="0"
+                                textAnchor="start"
+                                dominantBaseline="middle"
+                                className={`text-[9px] font-medium transition-colors ${
+                                  isHovered ? 'fill-slate-900 font-bold' : 'fill-slate-600'
+                                }`}
+                                style={{ fontSize: '9px' }}
+                              >
+                                {d.type.length > 22 ? `${d.type.slice(0, 20)}..` : d.type}
+                              </text>
+                            </g>
                           </g>
                         );
                       });

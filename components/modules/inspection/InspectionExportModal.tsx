@@ -188,9 +188,17 @@ export function InspectionExportModal({
           </div>
 
           {/* Scope Preview Metrics */}
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
-              Quality Assurance Summary ({targetRecords.length} Audits)
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                Quality Assurance Summary ({targetRecords.length} Audits)
+              </div>
+              {kpis.totalFailedQty > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
+                  {kpis.totalFailedQty.toLocaleString()} pcs in Quarantine Hold
+                </span>
+              )}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               <div className="p-2 rounded-lg bg-white border border-slate-200">
@@ -215,6 +223,40 @@ export function InspectionExportModal({
                 <div className="text-[10px] text-slate-500 font-medium">Rejected Lots</div>
                 <div className="text-sm font-mono font-bold text-rose-700 mt-0.5">
                   {kpis.rejectedCount} Lots
+                </div>
+              </div>
+            </div>
+
+            {/* Quantity Reconciliation Preview */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center pt-1 border-t border-slate-200">
+              <div className="p-2 rounded-lg bg-white border border-slate-200">
+                <div className="text-[10px] text-slate-500 font-medium">Inspected Qty</div>
+                <div className="text-xs font-mono font-bold text-blue-900 mt-0.5">
+                  {kpis.totalInspectedQty.toLocaleString()} pcs
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-white border border-slate-200">
+                <div className="text-[10px] text-slate-500 font-medium">Order Qty</div>
+                <div className="text-xs font-mono font-bold text-indigo-900 mt-0.5">
+                  {kpis.totalOrderQty.toLocaleString()} pcs
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-white border border-emerald-100">
+                <div className="text-[10px] text-emerald-600 font-medium">Excess Qty</div>
+                <div className="text-xs font-mono font-bold text-emerald-700 mt-0.5">
+                  +{kpis.totalExcessQty.toLocaleString()} pcs
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-white border border-amber-100">
+                <div className="text-[10px] text-amber-600 font-medium">Short Qty</div>
+                <div className="text-xs font-mono font-bold text-amber-700 mt-0.5">
+                  -{kpis.totalShortQty.toLocaleString()} pcs
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-rose-50/60 border border-rose-200">
+                <div className="text-[10px] text-rose-600 font-bold">Failed Qty</div>
+                <div className="text-xs font-mono font-black text-rose-700 mt-0.5">
+                  {kpis.totalFailedQty.toLocaleString()} pcs
                 </div>
               </div>
             </div>

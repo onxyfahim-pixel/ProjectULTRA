@@ -714,17 +714,17 @@ export interface QualityAudit {
   id: string;
   auditCode: string;
   auditType:
-    | 'INTERNAL'
-    | 'EXTERNAL'
-    | 'SUB_SUPPLIER'
-    | 'INTERNAL_QMS'
-    | 'BUYER_TECHNICAL'
-    | 'SOCIAL_COMPLIANCE'
-    | 'SECURITY_CTPAT'
-    | 'SUSTAINABILITY'
-    | 'SAFETY'
-    | '5S'
-    | string;
+  | 'INTERNAL'
+  | 'EXTERNAL'
+  | 'SUB_SUPPLIER'
+  | 'INTERNAL_QMS'
+  | 'BUYER_TECHNICAL'
+  | 'SOCIAL_COMPLIANCE'
+  | 'SECURITY_CTPAT'
+  | 'SUSTAINABILITY'
+  | 'SAFETY'
+  | '5S'
+  | string;
   auditCategory?: AuditCategory;
   standard: string; // e.g. ISO 9001:2015, HIGG FEM, WRAP, SMETA 4-PILLAR, Buyer QMS
   auditorName: string;
@@ -1473,6 +1473,18 @@ export interface ProcessFlowStep {
   responsibleRole?: string;
   criticalGate?: boolean;
   toleranceSpecs?: string;
+
+  // Visual Tree & Flowchart Properties
+  nodeType?: 'START' | 'PROCESS' | 'DECISION' | 'INSPECTION' | 'CORRECTION' | 'END';
+  shape?: 'oval' | 'rectangle' | 'diamond';
+  actionTag?: 'KEEP RECORD' | 'MAKE REPORT' | 'MAKE RECORD' | string;
+  actionTagPosition?: 'left' | 'right' | string;
+  decisionBranch?: 'PASS' | 'FAIL' | 'ROOT' | 'LEFT' | 'RIGHT' | string;
+  parentStepId?: string;
+  branchLabel?: string;
+  connectedToStepId?: string | string[];
+  loopBackToStepId?: string;
+  statusState?: 'VERIFIED' | 'IN_PROGRESS' | 'PENDING' | 'HALTED';
 }
 
 export type ProcessFlowStatus = 'ACTIVE' | 'DRAFT' | 'UNDER_REVIEW' | 'ARCHIVED';

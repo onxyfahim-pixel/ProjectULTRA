@@ -63,6 +63,8 @@ import {
   getProductionUnits,
   getProductionSections,
   INITIAL_PRODUCTION_UNITS,
+  INITIAL_PRODUCTION_SECTIONS,
+  INITIAL_PRODUCTION_LINES,
 } from '@/lib/db/production-management-store';
 import { ProductionUnit, ProductionSection, ProductionLine } from '@/lib/types/production-management';
 import {
@@ -490,42 +492,150 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
     return sorted.slice(0, 5);
   }, [summaryOrders]);
 
-  // Unique lists for Unit, Floor Section, Line, Buyer, Status filters
-  const uniqueUnits = useMemo(() => {
-    const set = new Set<string>();
-    managedUnits.forEach((u) => {
-      if (u.name) set.add(u.name.split('(')[0].trim());
-      if (u.unitCode) set.add(u.unitCode);
-    });
-    orders.forEach((o) => {
-      if (o.unit) set.add(o.unit.split('(')[0].trim());
-    });
-    return Array.from(set).filter(Boolean);
-  }, [orders, managedUnits]);
+  // Clean Management-Driven Connected Lists for Unit, Section, and Line filters
+  const availableUnits = useMemo(() => {
+    const list = managedUnits.length > 0 ? managedUnits : INITIAL_PRODUCTION_UNITS;
+    return list.filter((u) => u.status !== 'INACTIVE');
+  }, [managedUnits]);
 
-  const uniqueSections = useMemo(() => {
-    const set = new Set<string>();
-    managedSections.forEach((s) => {
-      if (s.name) set.add(s.name);
-    });
-    orders.forEach((o) => {
-      if (o.section) set.add(o.section);
-    });
-    return Array.from(set).filter(Boolean);
-  }, [orders, managedSections]);
+  // Connected Sections:
+  // When unitFilter === 'ALL': show all active management sections (deduplicated by name)
+  // When unitFilter !== 'ALL': only show sections connected to the selected unit
+  const availableSections = useMemo<ProductionSection[]>(() => {
+    const allSecs: ProductionSection[] = managedSections.length > 0 ? managedSections : INITIAL_PRODUCTION_SECTIONS;
+    const activeSecs = allSecs.filter((s: ProductionSection) => s.status !== 'INACTIVE');
 
-  const uniqueLines = useMemo(() => {
-    const set = new Set<string>();
-    managedLines.forEach((l) => {
-      if (l.name) set.add(l.name.split('(')[0].trim());
-      if (l.lineCode) set.add(l.lineCode);
+    if (unitFilter === 'ALL') {
+      const seen = new Set<string>();
+      return activeSecs.filter((s: ProductionSection) => {
+        if (seen.has(s.name)) return false;
+        seen.add(s.name);
+        return true;
+      });
+    }
+
+    const selUnit = availableUnits.find(
+      (u) => u.name === unitFilter || u.id === unitFilter || u.unitCode === unitFilter
+    );
+
+    const seen = new Set<string>();
+    return activeSecs.filter((s: ProductionSection) => {
+      const belongsDirectly =
+        (selUnit && (s.unitId === selUnit.id || s.unitName === selUnit.name)) ||
+        s.unitName === unitFilter ||
+        s.unitId === unitFilter;
+
+      const hasLinesInUnit = managedLines.some((l: ProductionLine) => {
+        const lineInUnit =
+          (selUnit && (l.unitId === selUnit.id || l.unitName === selUnit.name)) ||
+          l.unitName === unitFilter ||
+          l.unitId === unitFilter;
+        return lineInUnit && (l.sectionId === s.id || l.sectionName === s.name);
+      });
+
+      if ((belongsDirectly || hasLinesInUnit) && !seen.has(s.name)) {
+        seen.add(s.name);
+        return true;
+      }
+      return false;
     });
-    orders.forEach((o) => {
-      if (o.lineId) set.add(o.lineId);
-      if (o.sewingLine) set.add(o.sewingLine.split('(')[0].trim());
+  }, [managedSections, availableUnits, unitFilter, managedLines]);
+
+  // Connected Lines:
+  // Filtered by selected unit AND selected section
+  const availableLines = useMemo<ProductionLine[]>(() => {
+    const allLines: ProductionLine[] = managedLines.length > 0 ? managedLines : INITIAL_PRODUCTION_LINES;
+    const activeLines = allLines.filter((l: ProductionLine) => l.status !== 'INACTIVE');
+
+    const selUnit = availableUnits.find(
+      (u) => u.name === unitFilter || u.id === unitFilter || u.unitCode === unitFilter
+    );
+
+    return activeLines.filter((l: ProductionLine) => {
+      // Unit match
+      if (unitFilter !== 'ALL') {
+        const matchesUnit =
+          (selUnit && (l.unitId === selUnit.id || l.unitName === selUnit.name)) ||
+          l.unitName === unitFilter ||
+          l.unitId === unitFilter;
+        if (!matchesUnit) return false;
+      }
+
+      // Section match
+      if (sectionFilter !== 'ALL') {
+        const matchesSection =
+          l.sectionName === sectionFilter ||
+          (l.sectionName && l.sectionName.toLowerCase().includes(sectionFilter.toLowerCase())) ||
+          (sectionFilter && sectionFilter.toLowerCase().includes(l.sectionName?.toLowerCase() || ''));
+        if (!matchesSection) return false;
+      }
+
+      return true;
     });
-    return Array.from(set).filter(Boolean);
-  }, [orders, managedLines]);
+  }, [managedLines, availableUnits, unitFilter, sectionFilter]);
+
+  // Cascading Filter Handlers
+  const handleUnitFilterChange = (newUnit: string) => {
+    setUnitFilter(newUnit);
+    if (newUnit === 'ALL') return;
+
+    const selUnit = availableUnits.find(
+      (u) => u.name === newUnit || u.id === newUnit || u.unitCode === newUnit
+    );
+    const allSecs: ProductionSection[] = managedSections.length > 0 ? managedSections : INITIAL_PRODUCTION_SECTIONS;
+    const validSections = allSecs.filter((s: ProductionSection) => {
+      const belongs =
+        (selUnit && (s.unitId === selUnit.id || s.unitName === selUnit.name)) ||
+        s.unitName === newUnit ||
+        s.unitId === newUnit;
+      const hasLines = managedLines.some((l: ProductionLine) => {
+        const lineInUnit =
+          (selUnit && (l.unitId === selUnit.id || l.unitName === selUnit.name)) ||
+          l.unitName === newUnit ||
+          l.unitId === newUnit;
+        return lineInUnit && (l.sectionId === s.id || l.sectionName === s.name);
+      });
+      return belongs || hasLines;
+    });
+
+    if (sectionFilter !== 'ALL' && !validSections.some((s: ProductionSection) => s.name === sectionFilter)) {
+      setSectionFilter('ALL');
+      setLineFilter('ALL');
+    }
+  };
+
+  const handleSectionFilterChange = (newSec: string) => {
+    setSectionFilter(newSec);
+    if (newSec === 'ALL') return;
+
+    const selUnit = availableUnits.find(
+      (u) => u.name === unitFilter || u.id === unitFilter || u.unitCode === unitFilter
+    );
+    const allLines: ProductionLine[] = managedLines.length > 0 ? managedLines : INITIAL_PRODUCTION_LINES;
+    const validLines = allLines.filter((l: ProductionLine) => {
+      if (unitFilter !== 'ALL') {
+        const matchesUnit =
+          (selUnit && (l.unitId === selUnit.id || l.unitName === selUnit.name)) ||
+          l.unitName === unitFilter ||
+          l.unitId === unitFilter;
+        if (!matchesUnit) return false;
+      }
+      return (
+        l.sectionName === newSec ||
+        (l.sectionName && l.sectionName.toLowerCase().includes(newSec.toLowerCase())) ||
+        (newSec && newSec.toLowerCase().includes(l.sectionName?.toLowerCase() || ''))
+      );
+    });
+
+    if (
+      lineFilter !== 'ALL' &&
+      !validLines.some(
+        (l: ProductionLine) => l.name === lineFilter || l.lineCode === lineFilter || l.id === lineFilter
+      )
+    ) {
+      setLineFilter('ALL');
+    }
+  };
 
   const uniqueBuyers = useMemo(() => {
     return Array.from(new Set(orders.map((o) => o.buyer))).filter(Boolean);
@@ -1391,36 +1501,36 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                       <Building2 className="w-3.5 h-3.5 text-slate-400" />
                       <select
                         value={unitFilter}
-                        onChange={(e) => setUnitFilter(e.target.value)}
+                        onChange={(e) => handleUnitFilterChange(e.target.value)}
                         className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
                       >
-                        <option value="ALL">All Units ({uniqueUnits.length})</option>
-                        {uniqueUnits.map((u) => (
-                          <option key={u} value={u}>
-                            {u}
+                        <option value="ALL">All Units ({availableUnits.length})</option>
+                        {availableUnits.map((u) => (
+                          <option key={u.id || u.name} value={u.name}>
+                            {u.name}
                           </option>
                         ))}
                       </select>
                     </div>
 
-                    {/* Section Filter */}
+                    {/* Section Filter (Connected to Unit) */}
                     <div className="flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5 text-indigo-500" />
                       <select
                         value={sectionFilter}
-                        onChange={(e) => setSectionFilter(e.target.value)}
+                        onChange={(e) => handleSectionFilterChange(e.target.value)}
                         className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                       >
-                        <option value="ALL">All Sections ({uniqueSections.length})</option>
-                        {uniqueSections.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
+                        <option value="ALL">All Sections ({availableSections.length})</option>
+                        {availableSections.map((s) => (
+                          <option key={s.id || s.name} value={s.name}>
+                            {s.name}
                           </option>
                         ))}
                       </select>
                     </div>
 
-                    {/* Line Filter */}
+                    {/* Line Filter (Connected to Unit & Section) */}
                     <div className="flex items-center gap-1.5">
                       <Factory className="w-3.5 h-3.5 text-blue-500" />
                       <select
@@ -1428,10 +1538,10 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                         onChange={(e) => setLineFilter(e.target.value)}
                         className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
                       >
-                        <option value="ALL">All Lines ({uniqueLines.length})</option>
-                        {uniqueLines.map((l) => (
-                          <option key={l} value={l}>
-                            {l}
+                        <option value="ALL">All Lines ({availableLines.length})</option>
+                        {availableLines.map((l) => (
+                          <option key={l.id || l.lineCode} value={l.name}>
+                            {l.lineCode ? `[${l.lineCode}] ${l.name}` : l.name}
                           </option>
                         ))}
                       </select>
@@ -1943,36 +2053,36 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                       <Building2 className="w-3.5 h-3.5 text-slate-400" />
                       <select
                         value={unitFilter}
-                        onChange={(e) => setUnitFilter(e.target.value)}
+                        onChange={(e) => handleUnitFilterChange(e.target.value)}
                         className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[170px]"
                       >
-                        <option value="ALL">All Units ({uniqueUnits.length})</option>
-                        {uniqueUnits.map((u) => (
-                          <option key={u} value={u}>
-                            {u}
+                        <option value="ALL">All Units ({availableUnits.length})</option>
+                        {availableUnits.map((u) => (
+                          <option key={u.id || u.name} value={u.name}>
+                            {u.name}
                           </option>
                         ))}
                       </select>
                     </div>
 
-                    {/* Section Filter */}
+                    {/* Section Filter (Connected to Unit) */}
                     <div className="flex items-center gap-1">
                       <Layers className="w-3.5 h-3.5 text-indigo-500" />
                       <select
                         value={sectionFilter}
-                        onChange={(e) => setSectionFilter(e.target.value)}
+                        onChange={(e) => handleSectionFilterChange(e.target.value)}
                         className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer max-w-[170px]"
                       >
-                        <option value="ALL">All Sections ({uniqueSections.length})</option>
-                        {uniqueSections.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
+                        <option value="ALL">All Sections ({availableSections.length})</option>
+                        {availableSections.map((s) => (
+                          <option key={s.id || s.name} value={s.name}>
+                            {s.name}
                           </option>
                         ))}
                       </select>
                     </div>
 
-                    {/* Line Filter */}
+                    {/* Line Filter (Connected to Unit & Section) */}
                     <div className="flex items-center gap-1">
                       <Factory className="w-3.5 h-3.5 text-blue-500" />
                       <select
@@ -1980,10 +2090,10 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                         onChange={(e) => setLineFilter(e.target.value)}
                         className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-[160px]"
                       >
-                        <option value="ALL">All Lines ({uniqueLines.length})</option>
-                        {uniqueLines.map((l) => (
-                          <option key={l} value={l}>
-                            {l}
+                        <option value="ALL">All Lines ({availableLines.length})</option>
+                        {availableLines.map((l) => (
+                          <option key={l.id || l.lineCode} value={l.name}>
+                            {l.lineCode ? `[${l.lineCode}] ${l.name}` : l.name}
                           </option>
                         ))}
                       </select>
@@ -2059,31 +2169,7 @@ export function ProductionView({ orders: propOrders, onUpdateOrders }: Productio
                   'lineId',
                   'status',
                 ]}
-                primaryAction={
-                  canCreate ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSubView({ type: 'mobile_entry' })}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors shadow-2xs cursor-pointer shrink-0"
-                        title="Mobile Live Floor Entry: Touch-optimized for Handheld Phones"
-                      >
-                        <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Mobile Entry</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSubView({ type: 'add_record' });
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer shrink-0"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add Record</span>
-                      </button>
-                    </div>
-                  ) : undefined
-                }
+                primaryAction={undefined}
                 moduleKey="production"
                 onExport={
                   canExport

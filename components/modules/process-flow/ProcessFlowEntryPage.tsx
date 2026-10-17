@@ -17,12 +17,16 @@ import {
   Factory,
   ChevronRight,
   ShieldAlert,
+  Network,
+  Eye,
 } from 'lucide-react';
 import { ProcessFlowChart, ProcessFlowStep } from '@/lib/types/modules';
 import {
   MASTER_GARMENT_FLOW_STEPS,
+  SEWING_SECTION_FLOW_STEPS,
   INITIAL_PROCESS_FLOW_CHARTS,
 } from './process-flow-data';
+import { ProcessFlowVisualTree } from './ProcessFlowVisualTree';
 
 interface ProcessFlowEntryPageProps {
   initialFlow?: ProcessFlowChart | null;
@@ -40,6 +44,7 @@ export function ProcessFlowEntryPage({
   const isEditing = Boolean(initialFlow);
 
   const [activeTab, setActiveTab] = useState<'general' | 'sequencer' | 'preview'>('general');
+  const [showLiveTreePreview, setShowLiveTreePreview] = useState<boolean>(false);
 
   // Form State
   const [formData, setFormData] = useState<ProcessFlowChart>(() => {
@@ -154,6 +159,51 @@ export function ProcessFlowEntryPage({
     showToast(`Loaded "${template.title}" template`);
   };
 
+  // Start Clean Blank Tree
+  const handleStartBlankFlow = () => {
+    setFormData((prev) => ({
+      ...prev,
+      title: prev.title || 'Custom Process Flow',
+      steps: [
+        {
+          id: `step-${Date.now()}-1`,
+          stepNumber: 1,
+          stageName: 'Initial Material Check & Setup',
+          department: prev.department || 'Production',
+          inputMaterials: 'Work Order, Raw Materials',
+          transformation: 'Incoming lot inspection & line parameter setup',
+          qualityGate: '100% Parameter Verification',
+          standardTool: 'Standard Inspection Table',
+          leadTimeHours: 1,
+          responsibleRole: 'Quality Inspector',
+          criticalGate: false,
+          shape: 'oval',
+          nodeType: 'START',
+          actionTag: 'KEEP RECORD',
+          actionTagPosition: 'right',
+        },
+        {
+          id: `step-${Date.now()}-2`,
+          stepNumber: 2,
+          stageName: 'Main Production Operation',
+          department: prev.department || 'Production',
+          inputMaterials: 'Verified Components',
+          transformation: 'Assembly / processing operation according to tech pack',
+          qualityGate: 'In-line Inspection Acceptance',
+          standardTool: 'Standard Machine',
+          leadTimeHours: 4,
+          responsibleRole: 'Line Operator',
+          criticalGate: true,
+          shape: 'rectangle',
+          nodeType: 'PROCESS',
+        },
+      ],
+      totalLeadTimeHours: 5,
+      criticalGatesCount: 1,
+    }));
+    showToast('Clean blank tree initialized. Add stages to build your custom flow.');
+  };
+
   // Step Management
   const handleAddStep = () => {
     const nextSeq = (formData.steps?.length || 0) + 1;
@@ -175,6 +225,245 @@ export function ProcessFlowEntryPage({
       ...prev,
       steps: [...(prev.steps || []), newStep],
     }));
+  };
+
+  const handleAddDecisionSplit = () => {
+    const nextSeq = (formData.steps?.length || 0) + 1;
+    const parentCheck: ProcessFlowStep = {
+      id: `step-${Date.now()}-check`,
+      stepNumber: nextSeq,
+      stageName: 'Quality Inspection Check',
+      department: 'Quality Assurance',
+      inputMaterials: 'Assembled Units',
+      transformation: '100% Quality & Tolerance Inspection Gate',
+      qualityGate: 'Acceptance Criteria Check',
+      standardTool: 'Inspection Table & Gauge',
+      leadTimeHours: 1,
+      responsibleRole: 'QC Inspector',
+      criticalGate: true,
+      shape: 'diamond',
+      nodeType: 'DECISION',
+      actionTag: 'MAKE REPORT',
+      actionTagPosition: 'left',
+    };
+
+    const passNode: ProcessFlowStep = {
+      id: `step-${Date.now()}-pass`,
+      stepNumber: nextSeq + 1,
+      stageName: 'Send to Finishing / Next Stage',
+      department: 'Finishing Department',
+      inputMaterials: 'Passed Units',
+      transformation: 'Release to downstream manufacturing stream',
+      qualityGate: '100% Passed Lot Clearance',
+      standardTool: 'Conveyor Stream',
+      leadTimeHours: 2,
+      responsibleRole: 'Finishing In-Charge',
+      criticalGate: false,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+      decisionBranch: 'PASS',
+    };
+
+    const failNode: ProcessFlowStep = {
+      id: `step-${Date.now()}-fail`,
+      stepNumber: nextSeq + 2,
+      stageName: 'Return to Sewing for Rectify',
+      department: 'Production Floor',
+      inputMaterials: 'Defective Units',
+      transformation: 'Rework and stitch defect rectification',
+      qualityGate: 'Rework Clearance Audit',
+      standardTool: 'Rework Machine Station',
+      leadTimeHours: 2,
+      responsibleRole: 'Rework Operator',
+      criticalGate: true,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+      decisionBranch: 'FAIL',
+    };
+
+    setFormData((prev) => ({
+      ...prev,
+      steps: [...(prev.steps || []), parentCheck, passNode, failNode],
+    }));
+    showToast('Added Decision Gate with connected PASS & FAIL branches!');
+  };
+
+  const handleAddParallelSplit = () => {
+    const nextSeq = (formData.steps?.length || 0) + 1;
+    const parentNode: ProcessFlowStep = {
+      id: `step-${Date.now()}-split`,
+      stepNumber: nextSeq,
+      stageName: 'Component Prep & Dual Stream Splitting',
+      department: 'Production Floor',
+      inputMaterials: 'Bundle Cuts / Materials',
+      transformation: 'Distribution to parallel assembly line stations',
+      qualityGate: 'Bundle Count & Pattern Conformance',
+      standardTool: 'Line Distribution Table',
+      leadTimeHours: 1,
+      responsibleRole: 'Line Supervisor',
+      criticalGate: false,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+    };
+
+    const leftNode: ProcessFlowStep = {
+      id: `step-${Date.now()}-left`,
+      stepNumber: nextSeq + 1,
+      stageName: 'Stream A: Front Panel Assembly',
+      department: 'Sewing Line A',
+      inputMaterials: 'Front Panel Components',
+      transformation: 'Progressive front panel sewing and pocket fusing',
+      qualityGate: 'Tolerance ± 1.0mm',
+      standardTool: 'Single Needle Lockstitch',
+      leadTimeHours: 3,
+      responsibleRole: 'Sewing Operator A',
+      criticalGate: false,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+      decisionBranch: 'LEFT',
+    };
+
+    const rightNode: ProcessFlowStep = {
+      id: `step-${Date.now()}-right`,
+      stepNumber: nextSeq + 2,
+      stageName: 'Stream B: Back Panel Assembly',
+      department: 'Sewing Line B',
+      inputMaterials: 'Back Panel Components',
+      transformation: 'Back panel dart stitching and yoke attaching',
+      qualityGate: 'Tolerance ± 1.0mm',
+      standardTool: 'Single Needle Lockstitch',
+      leadTimeHours: 3,
+      responsibleRole: 'Sewing Operator B',
+      criticalGate: false,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+      decisionBranch: 'RIGHT',
+    };
+
+    setFormData((prev) => ({
+      ...prev,
+      steps: [...(prev.steps || []), parentNode, leftNode, rightNode],
+    }));
+    showToast('Added Parallel Dual Stream (Left & Right) without PASS/FAIL badges!');
+  };
+
+  const handleAddThreeWaySplit = () => {
+    const nextSeq = (formData.steps?.length || 0) + 1;
+    const parentId = `step-${Date.now()}-split3`;
+    const parentNode: ProcessFlowStep = {
+      id: parentId,
+      stepNumber: nextSeq,
+      stageName: 'Component Prep & 3-Way Tri-Stream Split',
+      department: 'Production Floor',
+      inputMaterials: 'Bundle Cuts / Trims / Materials',
+      transformation: 'Distribution across 3 parallel specialized sub-assembly lines',
+      qualityGate: 'Bundle Conformance Audit',
+      standardTool: 'Line Distribution Conveyor Table',
+      leadTimeHours: 1,
+      responsibleRole: 'Line Supervisor',
+      criticalGate: false,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+    };
+
+    const streamA: ProcessFlowStep = {
+      id: `step-${Date.now()}-stream-a`,
+      stepNumber: nextSeq + 1,
+      stageName: 'Stream A: Front Panel Prep',
+      department: 'Sewing Line A',
+      inputMaterials: 'Front Panel Cuts',
+      transformation: 'Front placket fusing and pocket attachment',
+      qualityGate: 'Tolerance ± 1.0mm',
+      standardTool: 'Single Needle Lockstitch',
+      leadTimeHours: 3,
+      responsibleRole: 'Sewing Operator A',
+      criticalGate: false,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+      parentStepId: parentId,
+      branchLabel: 'Stream A',
+    };
+
+    const streamB: ProcessFlowStep = {
+      id: `step-${Date.now()}-stream-b`,
+      stepNumber: nextSeq + 2,
+      stageName: 'Stream B: Back Panel Prep',
+      department: 'Sewing Line B',
+      inputMaterials: 'Back Panel Cuts',
+      transformation: 'Yoke joining and pleat stitching',
+      qualityGate: 'Tolerance ± 1.0mm',
+      standardTool: 'Single Needle Lockstitch',
+      leadTimeHours: 3,
+      responsibleRole: 'Sewing Operator B',
+      criticalGate: false,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+      parentStepId: parentId,
+      branchLabel: 'Stream B',
+    };
+
+    const streamC: ProcessFlowStep = {
+      id: `step-${Date.now()}-stream-c`,
+      stepNumber: nextSeq + 3,
+      stageName: 'Stream C: Collar & Cuff Sub-Assembly',
+      department: 'Sewing Line C',
+      inputMaterials: 'Collar & Cuff Interlinings',
+      transformation: 'Automatic collar runstitching and point turning',
+      qualityGate: 'Point Angle Symmetry ± 0.5mm',
+      standardTool: 'Specialized Profile Stitcher',
+      leadTimeHours: 2.5,
+      responsibleRole: 'Sewing Operator C',
+      criticalGate: false,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+      parentStepId: parentId,
+      branchLabel: 'Stream C',
+    };
+
+    setFormData((prev) => ({
+      ...prev,
+      steps: [...(prev.steps || []), parentNode, streamA, streamB, streamC],
+    }));
+    showToast('Added 3-Way Parallel Split (Stream A, B, and C)!');
+  };
+
+  const handleAddBranchUnderStage = (parentIndex: number) => {
+    const parent = formData.steps?.[parentIndex];
+    if (!parent) return;
+
+    // Count existing children under this parent
+    const existingChildren = (formData.steps || []).filter((s) => s.parentStepId === parent.id);
+    const branchLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    const branchLetter = branchLetters[existingChildren.length] || `Stream ${existingChildren.length + 1}`;
+    const defaultBranchLabel = `Stream ${branchLetter}`;
+
+    const nextSeq = (formData.steps?.length || 0) + 1;
+    const newBranch: ProcessFlowStep = {
+      id: `step-${Date.now()}-branch-${existingChildren.length + 1}`,
+      stepNumber: nextSeq,
+      stageName: `${defaultBranchLabel}: ${parent.stageName} Branch`,
+      department: parent.department || 'Production Floor',
+      inputMaterials: `Output components from Stage ${parent.stepNumber}`,
+      transformation: `Parallel operation stream ${branchLetter} execution`,
+      qualityGate: 'Branch Acceptance Specification',
+      standardTool: 'Standard Industrial Machine',
+      leadTimeHours: 2,
+      responsibleRole: parent.responsibleRole || 'Line Specialist',
+      criticalGate: false,
+      shape: 'rectangle',
+      nodeType: 'PROCESS',
+      parentStepId: parent.id,
+      branchLabel: defaultBranchLabel,
+    };
+
+    // Insert new branch right after the parent or at the end
+    setFormData((prev) => {
+      const steps = [...(prev.steps || [])];
+      steps.splice(parentIndex + 1 + existingChildren.length, 0, newBranch);
+      const renumbered = steps.map((s, idx) => ({ ...s, stepNumber: idx + 1 }));
+      return { ...prev, steps: renumbered };
+    });
+    showToast(`Added branch "${defaultBranchLabel}" under "${parent.stageName}"!`);
   };
 
   const handleUpdateStep = (index: number, field: keyof ProcessFlowStep, val: any) => {
@@ -501,55 +790,150 @@ export function ProcessFlowEntryPage({
       {/* TAB 2: STEP-BY-STEP FLOW SEQUENCER */}
       {activeTab === 'sequencer' && (
         <div className="space-y-5 animate-in fade-in duration-200">
-          {/* Toolbar with Template Loader and Add Stage */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                Process Pipeline Sequencer ({formData.steps?.length || 0} Stages)
-              </h3>
-              <p className="text-xs text-slate-500">
-                Total operating cycle: <strong className="text-slate-800 font-mono">{totalHours} Hours</strong> •{' '}
-                <strong className="text-emerald-700">{criticalGates} Critical Gates</strong>
-              </p>
+          {/* Top Actions & Quick Visual Templates */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                {(formData.steps || []).length} Stages Configured
+              </span>
+              <span className="text-xs text-slate-500 font-medium hidden sm:inline">
+                • {totalHours} Total Hours • {criticalGates} Critical Gates
+              </span>
             </div>
 
-            <div className="flex items-center flex-wrap gap-2">
-              <span className="text-[11px] text-slate-400 font-medium">Preload:</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleStartBlankFlow}
+                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5 mr-1"
+                title="Initialize a fresh blank flowchart with 2 initial stages"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>✨ Start Clean Blank Tree</span>
+              </button>
+
+              <span className="text-[11px] font-bold uppercase text-slate-400 mr-1 hidden md:inline">
+                Preset Trees:
+              </span>
               <button
                 type="button"
                 onClick={() => handleLoadTemplate(0)}
-                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                title="Knitwear Master Flow"
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                title="Sewing Section Standard Flow Chart (Exact Image Match)"
               >
-                Knit Flow
+                <span>🧵 Sewing Tree (Image Match)</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleLoadTemplate(1)}
-                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                title="Denim Wet & Dry Wash Flow"
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                title="Full Factory Master Garment Flow"
               >
-                Denim Flow
+                👕 Master Knit
               </button>
               <button
                 type="button"
                 onClick={() => handleLoadTemplate(2)}
-                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                title="Activewear Seamless Construction Flow"
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                title="Spreading & CAD Cutting Flow"
               >
-                Activewear Flow
+                ✂️ Cutting CAD
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLoadTemplate(3)}
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                title="Denim Wet & Dry Wash Flow"
+              >
+                👖 Denim
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLoadTemplate(4)}
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                title="Finishing & Needle Detection Flow"
+              >
+                📦 Finishing
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowLiveTreePreview((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer shadow-xs ml-1 ${
+                  showLiveTreePreview
+                    ? 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-400/30'
+                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                }`}
+                title="Toggle in-line live Visual Tree flowchart preview"
+              >
+                <Network className="w-3.5 h-3.5" />
+                <span>{showLiveTreePreview ? 'Hide Live Tree' : 'Live Tree Preview'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAddParallelSplit}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition-colors shadow-2xs cursor-pointer ml-1"
+                title="Add two parallel branches without PASS/FAIL badges (e.g. Stream A and Stream B)"
+              >
+                <Network className="w-3.5 h-3.5" />
+                <span>+ Parallel Split (Stream A / B)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAddThreeWaySplit}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors shadow-2xs cursor-pointer ml-1"
+                title="Add 3 parallel branches (Stream A, Stream B, Stream C)"
+              >
+                <GitCommit className="w-3.5 h-3.5" />
+                <span>+ 3-Way Split (A / B / C)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAddDecisionSplit}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors shadow-2xs cursor-pointer ml-1"
+                title="Add a decision node with connected PASS and FAIL branches"
+              >
+                <GitCommit className="w-3.5 h-3.5" />
+                <span>+ Split (PASS / FAIL)</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleAddStep}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs ml-2"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs ml-1"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Stage</span>
               </button>
             </div>
           </div>
+
+          {/* DOCKED LIVE VISUAL TREE PREVIEW (SHOWN WHEN TOGGLED) */}
+          {showLiveTreePreview && (
+            <div className="p-4 bg-slate-900 rounded-2xl border border-slate-700 shadow-xl space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between text-xs text-slate-300 pb-2 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-bold text-white">Live Visual Flowchart Tree Preview</span>
+                  <span className="text-slate-400 font-mono">({formData.steps?.length || 0} Stages Connected)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('preview')}
+                  className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold underline cursor-pointer"
+                >
+                  Open Fullscreen Preview Tab &rarr;
+                </button>
+              </div>
+              <ProcessFlowVisualTree
+                flow={formData}
+                onUpdateFlow={(updated) => setFormData(updated)}
+              />
+            </div>
+          )}
 
           {/* Sequential Step Cards */}
           <div className="space-y-3">
@@ -581,7 +965,32 @@ export function ProcessFlowEntryPage({
                   </div>
 
                   {/* Actions & Reorder */}
-                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto">
+                    {step.parentStepId && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        ↳ Branch: {step.branchLabel || 'Child Stream'}
+                      </span>
+                    )}
+
+                    {(() => {
+                      const childCount = (formData.steps || []).filter((s) => s.parentStepId === step.id).length;
+                      return childCount > 0 ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          🌿 {childCount} Branch{childCount > 1 ? 'es' : ''}
+                        </span>
+                      ) : null;
+                    })()}
+
+                    <button
+                      type="button"
+                      onClick={() => handleAddBranchUnderStage(idx)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors shadow-2xs cursor-pointer mr-1"
+                      title="Add a new branch connected under this stage"
+                    >
+                      <GitCommit className="w-3.5 h-3.5" />
+                      <span>+ Branch from Here</span>
+                    </button>
+
                     <label className="flex items-center gap-1 text-xs text-slate-700 cursor-pointer mr-2">
                       <input
                         type="checkbox"
@@ -705,6 +1114,110 @@ export function ProcessFlowEntryPage({
                       />
                     </div>
                   </div>
+
+                  {/* Visual Tree Node & Documentation Tag Linking */}
+                  <div className="pt-2.5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-slate-50/70 p-2.5 rounded-xl text-xs md:col-span-2 lg:col-span-3">
+                    {/* 1. Branch Origin (Parent Stage) */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-indigo-700 block flex items-center gap-1">
+                        <GitCommit className="w-3 h-3 text-indigo-600" />
+                        <span>Branch Origin (Parent Node)</span>
+                      </label>
+                      <select
+                        value={step.parentStepId || ''}
+                        onChange={(e) => {
+                          const pId = e.target.value || undefined;
+                          handleUpdateStep(idx, 'parentStepId', pId);
+                          if (pId && !step.branchLabel) {
+                            handleUpdateStep(idx, 'branchLabel', 'Stream A');
+                          }
+                        }}
+                        className="w-full px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 font-medium text-xs truncate"
+                      >
+                        <option value="">-- Main Sequential Stream --</option>
+                        {(formData.steps || [])
+                          .filter((s) => s.id !== step.id)
+                          .map((s) => (
+                            <option key={s.id} value={s.id}>
+                              Branch under #{s.stepNumber}: {s.stageName.slice(0, 24)}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    {/* 2. Branch Name / Stream Label */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-blue-700 block">
+                        Branch Label / Stream
+                      </label>
+                      <input
+                        type="text"
+                        value={step.branchLabel || (step.decisionBranch && step.decisionBranch !== 'ROOT' ? step.decisionBranch : '')}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          handleUpdateStep(idx, 'branchLabel', val);
+                          handleUpdateStep(idx, 'decisionBranch', val);
+                        }}
+                        placeholder="e.g. Stream A, PASS, FAIL..."
+                        className="w-full px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 font-medium text-xs"
+                      />
+                    </div>
+
+                    {/* 3. Tree Node Shape */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-500 block flex items-center gap-1">
+                        <Network className="w-3 h-3 text-blue-600" />
+                        <span>Tree Node Shape</span>
+                      </label>
+                      <select
+                        value={step.shape || (step.nodeType === 'DECISION' ? 'diamond' : step.nodeType === 'START' || step.nodeType === 'END' || idx === 0 ? 'oval' : 'rectangle')}
+                        onChange={(e) => {
+                          const shape = e.target.value as 'rectangle' | 'oval' | 'diamond';
+                          handleUpdateStep(idx, 'shape', shape);
+                          const nodeType = shape === 'diamond' ? 'DECISION' : shape === 'oval' ? 'START' : 'PROCESS';
+                          handleUpdateStep(idx, 'nodeType', nodeType);
+                        }}
+                        className="w-full px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 font-medium text-xs"
+                      >
+                        <option value="rectangle">Standard Rectangle</option>
+                        <option value="oval">Capsule / Oval (Terminal)</option>
+                        <option value="diamond">Diamond (Decision Gate)</option>
+                      </select>
+                    </div>
+
+                    {/* 4. Side Action Tag */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-amber-700 block">
+                        Side Action Tag
+                      </label>
+                      <select
+                        value={step.actionTag || ''}
+                        onChange={(e) => handleUpdateStep(idx, 'actionTag', e.target.value || undefined)}
+                        className="w-full px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 font-medium text-xs"
+                      >
+                        <option value="">No Action Tag</option>
+                        <option value="KEEP RECORD">KEEP RECORD (Gold Badge)</option>
+                        <option value="MAKE REPORT">MAKE REPORT (Orange Badge)</option>
+                        <option value="MAKE RECORD">MAKE RECORD (Yellow Badge)</option>
+                      </select>
+                    </div>
+
+                    {/* 5. Tag Side Position */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-500 block">
+                        Tag Side Position
+                      </label>
+                      <select
+                        value={step.actionTagPosition || 'right'}
+                        onChange={(e) => handleUpdateStep(idx, 'actionTagPosition', e.target.value)}
+                        disabled={!step.actionTag}
+                        className="w-full px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 font-medium text-xs disabled:opacity-40"
+                      >
+                        <option value="right">Right Side (Standard)</option>
+                        <option value="left">Left Side</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -726,30 +1239,41 @@ export function ProcessFlowEntryPage({
               </p>
             </div>
 
+            {/* Visual Tree Interactive Preview */}
+            <ProcessFlowVisualTree
+              flow={formData}
+              onUpdateFlow={(updated) => setFormData(updated)}
+            />
+
             {/* Pipeline Preview */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-4 pt-1">
-              {(formData.steps || []).map((step, idx) => (
-                <React.Fragment key={idx}>
-                  <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 min-w-[180px] max-w-[200px] shrink-0 space-y-1">
-                    <div className="flex justify-between items-center text-[10px] font-mono">
-                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center">
-                        {step.stepNumber}
-                      </span>
-                      <span className="font-bold text-slate-600">{step.leadTimeHours}h</span>
+            <div className="pt-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                Sequential Pipeline Ribbon
+              </h4>
+              <div className="flex items-center gap-2 overflow-x-auto pb-4 pt-1">
+                {(formData.steps || []).map((step, idx) => (
+                  <React.Fragment key={idx}>
+                    <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 min-w-[180px] max-w-[200px] shrink-0 space-y-1">
+                      <div className="flex justify-between items-center text-[10px] font-mono">
+                        <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center">
+                          {step.stepNumber}
+                        </span>
+                        <span className="font-bold text-slate-600">{step.leadTimeHours}h</span>
+                      </div>
+                      <div className="font-bold text-xs text-slate-900 truncate">{step.stageName}</div>
+                      <div className="text-[10px] text-slate-500 truncate">{step.department}</div>
+                      {step.criticalGate && (
+                        <span className="inline-block text-[9px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">
+                          Critical Gate
+                        </span>
+                      )}
                     </div>
-                    <div className="font-bold text-xs text-slate-900 truncate">{step.stageName}</div>
-                    <div className="text-[10px] text-slate-500 truncate">{step.department}</div>
-                    {step.criticalGate && (
-                      <span className="inline-block text-[9px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">
-                        Critical Gate
-                      </span>
+                    {idx < (formData.steps?.length || 0) - 1 && (
+                      <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
                     )}
-                  </div>
-                  {idx < (formData.steps?.length || 0) - 1 && (
-                    <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-                  )}
-                </React.Fragment>
-              ))}
+                  </React.Fragment>
+                ))}
+              </div>
             </div>
 
             <div className="pt-4 border-t flex justify-end gap-2">

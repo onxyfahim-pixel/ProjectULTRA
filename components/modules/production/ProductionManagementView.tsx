@@ -137,6 +137,20 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
     });
   }, [lines, searchQuery, unitFilter, sectionFilter, statusFilter]);
 
+  // Connected sections dependent on unitFilter
+  const availableSectionsForFilter = useMemo(() => {
+    if (unitFilter === 'ALL') return sections;
+    return sections.filter((s) => s.unitName === unitFilter || s.unitId === unitFilter);
+  }, [sections, unitFilter]);
+
+  const handleUnitFilterChange = (val: string) => {
+    setUnitFilter(val);
+    if (val !== 'ALL' && sectionFilter !== 'ALL') {
+      const valid = sections.filter((s) => (s.unitName === val || s.unitId === val) && s.name === sectionFilter);
+      if (valid.length === 0) setSectionFilter('ALL');
+    }
+  };
+
   // Unique Chiefs & QCs
   const uniqueChiefs = useMemo(
     () => Array.from(new Set(lines.map((l) => l.lineChief).filter(Boolean))),
@@ -483,10 +497,10 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
               {/* Unit Filter */}
               <select
                 value={unitFilter}
-                onChange={(e) => setUnitFilter(e.target.value)}
+                onChange={(e) => handleUnitFilterChange(e.target.value)}
                 className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
-                <option value="ALL">All Units</option>
+                <option value="ALL">All Units ({units.length})</option>
                 {units.map((u) => (
                   <option key={u.id} value={u.name}>
                     {u.name}
@@ -494,14 +508,14 @@ export function ProductionManagementView({ showToast }: ProductionManagementView
                 ))}
               </select>
 
-              {/* Section Filter */}
+              {/* Section Filter (Connected to Unit) */}
               <select
                 value={sectionFilter}
                 onChange={(e) => setSectionFilter(e.target.value)}
                 className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
-                <option value="ALL">All Sections</option>
-                {sections.map((s) => (
+                <option value="ALL">All Sections ({availableSectionsForFilter.length})</option>
+                {availableSectionsForFilter.map((s) => (
                   <option key={s.id} value={s.name}>
                     {s.name}
                   </option>

@@ -14,12 +14,15 @@ import {
   Clock,
   GitPullRequest,
   FileText,
+  Camera,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { CapaItem } from '@/lib/types/modules';
 import {
   exportSingleCapaPdf,
   exportSingleCapaExcel,
   downloadCapaCsv,
+  getAllCapaPhotos,
 } from './capa-export-utils';
 import { loadPdfHeaderSettings } from '@/lib/pdf/pdf-header-store';
 
@@ -37,6 +40,7 @@ export function CapaSingleExportModal({
   if (!isOpen || !capa) return null;
 
   const pdfSettings = loadPdfHeaderSettings();
+  const allPhotos = getAllCapaPhotos(capa);
 
   const handleExportPdf = () => {
     exportSingleCapaPdf(capa);
@@ -186,6 +190,42 @@ export function CapaSingleExportModal({
                 </span>
               </div>
             </div>
+
+            {/* Attached Photo Status Chip */}
+            <div className={`p-2 rounded-lg flex items-center justify-between gap-2 text-[11px] ${
+              allPhotos.length > 0
+                ? 'bg-blue-50 border border-blue-200 text-blue-900'
+                : 'bg-slate-100/70 border border-slate-200 text-slate-500'
+            }`}>
+              <div className="flex items-center gap-1.5 font-medium">
+                <Camera className={`w-3.5 h-3.5 ${allPhotos.length > 0 ? 'text-blue-600' : 'text-slate-400'}`} />
+                <span>
+                  {allPhotos.length > 0
+                    ? `${allPhotos.length} Attached Evidence Photo${allPhotos.length > 1 ? 's' : ''} (Embedded in PDF)`
+                    : 'No photos attached to this CAPA'}
+                </span>
+              </div>
+              {allPhotos.length > 0 && (
+                <div className="flex items-center gap-1 shrink-0">
+                  {allPhotos.slice(0, 3).map((photo, i) => (
+                    <img
+                      key={i}
+                      src={photo.url}
+                      alt={photo.caption}
+                      className="w-5 h-5 rounded object-cover border border-blue-200"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ))}
+                  {allPhotos.length > 3 && (
+                    <span className="text-[9px] font-bold text-blue-700 bg-blue-100 px-1 py-0.2 rounded">
+                      +{allPhotos.length - 3}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Export Format Cards */}
@@ -213,7 +253,7 @@ export function CapaSingleExportModal({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Formatted document with 8D phases, 5-Whys, containment, corrective actions &amp; sign-offs.
+                    Formatted document with 8D phases, 5-Whys, containment, corrective actions, attached photos &amp; sign-offs.
                   </p>
                 </div>
               </div>

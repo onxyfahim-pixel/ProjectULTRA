@@ -201,17 +201,17 @@ export function JobDescriptionDetailsPage({
           </div>
         </div>
 
-        {/* Minimum Experience & Level */}
+        {/* Role Level & Employment Type */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
           <div className="flex items-center gap-2 text-slate-500 text-xs font-medium">
-            <GraduationCap className="w-4 h-4 text-amber-600" />
-            <span>Experience &amp; Grade</span>
+            <Layers className="w-4 h-4 text-amber-600" />
+            <span>Grade &amp; Employment</span>
           </div>
           <div className="font-bold text-slate-900 text-sm">
-            Min. {job.experienceYears} Years
+            Grade: {job.level}
           </div>
           <div className="text-[11px] font-mono text-slate-500 font-medium">
-            Grade: {job.level} • {job.employmentType || 'FULL_TIME'}
+            Type: {job.employmentType || 'FULL_TIME'}
           </div>
         </div>
       </div>
@@ -322,58 +322,8 @@ export function JobDescriptionDetailsPage({
         )}
       </div>
 
-      {/* SECTION 3: EDUCATION, SKILLS & MANDATORY CERTIFICATIONS */}
+      {/* SECTION 3: TECHNICAL COMPETENCIES & MANDATORY CERTIFICATIONS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Education & Experience */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
-          <div className="border-b border-slate-100 pb-3">
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-              Educational &amp; Experience Credentials
-            </h2>
-            <p className="text-xs text-slate-500">
-              Minimum hiring threshold and proven track record required for this role.
-            </p>
-          </div>
-
-          <div className="space-y-3 text-xs">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-              <span className="text-[10px] font-mono text-slate-400 font-bold uppercase block">
-                Required Educational Degree:
-              </span>
-              <div className="font-bold text-slate-900 text-sm">{job.educationRequirement}</div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-              <span className="text-[10px] font-mono text-slate-400 font-bold uppercase block">
-                Minimum Industry Experience:
-              </span>
-              <div className="font-bold text-slate-900 text-sm">
-                {job.experienceYears} Years in Garment Manufacturing / Quality Management
-              </div>
-            </div>
-
-            {/* Certifications */}
-            {job.certificationsRequired && job.certificationsRequired.length > 0 && (
-              <div className="space-y-2 pt-1">
-                <span className="text-[10px] font-mono text-slate-500 font-bold uppercase block">
-                  Mandatory Professional Certifications:
-                </span>
-                <div className="space-y-1.5">
-                  {job.certificationsRequired.map((cert, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-200 flex items-center gap-2 text-emerald-900 font-medium"
-                    >
-                      <Award className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>{cert}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Technical Competencies Matrix */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
           <div className="border-b border-slate-100 pb-3">
@@ -401,6 +351,36 @@ export function JobDescriptionDetailsPage({
             <div className="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
               <span className="font-bold text-slate-900 block">Auditor Reference Note:</span>
               <p>{job.notes}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Mandatory Professional Certifications & Standards */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div className="border-b border-slate-100 pb-3">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+              Mandatory Professional Certifications
+            </h2>
+            <p className="text-xs text-slate-500">
+              Required compliance certifications and quality management qualifications.
+            </p>
+          </div>
+
+          {job.certificationsRequired && job.certificationsRequired.length > 0 ? (
+            <div className="space-y-2">
+              {job.certificationsRequired.map((cert, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-center gap-2.5 text-emerald-950 font-medium text-xs"
+                >
+                  <Award className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{cert}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 text-center">
+              No mandatory external certifications registered for this position.
             </div>
           )}
         </div>

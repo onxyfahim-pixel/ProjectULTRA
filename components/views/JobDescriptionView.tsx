@@ -253,17 +253,27 @@ export function JobDescriptionView() {
       ),
     },
     {
-      key: 'experience',
-      header: 'Experience & Degree',
-      sortable: true,
+      key: 'skills',
+      header: 'Technical Competencies',
+      sortable: false,
       render: (item) => (
-        <div className="space-y-0.5">
-          <span className="font-mono text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
-            Min. {item.experienceYears} Years
-          </span>
-          <div className="text-[10px] text-slate-500 truncate max-w-[130px]" title={item.educationRequirement}>
-            {item.educationRequirement}
+        <div className="space-y-0.5 max-w-[180px]">
+          <div className="flex flex-wrap gap-1">
+            {item.technicalSkills?.slice(0, 2).map((skill, idx) => (
+              <span
+                key={idx}
+                className="text-[10px] font-medium text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 truncate max-w-[170px]"
+                title={skill}
+              >
+                {skill}
+              </span>
+            ))}
           </div>
+          {(item.technicalSkills?.length || 0) > 2 && (
+            <span className="text-[10px] text-slate-400 font-mono">
+              +{(item.technicalSkills?.length || 0) - 2} more skills
+            </span>
+          )}
         </div>
       ),
     },

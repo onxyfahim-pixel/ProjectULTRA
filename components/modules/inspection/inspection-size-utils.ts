@@ -70,31 +70,31 @@ export function deriveSizeBreakdownFromBuyerOrder(
   fallbackLotQty = 10000,
   targetSampleSize = 315
 ): InspectionSizeBreakdownItem[] {
-  // If order has colorSizeBreakdown populated, aggregate quantities by size
+  // If order has colorSizeBreakdown populated, create entries by color and size
   if (order?.colorSizeBreakdown && order.colorSizeBreakdown.length > 0) {
-    const sizeMap: Record<string, number> = {};
+    const items: InspectionSizeBreakdownItem[] = [];
 
     for (const color of order.colorSizeBreakdown) {
+      const cName = (color.colorName || (color as any).color || '').trim() || 'Standard Color';
       if (color.sizeBreakdown && color.sizeBreakdown.length > 0) {
         for (const sb of color.sizeBreakdown) {
           const sName = sb.size.trim();
-          sizeMap[sName] = (sizeMap[sName] || 0) + (Number(sb.quantity) || 0);
+          const qty = Number(sb.quantity) || 0;
+          items.push({
+            id: `sz-${items.length + 1}-${cName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${sName.toLowerCase()}`,
+            size: sName,
+            colorName: cName,
+            orderQuantity: qty,
+            inspectedQuantity: qty,
+            samplePickupQuantity: 0,
+            defectCount: 0,
+            status: 'PASS',
+          });
         }
       }
     }
 
-    const sizeKeys = Object.keys(sizeMap);
-    if (sizeKeys.length > 0) {
-      const items: InspectionSizeBreakdownItem[] = sizeKeys.map((sz, idx) => ({
-        id: `sz-${idx + 1}-${sz.toLowerCase()}`,
-        size: sz,
-        orderQuantity: sizeMap[sz],
-        inspectedQuantity: sizeMap[sz],
-        samplePickupQuantity: 0,
-        defectCount: 0,
-        status: 'PASS',
-      }));
-
+    if (items.length > 0) {
       return calculateSizeSamplePickups(items, targetSampleSize);
     }
   }

@@ -298,6 +298,68 @@ export function printReportPdf(config: PrintableReportConfig): void {
       })
       .join('');
 
+    // Dynamic column aggregate calculation for tfoot
+    const numCols = config.tableHeaders.length;
+    const totals: string[] = [];
+
+    for (let colIdx = 0; colIdx < numCols; colIdx++) {
+      if (colIdx === 0) {
+        totals.push('TOTAL / SUMMARY');
+        continue;
+      }
+
+      const values = config.tableRows.map((r) => r[colIdx]);
+      const validNums: { val: number; isPct: boolean; isDhu: boolean }[] = [];
+
+      for (const v of values) {
+        if (v === null || v === undefined) continue;
+        const str = String(v).replace(/,/g, '').trim();
+        if (str.endsWith('%')) {
+          const n = parseFloat(str.replace('%', ''));
+          if (!isNaN(n)) validNums.push({ val: n, isPct: true, isDhu: false });
+        } else if (str.toUpperCase().includes('DHU')) {
+          const n = parseFloat(str.replace(/DHU/gi, ''));
+          if (!isNaN(n)) validNums.push({ val: n, isPct: false, isDhu: true });
+        } else {
+          const n = parseFloat(str);
+          if (!isNaN(n)) validNums.push({ val: n, isPct: false, isDhu: false });
+        }
+      }
+
+      if (validNums.length >= Math.max(1, Math.floor(config.tableRows.length * 0.4))) {
+        const isPct = validNums.every((n) => n.isPct);
+        const isDhu = validNums.every((n) => n.isDhu);
+
+        if (isPct) {
+          const avg = validNums.reduce((s, n) => s + n.val, 0) / validNums.length;
+          totals.push(`${avg.toFixed(1)}% (Avg)`);
+        } else if (isDhu) {
+          const avg = validNums.reduce((s, n) => s + n.val, 0) / validNums.length;
+          totals.push(`${avg.toFixed(2)} DHU (Avg)`);
+        } else {
+          const sum = validNums.reduce((s, n) => s + n.val, 0);
+          totals.push(sum % 1 !== 0 ? sum.toFixed(2) : sum.toLocaleString());
+        }
+      } else {
+        totals.push('—');
+      }
+    }
+
+    const tfootHtml = `
+      <tfoot>
+        <tr style="background:#0f172a; color:#ffffff; font-weight:bold; font-size:10px;">
+          ${totals
+            .map(
+              (t, idx) =>
+                `<td style="padding:6px 8px; border:1px solid #0f172a; color:#ffffff; ${
+                  idx === 0 ? 'font-weight:800; text-align:left;' : 'text-align:left;'
+                }">${t}</td>`
+            )
+            .join('')}
+        </tr>
+      </tfoot>
+    `;
+
     const notesHtml = config.summaryNotes && config.summaryNotes.length > 0
       ? `
       <div class="notes-box">
@@ -582,6 +644,7 @@ export function printReportPdf(config: PrintableReportConfig): void {
             <tbody>
               ${trHtml}
             </tbody>
+            ${tfootHtml}
           </table>
 
           ${notesHtml}
@@ -607,6 +670,12 @@ export function printReportPdf(config: PrintableReportConfig): void {
               <div class="sign-role">Approved By</div>
               <div class="sign-dept">Factory General Manager</div>
             </div>
+          </div>
+
+          <div style="margin-top:20px; padding-top:10px; border-top:1px dashed #cbd5e1; display:flex; justify-content:space-between; align-items:center; font-size:8.5px; color:#64748b;">
+            <span>CONFIDENTIAL & PROPRIETARY — VALIANT GARMENTS MANUFACTURING LTD.</span>
+            <span>ISO 9001:2015 Clause 7.5 Controlled Document • Generated ${config.generatedDate || new Date().toISOString().split('T')[0]}</span>
+            <span>Uncontrolled When Printed • Page 1 of 1</span>
           </div>
         </body>
       </html>
@@ -761,12 +830,26 @@ export function exportReportLedgerPdf(
             <tbody>
               ${rowsHtml}
             </tbody>
+            <tfoot>
+              <tr style="background:#0f172a; color:#ffffff; font-weight:bold; font-size:9.5px;">
+                <td style="padding:6px 8px; border:1px solid #0f172a; color:#ffffff; font-weight:800;">TOTAL REGISTER</td>
+                <td style="padding:6px 8px; border:1px solid #0f172a; color:#ffffff;" colspan="2">${reports.length} Synchronized Modules (${kpis.categoriesCount} Domains)</td>
+                <td style="padding:6px 8px; border:1px solid #0f172a; color:#ffffff;" colspan="3">Active Floor & QMS Records Synchronized</td>
+                <td style="padding:6px 8px; border:1px solid #0f172a; color:#ffffff; text-align:center;">${kpis.completionRate}% APPR</td>
+                <td style="padding:6px 8px; border:1px solid #0f172a; color:#ffffff; text-align:center;">PDF</td>
+              </tr>
+            </tfoot>
           </table>
           <div class="sign-strip">
             <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Prepared By</div><div class="sign-dept">Data Analyst / QA Engineer</div></div>
             <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Verified By</div><div class="sign-dept">Quality Assurance Manager</div></div>
             <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Operations Review</div><div class="sign-dept">Head of Production & IE</div></div>
             <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Executive Approval</div><div class="sign-dept">Factory General Manager</div></div>
+          </div>
+          <div style="margin-top:20px; padding-top:10px; border-top:1px dashed #cbd5e1; display:flex; justify-content:space-between; align-items:center; font-size:8.5px; color:#64748b;">
+            <span>CONFIDENTIAL & PROPRIETARY — VALIANT GARMENTS MANUFACTURING LTD.</span>
+            <span>ISO 9001:2015 Clause 7.5 Controlled Document • Generated ${new Date().toLocaleString()}</span>
+            <span>Uncontrolled When Printed • Page 1 of 1</span>
           </div>
         </body>
       </html>
@@ -930,6 +1013,69 @@ export function exportSingleReportRecordPdf(report: ReportRecord): void {
       )
       .join('');
 
+    const passCount = report.metricsTable.filter((m) => m.status === 'PASS').length;
+    const warnCount = report.metricsTable.filter((m) => m.status === 'WARN').length;
+    const failCount = report.metricsTable.filter((m) => m.status === 'FAIL').length;
+    const totalCount = report.metricsTable.length;
+    const complianceRate = totalCount > 0 ? Math.round((passCount / totalCount) * 100) : 100;
+
+    const metricsTfootHtml = `
+      <tfoot>
+        <tr style="background:#0f172a; color:#ffffff; font-weight:bold; font-size:10px;">
+          <td style="padding:7px 8px; border:1px solid #0f172a; color:#ffffff; font-weight:800;">TOTAL SUMMARY (${totalCount} METRICS)</td>
+          <td style="padding:7px 8px; border:1px solid #0f172a; color:#ffffff; text-align:center;">PASS: ${passCount} | WARN: ${warnCount}</td>
+          <td style="padding:7px 8px; border:1px solid #0f172a; color:#ffffff; text-align:center;">COMPLIANCE: ${complianceRate}%</td>
+          <td style="padding:7px 8px; border:1px solid #0f172a; color:#ffffff; text-align:center;">FAIL: ${failCount}</td>
+          <td style="padding:7px 8px; border:1px solid #0f172a; color:#ffffff; text-align:center;">
+            <span style="display:inline-block; padding:1px 6px; font-size:8.5px; font-weight:800; border-radius:4px; ${
+              failCount === 0 ? 'background:#ecfdf5; color:#047857;' : 'background:#fef2f2; color:#b91c1c;'
+            }">
+              ${failCount === 0 ? 'COMPLIANT' : 'ATTENTION'}
+            </span>
+          </td>
+        </tr>
+      </tfoot>
+    `;
+
+    const defectBreakdownHtml = report.defectBreakdown && report.defectBreakdown.length > 0
+      ? `
+      <div style="margin-top:14px; margin-bottom:12px;">
+        <div style="font-weight:700; font-size:11px; color:#0f172a; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+          <span>Defect Pareto Distribution & Frequency Analysis</span>
+          <span style="font-size:9px; color:#64748b; font-weight:normal;">80/20 Root-Cause Focus</span>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:38%;">Defect Classification</th>
+              <th style="width:14%; text-align:center;">Defect Count</th>
+              <th style="width:14%; text-align:center;">Share %</th>
+              <th style="width:14%; text-align:center;">Cumulative %</th>
+              <th style="width:20%; text-align:center;">Distribution</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${report.defectBreakdown
+              .map(
+                (d, idx) => `
+                <tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                  <td style="font-weight:600; color:#0f172a;">${d.defect}</td>
+                  <td style="text-align:center; font-family:monospace; font-weight:700;">${d.count.toLocaleString()}</td>
+                  <td style="text-align:center; font-weight:600; color:#b91c1c;">${d.percentage}%</td>
+                  <td style="text-align:center; font-weight:700; color:#1e3a8a;">${d.cumulative}%</td>
+                  <td>
+                    <div style="background:#e2e8f0; border-radius:3px; height:7px; width:100%; overflow:hidden;">
+                      <div style="background:#ef4444; height:100%; width:${Math.min(100, d.cumulative)}%;"></div>
+                    </div>
+                  </td>
+                </tr>`
+              )
+              .join('')}
+          </tbody>
+        </table>
+      </div>`
+      : '';
+
     const highlightsHtml = report.highlights && report.highlights.length > 0
       ? `
       <div class="box-card" style="border-left:4px solid #1e3a8a; background:#f8fafc;">
@@ -984,7 +1130,7 @@ export function exportSingleReportRecordPdf(report: ReportRecord): void {
             .data-table { width: 100%; border-collapse: collapse; font-size: 10px; margin: 12px 0; }
             .data-table th { background: #1e293b; color: #fff; padding: 6px 8px; text-align: left; border: 1px solid #0f172a; font-weight: 700; }
             .data-table td { padding: 5px 8px; border: 1px solid #e2e8f0; }
-            .sign-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px; border-top: 1px solid #cbd5e1; padding-top: 14px; page-break-inside: avoid; }
+            .sign-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 26px; border-top: 1px solid #cbd5e1; padding-top: 14px; page-break-inside: avoid; }
             .sign-col { text-align: center; }
             .sign-line { border-bottom: 1.5px solid #475569; height: 26px; margin-bottom: 4px; }
             .sign-role { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #334155; }
@@ -1024,12 +1170,20 @@ export function exportSingleReportRecordPdf(report: ReportRecord): void {
             <tbody>
               ${metricsRowsHtml}
             </tbody>
+            ${metricsTfootHtml}
           </table>
+          ${defectBreakdownHtml}
           ${recommendationsHtml}
           <div class="sign-strip">
-            <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Prepared By</div><div class="sign-dept">${report.generatedBy} (${report.department})</div></div>
-            <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Quality Verification</div><div class="sign-dept">Quality Assurance DGM</div></div>
-            <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Factory Sign-off</div><div class="sign-dept">General Manager (Operations)</div></div>
+            <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Prepared By (QA/Data)</div><div class="sign-dept">${report.generatedBy} (${report.department})</div></div>
+            <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Checked By (Section IE)</div><div class="sign-dept">Section In-Charge / IE Lead</div></div>
+            <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Verified By (QMS)</div><div class="sign-dept">Quality Assurance DGM</div></div>
+            <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Approved By</div><div class="sign-dept">General Manager (Operations)</div></div>
+          </div>
+          <div style="margin-top:20px; padding-top:10px; border-top:1px dashed #cbd5e1; display:flex; justify-content:space-between; align-items:center; font-size:8.5px; color:#64748b;">
+            <span>CONFIDENTIAL & PROPRIETARY — VALIANT GARMENTS MANUFACTURING LTD.</span>
+            <span>ISO 9001:2015 Clause 7.5 Controlled Document • Generated ${report.generatedDate || new Date().toISOString().split('T')[0]}</span>
+            <span>Uncontrolled When Printed • Page 1 of 1</span>
           </div>
         </body>
       </html>

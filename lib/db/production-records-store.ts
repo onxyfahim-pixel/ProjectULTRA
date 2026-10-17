@@ -120,11 +120,13 @@ export function getProductionRecords(): ProductionOrder[] {
         }
 
         // Match line in production management store to follow modified line/unit/section details
+        const lineSearch = (updated.lineId || updated.sewingLine || '').toLowerCase();
         const matchingLine = managedLines.find(
           (l) =>
             l.id === updated.lineId ||
             l.lineCode === updated.lineId ||
-            (updated.sewingLine && (l.name === updated.sewingLine || l.name.toLowerCase() === updated.sewingLine.toLowerCase()))
+            (updated.sewingLine && (l.name === updated.sewingLine || l.name.toLowerCase() === updated.sewingLine.toLowerCase())) ||
+            (lineSearch && (l.name.toLowerCase().includes(lineSearch) || lineSearch.includes(l.lineCode.toLowerCase())))
         );
 
         if (matchingLine) {
@@ -146,6 +148,16 @@ export function getProductionRecords(): ProductionOrder[] {
           }
         }
 
+        // Clean up legacy section naming if still holding a line name
+        if (updated.section && updated.section.includes('Sewing Line')) {
+          updated.section = 'Sewing Floor';
+          needsResave = true;
+        }
+        if (updated.section && updated.section.includes('Finishing & Packing Section')) {
+          updated.section = 'Finishing & Packing';
+          needsResave = true;
+        }
+
         if (!updated.recordDate) {
           updated.recordDate = updated.createdAt ? updated.createdAt.split('T')[0] : todayStr;
           needsResave = true;
@@ -154,12 +166,28 @@ export function getProductionRecords(): ProductionOrder[] {
         return updated;
       });
 
-      // Ensure all seed initial production orders are present
+      // Ensure all seed initial production orders are present & updated with clean definitions
       INITIAL_PRODUCTION_ORDERS.forEach((initOrd) => {
         const existingIdx = patched.findIndex((p) => p.id === initOrd.id);
         if (existingIdx === -1) {
           patched.push(initOrd);
           needsResave = true;
+        } else {
+          const ex = patched[existingIdx];
+          if (
+            ex.section !== initOrd.section ||
+            ex.lineId !== initOrd.lineId ||
+            ex.sewingLine !== initOrd.sewingLine
+          ) {
+            patched[existingIdx] = {
+              ...ex,
+              unit: initOrd.unit,
+              section: initOrd.section,
+              sewingLine: initOrd.sewingLine,
+              lineId: initOrd.lineId,
+            };
+            needsResave = true;
+          }
         }
       });
 

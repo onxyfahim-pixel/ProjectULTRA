@@ -15,8 +15,7 @@ export function computeJobKpis(jobs: JobDescriptionItem[]) {
   const underRevision = jobs.filter((j) => j.status === 'UNDER_REVISION').length;
   const archived = jobs.filter((j) => j.status === 'ARCHIVED').length;
 
-  const totalExperience = jobs.reduce((acc, j) => acc + (j.experienceYears || 0), 0);
-  const avgExperience = total > 0 ? (totalExperience / total).toFixed(1) : '0';
+  const totalSkills = jobs.reduce((acc, j) => acc + (j.technicalSkills?.length || 0), 0);
   const filledRate = total > 0 ? Math.round((active / total) * 100) : 100;
 
   return {
@@ -25,7 +24,7 @@ export function computeJobKpis(jobs: JobDescriptionItem[]) {
     vacant,
     underRevision,
     archived,
-    avgExperience,
+    totalSkills,
     filledRate,
   };
 }
@@ -137,8 +136,6 @@ export function exportJobRegisterPdf(
           <td>${j.department}</td>
           <td><span style="font-size: 8pt; font-weight: 600; padding: 2px 6px; background-color: #f1f5f9; border-radius: 4px;">${j.level}</span></td>
           <td>${j.supervisorTitle || j.supervisorName || 'Department Head'}</td>
-          <td style="font-size: 8pt;">${j.educationRequirement}</td>
-          <td style="text-align: center; font-weight: 600;">${j.experienceYears} Yrs</td>
           <td style="font-size: 8pt; color: #475569;">${skills}</td>
           <td style="text-align: center;">
             <span style="
@@ -286,8 +283,8 @@ export function exportJobRegisterPdf(
             <div class="kpi-value" style="color: #0284c7;">${kpis.underRevision}</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-title">Avg Exp Required</div>
-            <div class="kpi-value" style="color: #6366f1;">${kpis.avgExperience} Yrs</div>
+            <div class="kpi-title">Key Competencies</div>
+            <div class="kpi-value" style="color: #6366f1;">${kpis.totalSkills} Tracked</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-title">Staffing Fill Rate</div>
@@ -301,14 +298,12 @@ export function exportJobRegisterPdf(
             <tr>
               <th style="width: 3%; text-align: center;">#</th>
               <th style="width: 10%;">Role Code</th>
-              <th style="width: 20%;">Position Title & Incumbent</th>
-              <th style="width: 12%;">Department</th>
-              <th style="width: 8%;">Level</th>
-              <th style="width: 12%;">Reports To</th>
-              <th style="width: 13%;">Education Required</th>
-              <th style="width: 6%; text-align: center;">Exp</th>
-              <th style="width: 10%;">Key Competencies</th>
-              <th style="width: 6%; text-align: center;">Status</th>
+              <th style="width: 22%;">Position Title &amp; Incumbent</th>
+              <th style="width: 14%;">Department</th>
+              <th style="width: 9%;">Level</th>
+              <th style="width: 14%;">Reports To</th>
+              <th style="width: 20%;">Key Competencies</th>
+              <th style="width: 8%; text-align: center;">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -378,8 +373,6 @@ export function exportJobRegisterExcel(jobs: JobDescriptionItem[]): void {
           <td>${j.incumbentName || 'VACANT'}</td>
           <td>${j.companyIdNo || ''}</td>
           <td>${j.supervisorTitle || j.supervisorName || ''}</td>
-          <td>${j.educationRequirement}</td>
-          <td>${j.experienceYears}</td>
           <td>${j.status || 'ACTIVE'}</td>
           <td>${j.employmentType || 'FULL_TIME'}</td>
           <td>${j.technicalSkills?.join('; ') || ''}</td>
@@ -417,21 +410,21 @@ export function exportJobRegisterExcel(jobs: JobDescriptionItem[]): void {
       <body>
         <table>
           <tr>
-            <td colspan="16" style="font-size: 16pt; font-weight: bold; color: #1e3a8a;">
+            <td colspan="14" style="font-size: 16pt; font-weight: bold; color: #1e3a8a;">
               ${pdfSettings.companyName || 'Valiant Garments Manufacturing Ltd.'}
             </td>
           </tr>
           <tr>
-            <td colspan="16" style="font-size: 12pt; font-weight: bold;">
+            <td colspan="14" style="font-size: 12pt; font-weight: bold;">
               ORGANIZATIONAL JOB DESCRIPTIONS &amp; ROLE SPECIFICATION MASTER REGISTER
             </td>
           </tr>
           <tr>
-            <td colspan="16" style="font-size: 9pt; color: #64748b;">
+            <td colspan="14" style="font-size: 9pt; color: #64748b;">
               Doc Code: ${docCode} | Export Date: ${new Date().toISOString().slice(0, 10)} | Standard: ISO 9001:2015 Clause 5.3
             </td>
           </tr>
-          <tr><td colspan="16"></td></tr>
+          <tr><td colspan="14"></td></tr>
           <tr style="background-color: #0f172a; color: #ffffff;">
             <th>#</th>
             <th>Role Code</th>
@@ -441,8 +434,6 @@ export function exportJobRegisterExcel(jobs: JobDescriptionItem[]): void {
             <th>Incumbent</th>
             <th>Staff ID</th>
             <th>Reports To</th>
-            <th>Education Requirement</th>
-            <th>Exp (Years)</th>
             <th>Status</th>
             <th>Employment Type</th>
             <th>Technical Competencies</th>
@@ -677,37 +668,24 @@ export function exportSingleJobPdf(job: JobDescriptionItem): void {
           </div>
         </div>
 
-        <!-- 2. Competency Specifications -->
-        <div class="section-title">2. Competency &amp; Educational Prerequisites</div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 8.5pt;">
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
-            <strong style="color: #1e3a8a;">Minimum Education:</strong>
-            <p style="margin: 4px 0 0 0;">${job.educationRequirement}</p>
-          </div>
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
-            <strong style="color: #1e3a8a;">Relevant Experience Required:</strong>
-            <p style="margin: 4px 0 0 0;">${job.experienceYears} Years direct domain experience</p>
-          </div>
-        </div>
-
-        <!-- 3. Key Responsibilities -->
-        <div class="section-title">3. Core Operational Duties &amp; Key Responsibilities</div>
+        <!-- 2. Key Responsibilities -->
+        <div class="section-title">2. Core Operational Duties &amp; Key Responsibilities</div>
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
           ${respHtml || 'No detailed responsibilities documented.'}
         </div>
 
-        <!-- 4. Technical Skills & Tools -->
-        <div class="section-title">4. Technical Skills, Tools &amp; Certifications</div>
+        <!-- 3. Technical Skills & Tools -->
+        <div class="section-title">3. Technical Skills, Tools &amp; Certifications</div>
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
           ${skillsHtml || 'Standard vocational skills.'}
           ${job.decisionAuthority ? `<div style="margin-top: 8px; font-size: 8pt; color: #475569;"><strong>Authority & Decision Scope:</strong> ${job.decisionAuthority}</div>` : ''}
         </div>
 
-        <!-- 5. Key Performance Indicators (KPIs) -->
+        <!-- 4. Key Performance Indicators (KPIs) -->
         ${
           job.kpiMetrics && job.kpiMetrics.length > 0
             ? `
-              <div class="section-title">5. Core Accountability &amp; Performance Metrics (KPIs)</div>
+              <div class="section-title">4. Core Accountability &amp; Performance Metrics (KPIs)</div>
               <table>
                 <thead>
                   <tr>
@@ -840,7 +818,6 @@ export function exportSingleJobExcel(job: JobDescriptionItem): void {
           <tr><td><strong>Department:</strong></td><td>${job.department}</td><td><strong>Level:</strong></td><td>${job.level}</td></tr>
           <tr><td><strong>Incumbent:</strong></td><td>${job.incumbentName || 'VACANT'}</td><td><strong>Staff ID:</strong></td><td>${job.companyIdNo || ''}</td></tr>
           <tr><td><strong>Supervisor:</strong></td><td>${job.supervisorTitle || job.supervisorName || ''}</td><td><strong>Status:</strong></td><td>${job.status || 'ACTIVE'}</td></tr>
-          <tr><td><strong>Education:</strong></td><td>${job.educationRequirement}</td><td><strong>Experience:</strong></td><td>${job.experienceYears} Years</td></tr>
           <tr><td><strong>Technical Skills:</strong></td><td colspan="3">${job.technicalSkills?.join('; ') || ''}</td></tr>
           <tr><td><strong>Authority Scope:</strong></td><td colspan="3">${job.decisionAuthority || ''}</td></tr>
           <tr><td colspan="4"></td></tr>

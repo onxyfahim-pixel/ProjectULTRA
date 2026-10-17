@@ -73,8 +73,6 @@ export function JobDescriptionSingleExportModal({
         'Incumbent Name',
         'Staff ID',
         'Reports To',
-        'Education Required',
-        'Experience Years',
         'Status',
         'Employment Type',
         'Technical Skills',
@@ -90,8 +88,6 @@ export function JobDescriptionSingleExportModal({
         job.incumbentName || 'VACANT',
         job.companyIdNo || '',
         job.supervisorTitle || job.supervisorName || '',
-        job.educationRequirement,
-        job.experienceYears,
         job.status || 'ACTIVE',
         job.employmentType || 'FULL_TIME',
         job.technicalSkills?.join('; ') || '',
@@ -197,15 +193,15 @@ export function JobDescriptionSingleExportModal({
                 </p>
               </div>
               <div>
-                <span className="text-slate-500 text-[11px]">Experience:</span>
+                <span className="text-slate-500 text-[11px]">Employment Type:</span>
                 <p className="font-semibold text-slate-800 dark:text-slate-200">
-                  {job.experienceYears} Years
+                  {job.employmentType || 'FULL TIME'}
                 </p>
               </div>
               <div>
-                <span className="text-slate-500 text-[11px]">Education:</span>
+                <span className="text-slate-500 text-[11px]">Technical Skills:</span>
                 <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                  {job.educationRequirement}
+                  {job.technicalSkills?.length || 0} Key Competencies
                 </p>
               </div>
               <div>

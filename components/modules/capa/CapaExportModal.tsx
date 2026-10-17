@@ -312,7 +312,7 @@ export function CapaExportModal({
                     PDF Master Register
                   </h4>
                   <p className="text-[11px] text-slate-500">
-                    Comprehensive compliance log with root causes, target dates, severity &amp; 4-way signatures.
+                    Comprehensive compliance log with root causes, evidence photos, target dates &amp; 4-way signatures.
                   </p>
                 </div>
                 <button

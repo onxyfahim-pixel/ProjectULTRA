@@ -22,12 +22,14 @@ import {
   Send,
   BadgeCheck,
   FileDown,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   ReportRecord,
   REPORT_CATEGORY_CONFIG,
   ReportStatus,
 } from './reports-data';
+import { ReportTypeKey, ALL_REPORT_DEFINITIONS } from './reports-data-sync';
 import { useModulePermission } from '@/hooks/use-module-permission';
 import { ReportSingleExportModal } from './ReportSingleExportModal';
 import { RecordAuditHistory } from '@/components/ui/RecordAuditHistory';
@@ -37,6 +39,7 @@ interface ReportDetailsPageProps {
   onBack: () => void;
   onUpdateStatus?: (report: ReportRecord) => void;
   onExportCsv?: (report: ReportRecord) => void;
+  onOpenStudio?: (reportKey: ReportTypeKey) => void;
 }
 
 export function ReportDetailsPage({
@@ -44,6 +47,7 @@ export function ReportDetailsPage({
   onBack,
   onUpdateStatus,
   onExportCsv,
+  onOpenStudio,
 }: ReportDetailsPageProps) {
   const { canEdit, canExport } = useModulePermission('report_analysis');
   const [isExportModalOpen, setIsExportModalOpen] = React.useState(false);
@@ -129,6 +133,13 @@ export function ReportDetailsPage({
     document.body.removeChild(link);
   };
 
+  const matchingDef = ALL_REPORT_DEFINITIONS.find(
+    (d) =>
+      d.code.toLowerCase() === report.id.toLowerCase() ||
+      report.id.toLowerCase().includes(d.code.toLowerCase()) ||
+      d.title.toLowerCase() === report.title.toLowerCase()
+  );
+
   return (
     <div className="fixed inset-0 z-[45] overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-7 xl:p-8 animate-in fade-in duration-150">
       <div className="w-full max-w-[1920px] mx-auto space-y-6 pb-20">
@@ -161,6 +172,18 @@ export function ReportDetailsPage({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {matchingDef && onOpenStudio && (
+              <button
+                type="button"
+                onClick={() => onOpenStudio(matchingDef.key)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 shadow-2xs transition-colors cursor-pointer"
+                title="Open interactive studio with live filters, date horizon, and comparison tools"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Open in Live Studio</span>
+              </button>
+            )}
+
             {canEdit && (
               <button
                 type="button"

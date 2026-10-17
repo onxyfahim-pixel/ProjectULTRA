@@ -2,6 +2,119 @@ import { CapaItem } from '@/lib/types/modules';
 import { loadPdfHeaderSettings, renderPdfHeaderHtml, getModuleExportConfig } from '@/lib/pdf/pdf-header-store';
 
 /**
+ * Normalized evidence photo item for CAPA PDF & Excel exports
+ */
+export interface CapaPhotoEvidenceItem {
+  id: string;
+  url: string;
+  caption: string;
+  timestamp: string;
+  type: 'ROOT_CAUSE' | 'BEFORE' | 'AFTER' | 'COMPLETION' | string;
+  sourceSection?: string;
+}
+
+/**
+ * Extract all photographic evidence attached to a CAPA item
+ * Across: issues[].evidenceImage, rcaEvidenceImages, completionEvidenceImages, and generic photos
+ */
+export function getAllCapaPhotos(capa: CapaItem): CapaPhotoEvidenceItem[] {
+  const photos: CapaPhotoEvidenceItem[] = [];
+  const seenUrls = new Set<string>();
+
+  // 1. Issue-level evidence photos
+  if (Array.isArray(capa.issues)) {
+    capa.issues.forEach((iss, idx) => {
+      const imgUrl = iss?.evidenceImage?.trim();
+      if (imgUrl && !seenUrls.has(imgUrl)) {
+        seenUrls.add(imgUrl);
+        photos.push({
+          id: `iss-photo-${iss.id || idx}`,
+          url: imgUrl,
+          caption: iss.evidenceCaption?.trim() || `Issue #${idx + 1}: ${iss.issueTitle}`,
+          timestamp: iss.targetDate || capa.dateRaised || 'Recorded',
+          type: 'ROOT_CAUSE',
+          sourceSection: `Issue #${idx + 1} (${iss.category || 'Quality Finding'})`,
+        });
+      }
+    });
+  }
+
+  // 2. D4 Root Cause / Investigation Evidence Images
+  if (Array.isArray(capa.rcaEvidenceImages)) {
+    capa.rcaEvidenceImages.forEach((img, idx) => {
+      const imgUrl = img?.url?.trim();
+      if (imgUrl && !seenUrls.has(imgUrl)) {
+        seenUrls.add(imgUrl);
+        photos.push({
+          id: img.id || `rca-img-${idx}`,
+          url: imgUrl,
+          caption: img.caption?.trim() || 'Root Cause & Investigation Evidence',
+          timestamp: img.timestamp || capa.dateRaised || '',
+          type: img.type || 'ROOT_CAUSE',
+          sourceSection: 'D4 Root Cause Investigation',
+        });
+      }
+    });
+  }
+
+  // 3. D8 Completion / Verification Evidence Images
+  if (Array.isArray(capa.completionEvidenceImages)) {
+    capa.completionEvidenceImages.forEach((img, idx) => {
+      const imgUrl = img?.url?.trim();
+      if (imgUrl && !seenUrls.has(imgUrl)) {
+        seenUrls.add(imgUrl);
+        photos.push({
+          id: img.id || `comp-img-${idx}`,
+          url: imgUrl,
+          caption: img.caption?.trim() || 'Corrective Action Verification & Implementation',
+          timestamp: img.timestamp || capa.actualCompletionDate || capa.verificationDate || '',
+          type: img.type || 'COMPLETION',
+          sourceSection: 'D8 Effectiveness & Verification',
+        });
+      }
+    });
+  }
+
+  // 4. Any generic or legacy photos / evidenceImages
+  const anyCapa = capa as any;
+  if (Array.isArray(anyCapa.photos)) {
+    anyCapa.photos.forEach((p: any, idx: number) => {
+      const imgUrl = (typeof p === 'string' ? p : p?.url)?.trim();
+      if (imgUrl && !seenUrls.has(imgUrl)) {
+        seenUrls.add(imgUrl);
+        photos.push({
+          id: p?.id || `gen-photo-${idx}`,
+          url: imgUrl,
+          caption: (typeof p === 'object' && p?.caption ? p.caption : `Evidence Photo #${idx + 1}`).trim(),
+          timestamp: (typeof p === 'object' && p?.timestamp ? p.timestamp : '') || '',
+          type: (typeof p === 'object' && p?.type ? p.type : 'BEFORE'),
+          sourceSection: 'Attached Audit Evidence',
+        });
+      }
+    });
+  }
+
+  if (Array.isArray(anyCapa.evidenceImages)) {
+    anyCapa.evidenceImages.forEach((p: any, idx: number) => {
+      const imgUrl = (typeof p === 'string' ? p : p?.url)?.trim();
+      if (imgUrl && !seenUrls.has(imgUrl)) {
+        seenUrls.add(imgUrl);
+        photos.push({
+          id: p?.id || `ev-photo-${idx}`,
+          url: imgUrl,
+          caption: (typeof p === 'object' && p?.caption ? p.caption : `Evidence Photo #${idx + 1}`).trim(),
+          timestamp: (typeof p === 'object' && p?.timestamp ? p.timestamp : '') || '',
+          type: (typeof p === 'object' && p?.type ? p.type : 'BEFORE'),
+          sourceSection: 'Attached Audit Evidence',
+        });
+      }
+    });
+  }
+
+  return photos;
+}
+
+/**
  * Compute summary KPIs for CAPA module
  */
 export function computeCapaKpis(capas: CapaItem[]) {
@@ -16,6 +129,7 @@ export function computeCapaKpis(capas: CapaItem[]) {
   const closedRate = total > 0 ? Math.round((closed / total) * 100) : 0;
   const effectivenessVerifiedCount = capas.filter((c) => c.effectivenessVerified).length;
   const departmentsCount = new Set(capas.map((c) => c.department).filter(Boolean)).size;
+  const withPhotosCount = capas.filter((c) => getAllCapaPhotos(c).length > 0).length;
 
   return {
     total,
@@ -29,6 +143,7 @@ export function computeCapaKpis(capas: CapaItem[]) {
     closedRate,
     effectivenessVerifiedCount,
     departmentsCount,
+    withPhotosCount,
   };
 }
 
@@ -95,8 +210,20 @@ export function exportCapaSummaryPdf(
     );
 
     const rowsHtml = capas
-      .map(
-        (c, idx) => `
+      .map((c, idx) => {
+        const photos = getAllCapaPhotos(c);
+        const photoCellHtml =
+          photos.length > 0
+            ? `
+            <div style="display:flex; align-items:center; gap:5px;">
+              <img src="${photos[0].url}" alt="Evidence" style="width:24px; height:24px; object-fit:cover; border-radius:3px; border:1px solid #cbd5e1; flex-shrink:0;" onerror="this.style.display='none'" />
+              <span style="font-size:8.5px; font-weight:700; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; padding:1px 5px; border-radius:3px; white-space:nowrap;">
+                ${photos.length} photo${photos.length > 1 ? 's' : ''}
+              </span>
+            </div>`
+            : `<span style="color:#94a3b8; font-size:9px;">None</span>`;
+
+        return `
         <tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
           <td style="font-family:monospace; font-weight:700; color:#1e3a8a;">${c.capaNumber}</td>
           <td style="font-weight:600; color:#0f172a;">${c.issueTitle}</td>
@@ -115,7 +242,8 @@ export function exportCapaSummaryPdf(
           </td>
           <td style="color:#334155; font-size:9.5px;">${c.responsiblePerson}</td>
           <td style="color:#64748b; font-family:monospace; font-size:9px;">${c.targetCompletionDate}</td>
-          <td style="color:#475569; font-size:9.5px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${c.rootCause || '-'}</td>
+          <td style="color:#475569; font-size:9px; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${c.rootCause || '-'}</td>
+          <td>${photoCellHtml}</td>
           <td>
             <span style="display:inline-block; padding:1px 6px; font-size:9px; font-weight:700; border-radius:4px; ${
               c.status === 'CLOSED'
@@ -129,8 +257,8 @@ export function exportCapaSummaryPdf(
               ${c.status.replace(/_/g, ' ')}
             </span>
           </td>
-        </tr>`
-      )
+        </tr>`;
+      })
       .join('');
 
     const htmlContent = `
@@ -155,7 +283,7 @@ export function exportCapaSummaryPdf(
             .kpi-val { font-size: 17px; font-weight: 800; color: #0f172a; margin-top: 2px; }
             .data-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 10px; }
             .data-table th { background: #1e293b; color: #fff; padding: 6px 8px; text-align: left; border: 1px solid #0f172a; font-weight: 700; font-size: 9.5px; }
-            .data-table td { padding: 5px 8px; border: 1px solid #e2e8f0; }
+            .data-table td { padding: 5px 8px; border: 1px solid #e2e8f0; vertical-align: middle; }
             .sign-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 26px; border-top: 1px solid #cbd5e1; padding-top: 14px; page-break-inside: avoid; }
             .sign-col { text-align: center; }
             .sign-line { border-bottom: 1.5px solid #475569; height: 26px; margin-bottom: 4px; }
@@ -171,7 +299,7 @@ export function exportCapaSummaryPdf(
           </div>
           ${dynamicHeaderHtml}
           <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:6px 12px; border-radius:6px; font-size:10px; font-weight:600; color:#1e40af; margin-bottom:10px;">
-            Export Scope: ${scopeLabel} • Record Count: ${capas.length} Files • Generated: ${new Date().toLocaleString()}
+            Export Scope: ${scopeLabel} • Record Count: ${capas.length} Files • ${kpis.withPhotosCount} Files with Photographic Evidence Attached • Generated: ${new Date().toLocaleString()}
           </div>
           <div class="kpi-strip">
             <div class="kpi-card"><div class="kpi-lbl">Total CAPA Files</div><div class="kpi-val">${kpis.total}</div></div>
@@ -183,14 +311,15 @@ export function exportCapaSummaryPdf(
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width:11%;">CAPA Ref</th>
-                <th style="width:24%;">Issue Title</th>
-                <th style="width:12%;">Trigger Source</th>
-                <th style="width:11%;">Department</th>
-                <th style="width:8%;">Severity</th>
-                <th style="width:11%;">Lead</th>
-                <th style="width:9%;">Target Date</th>
-                <th style="width:14%;">Identified Root Cause</th>
+                <th style="width:10%;">CAPA Ref</th>
+                <th style="width:22%;">Issue Title</th>
+                <th style="width:11%;">Trigger Source</th>
+                <th style="width:10%;">Department</th>
+                <th style="width:7%;">Severity</th>
+                <th style="width:10%;">Lead</th>
+                <th style="width:8%;">Target Date</th>
+                <th style="width:12%;">Root Cause</th>
+                <th style="width:10%;">Attached Photos</th>
                 <th style="width:10%;">8D Status</th>
               </tr>
             </thead>
@@ -229,8 +358,9 @@ export function exportCapaSummaryExcel(
     const companyName = pdfSettings.companyName || 'Valiant Garments Manufacturing Ltd.';
 
     const rowsHtml = capas
-      .map(
-        (c, idx) => `
+      .map((c, idx) => {
+        const photos = getAllCapaPhotos(c);
+        return `
         <tr>
           <td style="font-weight:bold; color:#1e3a8a; border:1px solid #cbd5e1; padding:5px 8px; background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${c.capaNumber}</td>
           <td style="font-weight:600; border:1px solid #cbd5e1; padding:5px 8px; background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${c.issueTitle}</td>
@@ -240,10 +370,11 @@ export function exportCapaSummaryExcel(
           <td style="border:1px solid #cbd5e1; padding:5px 8px; background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${c.responsiblePerson}</td>
           <td style="border:1px solid #cbd5e1; padding:5px 8px; background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${c.targetCompletionDate}</td>
           <td style="border:1px solid #cbd5e1; padding:5px 8px; background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${c.rootCause || '-'}</td>
+          <td style="border:1px solid #cbd5e1; padding:5px 8px; background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${photos.length > 0 ? `${photos.length} Photo(s)` : 'None'}</td>
           <td style="border:1px solid #cbd5e1; padding:5px 8px; font-weight:bold; background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${c.status}</td>
           <td style="border:1px solid #cbd5e1; padding:5px 8px; background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">${c.effectivenessVerified ? 'YES' : 'NO'}</td>
-        </tr>`
-      )
+        </tr>`;
+      })
       .join('');
 
     const excelTemplate = `
@@ -257,9 +388,9 @@ export function exportCapaSummaryExcel(
         </head>
         <body>
           <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
-            <tr><td colspan="10" style="font-size:16pt; font-weight:bold; color:#1e3a8a; padding:8px 0;">${companyName}</td></tr>
-            <tr><td colspan="10" style="font-size:12pt; font-weight:bold; color:#0f172a;">CAPA 8D Corrective &amp; Preventive Action Master Register</td></tr>
-            <tr><td colspan="10" style="font-size:9pt; color:#64748b; padding-bottom:8px;">Scope: ${scopeLabel} | Total: ${capas.length} Files | Generated: ${new Date().toLocaleString()}</td></tr>
+            <tr><td colspan="11" style="font-size:16pt; font-weight:bold; color:#1e3a8a; padding:8px 0;">${companyName}</td></tr>
+            <tr><td colspan="11" style="font-size:12pt; font-weight:bold; color:#0f172a;">CAPA 8D Corrective &amp; Preventive Action Master Register</td></tr>
+            <tr><td colspan="11" style="font-size:9pt; color:#64748b; padding-bottom:8px;">Scope: ${scopeLabel} | Total: ${capas.length} Files | ${kpis.withPhotosCount} With Attached Photos | Generated: ${new Date().toLocaleString()}</td></tr>
           </table>
           <table style="width:100%; border-collapse:collapse; margin-bottom:15px;">
             <tr>
@@ -267,7 +398,7 @@ export function exportCapaSummaryExcel(
               <td colspan="2" style="background:#ecfdf5; border:1px solid #86efac; padding:8px; text-align:center;"><div style="font-size:9pt; color:#065f46;">Closed &amp; Verified</div><div style="font-size:14pt; font-weight:bold; color:#047857;">${kpis.closed}</div></td>
               <td colspan="2" style="background:#fffbeb; border:1px solid #fde68a; padding:8px; text-align:center;"><div style="font-size:9pt; color:#92400e;">In Progress</div><div style="font-size:14pt; font-weight:bold; color:#b45309;">${kpis.inProgress}</div></td>
               <td colspan="2" style="background:#fef2f2; border:1px solid #fca5a5; padding:8px; text-align:center;"><div style="font-size:9pt; color:#991b1b;">Critical</div><div style="font-size:14pt; font-weight:bold; color:#dc2626;">${kpis.critical}</div></td>
-              <td colspan="2" style="background:#f8fafc; border:1px solid #cbd5e1; padding:8px; text-align:center;"><div style="font-size:9pt; color:#334155;">Resolution Rate</div><div style="font-size:14pt; font-weight:bold; color:#1e293b;">${kpis.closedRate}%</div></td>
+              <td colspan="3" style="background:#f8fafc; border:1px solid #cbd5e1; padding:8px; text-align:center;"><div style="font-size:9pt; color:#334155;">Resolution Rate</div><div style="font-size:14pt; font-weight:bold; color:#1e293b;">${kpis.closedRate}%</div></td>
             </tr>
           </table>
           <table style="width:100%; border-collapse:collapse;">
@@ -281,6 +412,7 @@ export function exportCapaSummaryExcel(
                 <th style="padding:6px 8px; border:1px solid #0f172a; text-align:left;">Responsible Lead</th>
                 <th style="padding:6px 8px; border:1px solid #0f172a; text-align:left;">Target Date</th>
                 <th style="padding:6px 8px; border:1px solid #0f172a; text-align:left;">Root Cause</th>
+                <th style="padding:6px 8px; border:1px solid #0f172a; text-align:left;">Evidence Photos</th>
                 <th style="padding:6px 8px; border:1px solid #0f172a; text-align:left;">Status</th>
                 <th style="padding:6px 8px; border:1px solid #0f172a; text-align:left;">Verified</th>
               </tr>
@@ -309,6 +441,10 @@ export function exportCapaSummaryExcel(
 
 /**
  * Export single CAPA 8D resolution report as official printable / PDF
+ * Now includes all attached photographic evidence:
+ * - Inline RCA / investigation photos in D4
+ * - Inline completion / verification photos in D8
+ * - Comprehensive photographic evidence gallery annex before sign-offs
  */
 export function exportSingleCapaPdf(capa: CapaItem): void {
   try {
@@ -321,6 +457,22 @@ export function exportSingleCapaPdf(capa: CapaItem): void {
     const pdfSettings = loadPdfHeaderSettings();
     const exportConfig = getModuleExportConfig(pdfSettings, 'capa', 'single', capa.capaNumber);
     const docCode = exportConfig.fullDocCode;
+
+    // Collect all attached evidence photos
+    const allPhotos = getAllCapaPhotos(capa);
+    const rcaPhotos = allPhotos.filter(
+      (p) =>
+        p.type === 'ROOT_CAUSE' ||
+        p.type === 'BEFORE' ||
+        p.sourceSection?.includes('D4') ||
+        p.sourceSection?.includes('Issue')
+    );
+    const completionPhotos = allPhotos.filter(
+      (p) =>
+        p.type === 'AFTER' ||
+        p.type === 'COMPLETION' ||
+        p.sourceSection?.includes('D8')
+    );
 
     const dynamicHeaderHtml = renderPdfHeaderHtml(
       pdfSettings,
@@ -343,6 +495,122 @@ export function exportSingleCapaPdf(capa: CapaItem): void {
         </ol>
       </div>`
       : '';
+
+    // Inline D4 RCA Photos HTML
+    const d4InlinePhotosHtml =
+      rcaPhotos.length > 0
+        ? `
+      <div class="inline-photo-strip">
+        <div style="font-size:9.5px; font-weight:700; color:#1d4ed8; width:100%; margin-bottom:2px;">
+          📷 Root Cause &amp; Investigation Evidence Photos (${rcaPhotos.length}):
+        </div>
+        ${rcaPhotos
+          .map(
+            (p) => `
+          <div class="inline-photo-chip">
+            <img src="${p.url}" alt="${p.caption}" class="inline-thumb" onerror="this.style.display='none'" />
+            <div style="font-size:9px; line-height:1.25; overflow:hidden;">
+              <div style="font-weight:700; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:210px;">${p.caption}</div>
+              <div style="color:#64748b; font-size:8px;">${p.timestamp || 'Recorded during audit'}</div>
+            </div>
+          </div>`
+          )
+          .join('')}
+      </div>`
+        : '';
+
+    // Inline D8 Completion Photos HTML
+    const d8InlinePhotosHtml =
+      completionPhotos.length > 0
+        ? `
+      <div class="inline-photo-strip">
+        <div style="font-size:9.5px; font-weight:700; color:#065f46; width:100%; margin-bottom:2px;">
+          📷 Corrective Action Verification &amp; Implementation Photos (${completionPhotos.length}):
+        </div>
+        ${completionPhotos
+          .map(
+            (p) => `
+          <div class="inline-photo-chip">
+            <img src="${p.url}" alt="${p.caption}" class="inline-thumb" onerror="this.style.display='none'" />
+            <div style="font-size:9px; line-height:1.25; overflow:hidden;">
+              <div style="font-weight:700; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:210px;">${p.caption}</div>
+              <div style="color:#64748b; font-size:8px;">${p.timestamp || 'Verified on floor'}</div>
+            </div>
+          </div>`
+          )
+          .join('')}
+      </div>`
+        : '';
+
+    // Dedicated Photographic Evidence Gallery Annex HTML
+    const photoGalleryHtml =
+      allPhotos.length > 0
+        ? `
+      <!-- Photographic Audit Evidence Annex -->
+      <div class="step-box" style="border-left:4px solid #0284c7; background:#f0f9ff; margin-top:12px; page-break-inside:avoid;">
+        <div class="step-title" style="color:#0369a1;">
+          <span style="display:flex; align-items:center; gap:6px;">
+            <span>📷 Photographic Audit Evidence &amp; Corrective Action Validation (${allPhotos.length} Attached)</span>
+          </span>
+          <span style="font-size:9px; font-weight:700; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; border:1px solid #bae6fd;">
+            ISO 9001:2015 Clause 10.2 Annex
+          </span>
+        </div>
+        <p style="font-size:9.5px; color:#475569; margin:2px 0 10px 0;">
+          Digital photographic verification captured during root-cause investigation, defect containment, and post-implementation floor audits.
+        </p>
+        <div class="photo-gallery">
+          ${allPhotos
+            .map((p, idx) => {
+              const typeLabel =
+                p.type === 'ROOT_CAUSE'
+                  ? 'Root Cause / Investigation'
+                  : p.type === 'BEFORE'
+                  ? 'Before / Non-Conformance'
+                  : p.type === 'AFTER'
+                  ? 'After / Corrective Installation'
+                  : p.type === 'COMPLETION'
+                  ? 'Completion / Verified'
+                  : p.type;
+
+              const badgeStyle =
+                p.type === 'AFTER' || p.type === 'COMPLETION'
+                  ? 'background:#ecfdf5; color:#047857; border:1px solid #a7f3d0;'
+                  : p.type === 'ROOT_CAUSE'
+                  ? 'background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;'
+                  : 'background:#fffbeb; color:#b45309; border:1px solid #fde68a;';
+
+              return `
+              <div class="photo-card">
+                <div class="photo-img-wrap">
+                  <img src="${p.url}" alt="${p.caption}" class="photo-img" onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8;font-size:10px;text-align:center;padding:10px;\\'>[Photo Preview Unavailable]</div>';" />
+                </div>
+                <div class="photo-meta">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                    <span class="photo-badge" style="${badgeStyle}">${typeLabel}</span>
+                    <span style="font-size:8.5px; color:#64748b; font-family:monospace;">#${idx + 1}</span>
+                  </div>
+                  <div style="font-weight:700; color:#0f172a; line-height:1.35; margin-bottom:4px;">${p.caption}</div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; font-size:8px; color:#64748b; border-top:1px dashed #cbd5e1; padding-top:4px; margin-top:auto;">
+                    <span>${p.sourceSection || 'CAPA Audit Evidence'}</span>
+                    <span>${p.timestamp || 'Recorded'}</span>
+                  </div>
+                </div>
+              </div>`;
+            })
+            .join('')}
+        </div>
+      </div>`
+        : `
+      <div class="step-box" style="border-left:4px solid #94a3b8; background:#f8fafc; margin-top:10px; page-break-inside:avoid;">
+        <div class="step-title" style="color:#475569;">
+          <span>📷 Photographic Audit Evidence</span>
+          <span style="font-size:9px; font-weight:600; color:#64748b;">0 Photos Attached</span>
+        </div>
+        <div style="font-size:9.5px; color:#64748b; font-style:italic; line-height:1.4;">
+          No physical photo files were attached to this digital CAPA record. Verification was conducted through physical inspection logs and on-floor supervisor check-sheets.
+        </div>
+      </div>`;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -369,12 +637,27 @@ export function exportSingleCapaPdf(capa: CapaItem): void {
             .step-title { font-size: 11px; font-weight: 700; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
             .box-card { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; }
             .box-title { font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+            .inline-photo-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px dashed #cbd5e1; }
+            .inline-photo-chip { display: flex; align-items: center; gap: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 6px; max-width: 280px; }
+            .inline-thumb { width: 38px; height: 38px; border-radius: 3px; object-fit: cover; border: 1px solid #94a3b8; flex-shrink: 0; }
+            .photo-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-top: 8px; }
+            .photo-card { border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; overflow: hidden; page-break-inside: avoid; break-inside: avoid; box-shadow: 0 1px 2px rgba(0,0,0,0.04); display: flex; flex-direction: column; }
+            .photo-img-wrap { width: 100%; height: 140px; background: #0f172a; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+            .photo-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+            .photo-meta { padding: 8px; font-size: 9px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; flex-direction: column; flex: 1; }
+            .photo-badge { display: inline-block; padding: 1px 5px; font-size: 8px; font-weight: 700; border-radius: 3px; text-transform: uppercase; }
             .sign-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 24px; border-top: 1px solid #cbd5e1; padding-top: 14px; page-break-inside: avoid; }
             .sign-col { text-align: center; }
             .sign-line { border-bottom: 1.5px solid #475569; height: 26px; margin-bottom: 4px; }
             .sign-role { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #334155; }
             .sign-dept { font-size: 8px; color: #64748b; }
-            @media print { .print-btn-bar { display: none !important; } body { padding: 0; } }
+            @media print {
+              .print-btn-bar { display: none !important; }
+              body { padding: 0; }
+              .photo-card { page-break-inside: avoid; break-inside: avoid; }
+              .step-box { page-break-inside: avoid; break-inside: avoid; }
+              .sign-strip { page-break-inside: avoid; break-inside: avoid; }
+            }
           </style>
         </head>
         <body>
@@ -392,7 +675,7 @@ export function exportSingleCapaPdf(capa: CapaItem): void {
             <div class="meta-item"><span class="meta-lbl">Severity:</span><span class="badge ${capa.severity === 'CRITICAL' ? 'style="background:#fef2f2; color:#b91c1c;"' : 'style="background:#eff6ff; color:#1d4ed8;"'}">${capa.severity || 'MAJOR'}</span></div>
             <div class="meta-item"><span class="meta-lbl">Responsible Lead:</span><span class="meta-val">${capa.responsiblePerson}</span></div>
             <div class="meta-item"><span class="meta-lbl">Target Date:</span><span class="meta-val">${capa.targetCompletionDate}</span></div>
-            <div class="meta-item"><span class="meta-lbl">8D Status:</span><span class="badge ${capa.status === 'CLOSED' ? 'style="background:#ecfdf5; color:#047857;"' : 'style="background:#fffbeb; color:#b45309;"'}">${capa.status.replace(/_/g, ' ')}</span></div>
+            <div class="meta-item"><span class="meta-lbl">Evidence Photos:</span><span class="badge ${allPhotos.length > 0 ? 'style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;"' : 'style="background:#f1f5f9; color:#64748b;"'}">${allPhotos.length} Attached</span></div>
           </div>
 
           <!-- D1 & D2: Problem Statement -->
@@ -421,6 +704,7 @@ export function exportSingleCapaPdf(capa: CapaItem): void {
             </div>
             <div style="font-weight:600; color:#0f172a; margin-bottom:4px;">Core Finding: ${capa.rootCause}</div>
             ${fiveWhysHtml}
+            ${d4InlinePhotosHtml}
           </div>
 
           <!-- D5 & D6: Permanent Corrective Action -->
@@ -455,7 +739,11 @@ export function exportSingleCapaPdf(capa: CapaItem): void {
             <div style="font-size:9.5px; color:#64748b; margin-top:4px;">
               Verified By: <strong>${capa.verifiedBy || 'Quality Assurance Lead'}</strong> &bull; Verification Date: <strong>${capa.verificationDate || capa.actualCompletionDate || 'Pending'}</strong>
             </div>
+            ${d8InlinePhotosHtml}
           </div>
+
+          <!-- D4/D8 Photographic Evidence Annex -->
+          ${photoGalleryHtml}
 
           <div class="sign-strip">
             <div class="sign-col"><div class="sign-line"></div><div class="sign-role">Investigation Lead</div><div class="sign-dept">${capa.responsiblePerson}</div></div>
@@ -477,11 +765,29 @@ export function exportSingleCapaPdf(capa: CapaItem): void {
 
 /**
  * Export single CAPA 8D report to styled Excel workbook (.xls)
+ * Includes full photographic evidence listing with captions & URLs
  */
 export function exportSingleCapaExcel(capa: CapaItem): void {
   try {
     const pdfSettings = loadPdfHeaderSettings();
     const companyName = pdfSettings.companyName || 'Valiant Garments Manufacturing Ltd.';
+    const allPhotos = getAllCapaPhotos(capa);
+
+    const photosExcelRowsHtml =
+      allPhotos.length > 0
+        ? allPhotos
+            .map(
+              (p, idx) => `
+          <tr>
+            <td style="border:1px solid #cbd5e1; padding:5px 8px; font-weight:bold; color:#1e3a8a;">#${idx + 1} (${p.type})</td>
+            <td style="border:1px solid #cbd5e1; padding:5px 8px;">${p.sourceSection || 'Audit Evidence'}</td>
+            <td style="border:1px solid #cbd5e1; padding:5px 8px; font-weight:600;">${p.caption}</td>
+            <td style="border:1px solid #cbd5e1; padding:5px 8px;">${p.timestamp || '-'}</td>
+            <td style="border:1px solid #cbd5e1; padding:5px 8px; font-family:monospace; font-size:8.5pt;"><a href="${p.url}" target="_blank" style="color:#1d4ed8; text-decoration:underline;">${p.url}</a></td>
+          </tr>`
+            )
+            .join('')
+        : `<tr><td colspan="5" style="border:1px solid #cbd5e1; padding:6px 8px; font-style:italic; color:#64748b;">No photographic evidence files attached to this record.</td></tr>`;
 
     const excelTemplate = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -494,9 +800,9 @@ export function exportSingleCapaExcel(capa: CapaItem): void {
         </head>
         <body>
           <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
-            <tr><td colspan="4" style="font-size:16pt; font-weight:bold; color:#1e3a8a; padding:8px 0;">${companyName}</td></tr>
-            <tr><td colspan="4" style="font-size:13pt; font-weight:bold; color:#0f172a;">8D CAPA Resolution Record: ${capa.capaNumber}</td></tr>
-            <tr><td colspan="4" style="font-size:9pt; color:#64748b; padding-bottom:8px;">ISO 9001:2015 Clause 10.2 | Generated: ${new Date().toLocaleString()}</td></tr>
+            <tr><td colspan="5" style="font-size:16pt; font-weight:bold; color:#1e3a8a; padding:8px 0;">${companyName}</td></tr>
+            <tr><td colspan="5" style="font-size:13pt; font-weight:bold; color:#0f172a;">8D CAPA Resolution Record: ${capa.capaNumber}</td></tr>
+            <tr><td colspan="5" style="font-size:9pt; color:#64748b; padding-bottom:8px;">ISO 9001:2015 Clause 10.2 | Attached Photos: ${allPhotos.length} | Generated: ${new Date().toLocaleString()}</td></tr>
           </table>
 
           <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
@@ -504,68 +810,81 @@ export function exportSingleCapaExcel(capa: CapaItem): void {
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold; width:20%;">CAPA Ref:</td>
               <td style="border:1px solid #cbd5e1; padding:6px; width:30%; font-family:monospace; font-weight:bold; color:#1e3a8a;">${capa.capaNumber}</td>
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold; width:20%;">Date Raised:</td>
-              <td style="border:1px solid #cbd5e1; padding:6px; width:30%;">${capa.dateRaised || 'N/A'}</td>
+              <td colspan="2" style="border:1px solid #cbd5e1; padding:6px; width:30%;">${capa.dateRaised || 'N/A'}</td>
             </tr>
             <tr>
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">Trigger Source:</td>
               <td style="border:1px solid #cbd5e1; padding:6px;">${capa.source}</td>
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">Department:</td>
-              <td style="border:1px solid #cbd5e1; padding:6px;">${capa.department || 'QA'}</td>
+              <td colspan="2" style="border:1px solid #cbd5e1; padding:6px;">${capa.department || 'QA'}</td>
             </tr>
             <tr style="background:#f1f5f9;">
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">Severity:</td>
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold; color:${capa.severity === 'CRITICAL' ? '#b91c1c' : '#1d4ed8'};">${capa.severity || 'MAJOR'}</td>
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">8D Status:</td>
-              <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">${capa.status}</td>
+              <td colspan="2" style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">${capa.status}</td>
             </tr>
             <tr>
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">Responsible Lead:</td>
               <td style="border:1px solid #cbd5e1; padding:6px;">${capa.responsiblePerson}</td>
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">Target Completion:</td>
-              <td style="border:1px solid #cbd5e1; padding:6px;">${capa.targetCompletionDate}</td>
+              <td colspan="2" style="border:1px solid #cbd5e1; padding:6px;">${capa.targetCompletionDate}</td>
             </tr>
           </table>
 
           <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
-            <tr style="background:#1e293b; color:#fff;"><th colspan="4" style="padding:6px; text-align:left;">D1-D2. Problem Definition &amp; Non-Conformance</th></tr>
-            <tr><td colspan="4" style="border:1px solid #cbd5e1; padding:8px; font-weight:bold; background:#f8fafc;">${capa.issueTitle}</td></tr>
-            <tr><td colspan="4" style="border:1px solid #cbd5e1; padding:8px;">${capa.problemDescription || capa.problemStatement || '-'}</td></tr>
+            <tr style="background:#1e293b; color:#fff;"><th colspan="5" style="padding:6px; text-align:left;">D1-D2. Problem Definition &amp; Non-Conformance</th></tr>
+            <tr><td colspan="5" style="border:1px solid #cbd5e1; padding:8px; font-weight:bold; background:#f8fafc;">${capa.issueTitle}</td></tr>
+            <tr><td colspan="5" style="border:1px solid #cbd5e1; padding:8px;">${capa.problemDescription || capa.problemStatement || '-'}</td></tr>
           </table>
 
           <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
-            <tr style="background:#1e293b; color:#fff;"><th colspan="4" style="padding:6px; text-align:left;">D3. Containment Action</th></tr>
-            <tr><td colspan="4" style="border:1px solid #cbd5e1; padding:8px;">${capa.containmentAction || '-'}</td></tr>
+            <tr style="background:#1e293b; color:#fff;"><th colspan="5" style="padding:6px; text-align:left;">D3. Containment Action</th></tr>
+            <tr><td colspan="5" style="border:1px solid #cbd5e1; padding:8px;">${capa.containmentAction || '-'}</td></tr>
           </table>
 
           <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
-            <tr style="background:#1e293b; color:#fff;"><th colspan="4" style="padding:6px; text-align:left;">D4. Root Cause Analysis (5-Whys)</th></tr>
-            <tr><td colspan="4" style="border:1px solid #cbd5e1; padding:8px; font-weight:bold; background:#f8fafc;">Core Cause: ${capa.rootCause}</td></tr>
-            ${capa.fiveWhys?.why1 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 1:</td><td colspan="3" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why1}</td></tr>` : ''}
-            ${capa.fiveWhys?.why2 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 2:</td><td colspan="3" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why2}</td></tr>` : ''}
-            ${capa.fiveWhys?.why3 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 3:</td><td colspan="3" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why3}</td></tr>` : ''}
-            ${capa.fiveWhys?.why4 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 4:</td><td colspan="3" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why4}</td></tr>` : ''}
-            ${capa.fiveWhys?.why5 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 5 (Root):</td><td colspan="3" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why5}</td></tr>` : ''}
+            <tr style="background:#1e293b; color:#fff;"><th colspan="5" style="padding:6px; text-align:left;">D4. Root Cause Analysis (5-Whys)</th></tr>
+            <tr><td colspan="5" style="border:1px solid #cbd5e1; padding:8px; font-weight:bold; background:#f8fafc;">Core Cause: ${capa.rootCause}</td></tr>
+            ${capa.fiveWhys?.why1 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 1:</td><td colspan="4" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why1}</td></tr>` : ''}
+            ${capa.fiveWhys?.why2 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 2:</td><td colspan="4" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why2}</td></tr>` : ''}
+            ${capa.fiveWhys?.why3 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 3:</td><td colspan="4" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why3}</td></tr>` : ''}
+            ${capa.fiveWhys?.why4 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 4:</td><td colspan="4" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why4}</td></tr>` : ''}
+            ${capa.fiveWhys?.why5 ? `<tr><td style="border:1px solid #cbd5e1; padding:5px; font-weight:bold; width:15%;">Why 5 (Root):</td><td colspan="4" style="border:1px solid #cbd5e1; padding:5px;">${capa.fiveWhys.why5}</td></tr>` : ''}
           </table>
 
           <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
-            <tr style="background:#1e293b; color:#fff;"><th colspan="4" style="padding:6px; text-align:left;">D5-D6. Permanent Corrective Action</th></tr>
-            <tr><td colspan="4" style="border:1px solid #cbd5e1; padding:8px;">${capa.correctiveAction || '-'}</td></tr>
+            <tr style="background:#1e293b; color:#fff;"><th colspan="5" style="padding:6px; text-align:left;">D5-D6. Permanent Corrective Action</th></tr>
+            <tr><td colspan="5" style="border:1px solid #cbd5e1; padding:8px;">${capa.correctiveAction || '-'}</td></tr>
           </table>
 
           <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
-            <tr style="background:#1e293b; color:#fff;"><th colspan="4" style="padding:6px; text-align:left;">D7. Preventive Action &amp; Standardization</th></tr>
-            <tr><td colspan="4" style="border:1px solid #cbd5e1; padding:8px;">${capa.preventiveAction || '-'}</td></tr>
+            <tr style="background:#1e293b; color:#fff;"><th colspan="5" style="padding:6px; text-align:left;">D7. Preventive Action &amp; Standardization</th></tr>
+            <tr><td colspan="5" style="border:1px solid #cbd5e1; padding:8px;">${capa.preventiveAction || '-'}</td></tr>
           </table>
 
-          <table style="width:100%; border-collapse:collapse;">
-            <tr style="background:#1e293b; color:#fff;"><th colspan="4" style="padding:6px; text-align:left;">D8. Verification of Effectiveness</th></tr>
-            <tr><td colspan="4" style="border:1px solid #cbd5e1; padding:8px;">${capa.verificationNotes || (capa.effectivenessVerified ? 'Effectiveness verified with zero defects across subsequent lots.' : 'Pending')}</td></tr>
+          <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
+            <tr style="background:#1e293b; color:#fff;"><th colspan="5" style="padding:6px; text-align:left;">D8. Verification of Effectiveness</th></tr>
+            <tr><td colspan="5" style="border:1px solid #cbd5e1; padding:8px;">${capa.verificationNotes || (capa.effectivenessVerified ? 'Effectiveness verified with zero defects across subsequent lots.' : 'Pending')}</td></tr>
             <tr style="background:#f1f5f9;">
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">Verified By:</td>
               <td style="border:1px solid #cbd5e1; padding:6px;">${capa.verifiedBy || 'QA Team'}</td>
               <td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">Verification Date:</td>
-              <td style="border:1px solid #cbd5e1; padding:6px;">${capa.verificationDate || capa.actualCompletionDate || 'Pending'}</td>
+              <td colspan="2" style="border:1px solid #cbd5e1; padding:6px;">${capa.verificationDate || capa.actualCompletionDate || 'Pending'}</td>
             </tr>
+          </table>
+
+          <!-- Attached Photographic Evidence Section -->
+          <table style="width:100%; border-collapse:collapse;">
+            <tr style="background:#0284c7; color:#fff;"><th colspan="5" style="padding:6px; text-align:left;">Photographic Audit Evidence &amp; Attached Files (${allPhotos.length} Attached)</th></tr>
+            <tr style="background:#f1f5f9; font-weight:bold;">
+              <td style="border:1px solid #cbd5e1; padding:5px 8px; width:18%;">Photo Tag</td>
+              <td style="border:1px solid #cbd5e1; padding:5px 8px; width:22%;">Audit Stage</td>
+              <td style="border:1px solid #cbd5e1; padding:5px 8px; width:25%;">Evidence Caption</td>
+              <td style="border:1px solid #cbd5e1; padding:5px 8px; width:15%;">Timestamp</td>
+              <td style="border:1px solid #cbd5e1; padding:5px 8px; width:20%;">Evidence File URL</td>
+            </tr>
+            ${photosExcelRowsHtml}
           </table>
         </body>
       </html>
