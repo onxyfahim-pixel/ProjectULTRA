@@ -29,6 +29,8 @@ import {
   Sun,
   Palette,
   Sparkles,
+  GitCommit,
+  Network,
 } from 'lucide-react';
 import { ProcessFlowChart, ProcessFlowStep } from '@/lib/types/modules';
 
